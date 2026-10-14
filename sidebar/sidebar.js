@@ -295,6 +295,8 @@
     paint();
 
     wrap.startEdit = (caret = "end") => {
+      ta._startValue = ta.value; // für Strg+Z: Text im Feld zuerst
+      ta._checkpointed = false;
       view.hidden = true;
       ta.hidden = false;
       autosize(ta);
@@ -309,6 +311,11 @@
       wrap.startEdit(caretFromClick(view, ta.value, e));
     });
     ta.addEventListener("input", () => {
+      // Erster Tastendruck in diesem Feld: Stand davor für Strg+Z merken.
+      if (!ta._checkpointed) {
+        ta._checkpointed = true;
+        checkpoint();
+      }
       if (!multiline && ta.value.includes("\n")) ta.value = ta.value.replace(/\s*\n\s*/g, " ");
       autosize(ta);
       if (onInput) onInput(ta.value);
@@ -416,10 +423,13 @@
     return p && p.l === t.l ? t.p : "";
   }
 
-  function openChildren(listId, parentId) {
+  // Geschwister in Anzeige-Reihenfolge. Oberste Ebene: nur offene (erledigte
+  // stehen unten im Erledigt-Bereich). Darunter alle – abgehakte Unteraufgaben
+  // bleiben an ihrem Platz (wie in Notion).
+  function visibleChildren(listId, parentId) {
     const out = [];
     for (const [id, t] of tasks) {
-      if (t.l === listId && !t.x && parentOf(id) === parentId) out.push({ id, ...t });
+      if (t.l === listId && parentOf(id) === parentId && (parentId || !t.x)) out.push({ id, ...t });
     }
     return out.sort(byOrder);
   }
@@ -461,7 +471,7 @@
   function placeTask(id, parentId, index) {
     const t = tasks.get(id);
     if (!t) return;
-    const sibs = openChildren(t.l, parentId).filter((s) => s.id !== id);
+    const sibs = visibleChildren(t.l, parentId).filter((s) => s.id !== id);
     const i = Math.max(0, Math.min(index, sibs.length));
     const prev = sibs[i - 1];
     const next = sibs[i];
@@ -481,8 +491,90 @@
     } else {
       set(id, { p: parentId, o });
     }
+    // Eine offene Aufgabe steht nie unter einer erledigten: darüber wieder öffnen.
+    if (!tasks.get(id).x) {
+      for (const a of ancestors(id)) if (tasks.get(a).x) set(a, { x: false, xa: "" });
+    }
     write(updates);
   }
+
+  // --- Rückgängig / Wiederholen (Strg+Z / Strg+Y) ----------------------------
+  // Vor jeder Aktion wird der Zustand aller Listen und Aufgaben gemerkt
+  // (als JSON-Text, ~100 KB höchstens). Rückgängig stellt ihn wieder her und
+  // schreibt nur die Einträge, die sich tatsächlich unterscheiden.
+
+  const HISTORY_MAX = 100;
+  const undoStack = [];
+  const redoStack = [];
+
+  const serialize = () => JSON.stringify({ l: [...lists], t: [...tasks] });
+
+  function checkpoint() {
+    flushPending();
+    const s = serialize();
+    if (undoStack[undoStack.length - 1] !== s) {
+      undoStack.push(s);
+      if (undoStack.length > HISTORY_MAX) undoStack.shift();
+    }
+    redoStack.length = 0;
+  }
+
+  function applyState(serial) {
+    const s = JSON.parse(serial);
+    const target = new Map([
+      ...s.l.map(([id, v]) => [LIST + id, v]),
+      ...s.t.map(([id, v]) => [TASK + id, v]),
+    ]);
+    const current = new Map([
+      ...[...lists].map(([id, v]) => [LIST + id, v]),
+      ...[...tasks].map(([id, v]) => [TASK + id, v]),
+    ]);
+    const sets = {};
+    for (const [k, v] of target) {
+      if (JSON.stringify(current.get(k)) !== JSON.stringify(v)) sets[k] = v;
+    }
+    const removes = [...current.keys()].filter((k) => !target.has(k));
+    lists.clear();
+    tasks.clear();
+    for (const [id, v] of s.l) lists.set(id, v);
+    for (const [id, v] of s.t) tasks.set(id, v);
+    if (Object.keys(sets).length) write(sets);
+    if (removes.length) remove(removes);
+    ensureCurrentList();
+    render();
+  }
+
+  function stepHistory(from, to) {
+    flushPending();
+    const cur = serialize();
+    // Einträge überspringen, die dem aktuellen Stand gleichen.
+    while (from.length && from[from.length - 1] === cur) from.pop();
+    if (!from.length) return;
+    to.push(cur);
+    hideToast();
+    applyState(from.pop());
+  }
+
+  const undo = () => stepHistory(undoStack, redoStack);
+  const redo = () => stepHistory(redoStack, undoStack);
+
+  // Im gerade bearbeiteten Feld gilt zuerst das normale Text-Rückgängig des
+  // Browsers; erst wenn der Text wieder dem Anfangsstand entspricht, wirkt
+  // Strg+Z auf die Aufgaben (wie in Notion).
+  document.addEventListener("keydown", (e) => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    const k = e.key.toLowerCase();
+    const isUndo = k === "z" && !e.shiftKey;
+    const isRedo = k === "y" || (k === "z" && e.shiftKey);
+    if (!isUndo && !isRedo) return;
+    const a = document.activeElement;
+    if (a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT")) {
+      if (a._startValue === undefined || a.value !== a._startValue) return;
+    }
+    e.preventDefault();
+    if (isUndo) undo();
+    else redo();
+  });
 
   // --- Listen ----------------------------------------------------------------
 
@@ -567,6 +659,7 @@
     const action = btn.dataset.action;
     if (action === "new") {
       editListName("", (name) => {
+        checkpoint();
         const id = newId();
         const maxO = Math.max(0, ...[...lists.values()].map((l) => l.o || 0));
         const list = { t: name, o: maxO + 1 };
@@ -577,6 +670,7 @@
     } else if (action === "rename") {
       const id = currentList;
       editListName(lists.get(id).t || "", (name) => {
+        checkpoint();
         const list = { ...lists.get(id), t: name };
         lists.set(id, list);
         write({ [LIST + id]: list });
@@ -595,6 +689,7 @@
 
   function deleteList(id) {
     if (lists.size <= 1) return;
+    checkpoint();
     const removed = { [LIST + id]: lists.get(id) };
     for (const [tid, t] of tasks) {
       if (t.l === id) removed[TASK + tid] = t;
@@ -617,6 +712,7 @@
   // „Aufgabe hinzufügen": leere Aufgabe ganz oben, gleich im Bearbeiten-Modus –
   // derselbe Code wie beim Bearbeiten einer bestehenden Aufgabe.
   function addTask() {
+    checkpoint();
     const id = createTask({});
     placeTask(id, "", 0);
     focusAfterRender = { id, caret: "end" };
@@ -625,37 +721,40 @@
 
   // Knopf „+ Unteraufgabe": neue leere Zeile als letztes Kind.
   function addChild(parentId) {
+    checkpoint();
     const id = createTask({});
-    placeTask(id, parentId, openChildren(currentList, parentId).length);
+    placeTask(id, parentId, visibleChildren(currentList, parentId).length);
     focusAfterRender = { id, caret: "end" };
     render();
   }
 
-  // Enter: neue Zeile direkt darunter. Hat die Aufgabe offene Unteraufgaben,
+  // Enter: neue Zeile direkt darunter. Hat eine offene Aufgabe Unteraufgaben,
   // wird die neue Zeile deren erstes Kind (sie steht ja direkt darunter).
+  // Unter einer abgehakten Unteraufgabe entsteht eine neue offene daneben.
   function insertBelow(id, text) {
     const t = tasks.get(id);
     const nid = createTask({ l: t.l, t: text });
-    if (openChildren(t.l, id).length) {
+    if (!t.x && visibleChildren(t.l, id).length) {
       placeTask(nid, id, 0);
     } else {
       const par = parentOf(id);
-      const idx = openChildren(t.l, par).findIndex((s) => s.id === id);
+      const idx = visibleChildren(t.l, par).findIndex((s) => s.id === id);
       placeTask(nid, par, idx + 1);
     }
     focusAfterRender = { id: nid, caret: "start" };
     render();
   }
 
-  // Tab: wird letztes Kind der offenen Aufgabe direkt darüber (gleiche Ebene).
+  // Tab: wird letztes Kind der Aufgabe direkt darüber (gleiche Ebene).
   function indent(id, caret) {
     const t = tasks.get(id);
-    if (!t || t.x) return;
-    const sibs = openChildren(t.l, parentOf(id));
+    if (!t) return;
+    const sibs = visibleChildren(t.l, parentOf(id));
     const i = sibs.findIndex((s) => s.id === id);
     if (i <= 0) return;
+    checkpoint();
     const newParent = sibs[i - 1].id;
-    placeTask(id, newParent, openChildren(t.l, newParent).length);
+    placeTask(id, newParent, visibleChildren(t.l, newParent).length);
     focusAfterRender = { id, caret };
     render();
   }
@@ -665,8 +764,9 @@
     const t = tasks.get(id);
     const par = parentOf(id);
     if (!t || !par) return;
+    checkpoint();
     const gp = parentOf(par);
-    const sibs = openChildren(t.l, gp);
+    const sibs = visibleChildren(t.l, gp);
     const i = sibs.findIndex((s) => s.id === par);
     placeTask(id, gp, i < 0 ? sibs.length : i + 1);
     focusAfterRender = { id, caret };
@@ -676,12 +776,13 @@
   // Alt+↑ / Alt+↓: eine Position nach oben/unten innerhalb der Ebene.
   function moveBy(id, delta, caret) {
     const t = tasks.get(id);
-    if (!t || t.x) return;
+    if (!t) return;
     const par = parentOf(id);
-    const sibs = openChildren(t.l, par);
+    const sibs = visibleChildren(t.l, par);
     const i = sibs.findIndex((s) => s.id === id);
     const j = i + delta;
     if (i < 0 || j < 0 || j >= sibs.length) return;
+    checkpoint();
     placeTask(id, par, j);
     focusAfterRender = { id, caret };
     render();
@@ -690,6 +791,7 @@
   function toggleDone(id) {
     const t = tasks.get(id);
     if (!t) return;
+    checkpoint();
     const now = Date.now();
     const updates = {};
     const set = (tid, fields) => {
@@ -734,6 +836,7 @@
   // eine leere Zeile beim Wechsel in eine andere Zeile verschwindet).
   function deleteTask(id, { silent = false, deferRender = false } = {}) {
     if (!tasks.has(id)) return;
+    if (!silent) checkpoint();
     const removed = withDescendants(id);
     applyRemoval(removed);
     if (deferRender) scheduleRender();
@@ -751,12 +854,14 @@
     }
     const n = Object.keys(removed).length;
     if (!n) return;
+    checkpoint();
     applyRemoval(removed);
     render();
     toast(n === 1 ? "1 Aufgabe gelöscht" : `${n} Aufgaben gelöscht`, removed);
   }
 
   function setDue(id, d) {
+    checkpoint();
     patchTask(id, { d });
     render();
   }
@@ -781,6 +886,7 @@
   // Backspace in leerer Zeile: löschen und in die Zeile darüber springen.
   function removeEmpty(id) {
     if (hasChildren(id)) return;
+    checkpoint();
     const cur = tasks.get(id);
     const prev = neighbor(id, -1);
     const silent = !cur.n && !cur.d;
@@ -828,8 +934,10 @@
       toggleDone(id);
     } else if (e.key === "Enter" && plain && !e.shiftKey) {
       e.preventDefault();
-      if (t.x) {
+      if (t.x && !parentOf(id)) {
+        // Erledigte Hauptaufgabe (unten im Erledigt-Bereich): Feld verlassen.
         ta.blur();
+        setExpanded(null);
       } else if (!ta.value.trim()) {
         // Leere Zeile: eingerückt → ausrücken, oberste Ebene → verlassen
         // (die leere Zeile verschwindet dann von selbst).
@@ -841,6 +949,7 @@
         }
       } else {
         // Text rechts vom Cursor wandert in die neue Zeile (wie in Notion).
+        checkpoint();
         cancelDebounce("t:" + id);
         patchTask(id, { t: ta.value.slice(0, pos).trimEnd() });
         insertBelow(id, ta.value.slice(end).trim());
@@ -887,6 +996,20 @@
         focusTitle(first.dataset.id, "end");
       }
     }
+  });
+
+  // Nichts ausgewählt (nur in die Seitenleiste geklickt): ↑ springt in die
+  // unterste, ↓ in die oberste sichtbare Aufgabe.
+  document.addEventListener("keydown", (e) => {
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    const a = document.activeElement;
+    if (a && a.matches("textarea, input, select")) return;
+    const lis = document.querySelectorAll("#openList li.task, #doneList li.task");
+    if (!lis.length) return;
+    e.preventDefault();
+    const li = e.key === "ArrowUp" ? lis[lis.length - 1] : lis[0];
+    focusTitle(li.dataset.id, "end");
   });
 
   // --- Bearbeiten = Aufklappen (immer nur eine Aufgabe) ----------------------
@@ -975,6 +1098,7 @@
     const restore = toastUndo;
     hideToast();
     if (!restore) return;
+    checkpoint();
     for (const [key, value] of Object.entries(restore)) {
       (key.startsWith(TASK) ? tasks : lists).set(key.slice(2), value);
     }
@@ -1170,8 +1294,8 @@
         if (!tree.has(p)) tree.set(p, []);
         tree.get(p).push(t);
       }
-      // Offene zuerst (nach Reihenfolge), erledigte Unteraufgaben dahinter.
-      for (const kids of tree.values()) kids.sort((a, b) => (a.x ? 1 : 0) - (b.x ? 1 : 0) || byOrder(a, b));
+      // Nach Reihenfolge – abgehakte Unteraufgaben bleiben an ihrem Platz.
+      for (const kids of tree.values()) kids.sort(byOrder);
 
       // Schutz gegen Kreise (z. B. widersprüchliche Änderungen zweier Geräte):
       // Nicht erreichbare Aufgaben werden oben angezeigt.
@@ -1275,14 +1399,14 @@
     dropInfo = null;
     const li = e.target instanceof Element ? e.target.closest("li.task") : null;
     const src = findLi(dragging.id);
-    if (!li || !src || src.contains(li) || li.classList.contains("done")) return;
+    if (!li || !src || src.contains(li)) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
     const row = li.querySelector(":scope > .row");
     const rect = row.getBoundingClientRect();
     const titleLeft = row.querySelector(".main").getBoundingClientRect().left;
     const lower = e.clientY > rect.top + rect.height / 2;
-    const hasKids = openChildren(currentList, li.dataset.id).some((k) => k.id !== dragging.id);
+    const hasKids = visibleChildren(currentList, li.dataset.id).some((k) => k.id !== dragging.id);
     const mode = !lower ? "before" : hasKids || e.clientX > titleLeft + 24 ? "inside" : "after";
     row.classList.add("drop-" + mode);
     dropInfo = { id: li.dataset.id, mode };
@@ -1292,11 +1416,12 @@
     if (!dragging || !dropInfo) return;
     e.preventDefault();
     const { id: target, mode } = dropInfo;
+    checkpoint();
     if (mode === "inside") {
       placeTask(dragging.id, target, 0);
     } else {
       const par = parentOf(target);
-      const sibs = openChildren(currentList, par).filter((s) => s.id !== dragging.id);
+      const sibs = visibleChildren(currentList, par).filter((s) => s.id !== dragging.id);
       const i = sibs.findIndex((s) => s.id === target);
       placeTask(dragging.id, par, mode === "before" ? i : i + 1);
     }

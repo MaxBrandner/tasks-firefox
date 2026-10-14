@@ -16,7 +16,12 @@ kein Server, keine Berechtigungen auf Webseiten.
 - **Sortieren** – am Griff `⋮⋮` ziehen, oder im Titel **Alt+↑ / Alt+↓**.
   Unteraufgaben lassen sich innerhalb ihrer Hauptaufgabe sortieren.
 - **Erledigt** – einklappbarer Bereich unten, „Erledigte löschen".
-- **Rückgängig** – nach jedem Löschen (Aufgabe, Liste, Erledigte) ca. 7 s lang.
+- **Rückgängig / Wiederholen** – **Strg+Z** / **Strg+Y** (oder Strg+Shift+Z) für
+  alle Änderungen; beim Tippen wirkt Strg+Z zuerst auf den Text im Feld.
+  Nach jedem Löschen zusätzlich ca. 7 s lang ein „Rückgängig"-Knopf.
+- **Abgehakte Unteraufgaben** bleiben an ihrem Platz; Enter darauf legt
+  darunter eine neue an.
+- **↑ / ↓ ohne Auswahl** – springt in die unterste bzw. oberste Aufgabe.
 - **Design** – System / Hell / Dunkel (Knopf oben rechts).
 
 Toolbar-Symbol oder **Strg+Alt+A**: blendet die Seitenleiste ein und aus.
