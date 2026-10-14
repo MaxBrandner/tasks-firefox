@@ -19,7 +19,9 @@ kein Server, keine Berechtigungen auf Webseiten.
 - **Rückgängig** – nach jedem Löschen (Aufgabe, Liste, Erledigte) ca. 7 s lang.
 - **Design** – System / Hell / Dunkel (Knopf oben rechts).
 
-Toolbar-Symbol: blendet die Seitenleiste ein und aus.
+Toolbar-Symbol oder **Strg+Alt+A**: blendet die Seitenleiste ein und aus.
+Die Tastenkombination lässt sich ändern unter `about:addons` → Zahnrad →
+„Erweiterungs-Tastenkombinationen verwalten".
 
 ## Speicher & Grenzen
 
