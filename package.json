@@ -1,0 +1,14 @@
+{
+  "name": "tasks-firefox",
+  "version": "0.1.1",
+  "private": true,
+  "description": "Firefox-Erweiterung: Aufgabenlisten in der Seitenleiste, synchronisiert über Firefox Sync.",
+  "scripts": {
+    "lint": "web-ext lint --self-hosted",
+    "build": "web-ext build --overwrite-dest",
+    "sign": "bash scripts/sign.sh"
+  },
+  "devDependencies": {
+    "web-ext": "^10.5.0"
+  }
+}

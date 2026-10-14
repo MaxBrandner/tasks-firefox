@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Build-Artefakte
+web-ext-artifacts/
+
+# web-ext Signier-Zustand / Secrets
+.web-extension-id
+*.env
+.env
+.env.*
+!.env.example
+*.pem
+*.secret
+
+# OS / Editor
+.DS_Store
+*.swp
+.amo-upload-uuid

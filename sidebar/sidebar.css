@@ -1,0 +1,831 @@
+/* Tasks – Seitenleiste */
+
+:root {
+  --bg: #f7f5f0;
+  --surface: #ffffff;
+  --text: #1f2328;
+  --muted: #6b6f76;
+  --faint: #a3a29d;
+  --line: #e6e1d8;
+  --hover: #efebe3;
+  --accent: #2f6f5e;
+  --accent-text: #ffffff;
+  --accent-soft: #dfece6;
+  --danger: #b4441b;
+  --today: #2f6f5e;
+  --overdue: #b4441b;
+  --shadow: 0 6px 24px rgba(40, 32, 20, 0.14);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #17191c;
+    --surface: #202327;
+    --text: #e7e5e1;
+    --muted: #9ba0a6;
+    --faint: #5f646b;
+    --line: #2d3137;
+    --hover: #262a2f;
+    --accent: #6cc4a4;
+    --accent-text: #10241d;
+    --accent-soft: #1f3a31;
+    --danger: #ef8a63;
+    --today: #6cc4a4;
+    --overdue: #ef8a63;
+    --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #17191c;
+  --surface: #202327;
+  --text: #e7e5e1;
+  --muted: #9ba0a6;
+  --faint: #5f646b;
+  --line: #2d3137;
+  --hover: #262a2f;
+  --accent: #6cc4a4;
+  --accent-text: #10241d;
+  --accent-soft: #1f3a31;
+  --danger: #ef8a63;
+  --today: #6cc4a4;
+  --overdue: #ef8a63;
+  --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Seitenleiste dreigeteilt: oben fest, Mitte scrollt, „Erledigt" unten fest. */
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font: 13.5px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* --- Icons ----------------------------------------------------------------
+ * Alle Symbole sind SVGs in festen, zentrierten Knöpfen – Schriftzeichen wie
+ * ▾ oder ⋯ werden je nach Schrift verschieden groß und versetzt dargestellt. */
+
+.ico {
+  display: block;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.ico-dots {
+  stroke-width: 3.2;
+}
+
+.icon-btn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.icon-btn .ico {
+  width: 18px;
+  height: 18px;
+}
+
+.icon-btn:hover,
+.icon-btn[aria-expanded="true"] {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.icon-btn.small {
+  width: 22px;
+  height: 22px;
+}
+
+.icon-btn.small .ico {
+  width: 14px;
+  height: 14px;
+}
+
+kbd {
+  display: inline-block;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--surface);
+  font: 11px/16px ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  white-space: nowrap;
+}
+
+/* --- Kopfzeile ------------------------------------------------------------- */
+
+.topbar {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px 8px 10px;
+}
+
+.list-select,
+.list-name-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.list-select {
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+
+.list-select:hover {
+  background: var(--hover);
+}
+
+.list-select option {
+  background: var(--surface);
+  font-size: 13.5px;
+  font-weight: 400;
+}
+
+.list-name-input {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.count {
+  flex: none;
+  min-width: 22px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.menu {
+  position: absolute;
+  top: 42px;
+  right: 8px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.menu button {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  text-align: left;
+}
+
+.menu button:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.menu button:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.menu .danger:not(:disabled) {
+  color: var(--danger);
+}
+
+.menu hr {
+  width: 100%;
+  margin: 4px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.banner {
+  flex: none;
+  margin: 0 10px 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  color: var(--danger);
+  font-size: 12.5px;
+}
+
+.help {
+  flex: none;
+  margin: 0 10px 8px;
+  padding: 10px 12px 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  align-items: center;
+}
+
+.help p {
+  margin: 10px 0 4px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+/* --- Neue Aufgabe ---------------------------------------------------------- */
+
+.add-btn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 10px 6px;
+  padding: 8px 12px 8px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+  text-align: left;
+}
+
+.add-btn:hover {
+  background: color-mix(in srgb, var(--accent) 22%, var(--accent-soft));
+}
+
+.add-icon .ico {
+  width: 18px;
+  height: 18px;
+}
+
+/* --- Aufgaben ------------------------------------------------------------------ */
+
+.scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 4px 24px;
+}
+
+.tasks,
+.subtasks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Jede Ebene rückt ein; die Linie zeigt, was zusammengehört. */
+.subtasks {
+  margin-left: 22px;
+  border-left: 1px solid var(--line);
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 3px 2px 3px 0;
+  border-radius: 6px;
+}
+
+.row:hover,
+.task.expanded > .row {
+  background: var(--hover);
+}
+
+.grip,
+.grip-spacer {
+  flex: none;
+  width: 16px;
+  height: 24px;
+}
+
+.grip {
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+  cursor: grab;
+  opacity: 0;
+  touch-action: none;
+}
+
+.grip .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.row:hover .grip {
+  opacity: 1;
+}
+
+.grip:hover {
+  color: var(--muted);
+}
+
+.check {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: 3px 2px 0 0;
+  padding: 0;
+  border: 1.6px solid var(--muted);
+  border-radius: 50%;
+  background: transparent;
+  color: transparent;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+
+.check .ico {
+  width: 11px;
+  height: 11px;
+  stroke-width: 3.2;
+}
+
+.check:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.task.done > .row .check {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Markdown-Feld: gerendert anzeigen, beim Anklicken Rohtext bearbeiten. */
+.md-view {
+  cursor: text;
+  overflow-wrap: anywhere;
+}
+
+.md-view.placeholder {
+  color: var(--faint);
+}
+
+.md-edit {
+  display: block;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  resize: none;
+  overflow: hidden;
+  outline: none;
+}
+
+.title .md-view,
+.title .md-edit {
+  min-height: 24px;
+  padding: 2px 2px;
+  line-height: 20px;
+}
+
+.task.done > .row .title .md-view {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--faint);
+}
+
+.md-view a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.md-view a:hover {
+  text-decoration-color: var(--accent);
+}
+
+.md-view code {
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--hover);
+  font: 0.9em ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+.md-p {
+  min-height: 1.45em;
+}
+
+.md-gap {
+  height: 0.5em;
+}
+
+.md-h {
+  margin: 2px 0;
+  font-weight: 700;
+}
+
+.md-h1 {
+  font-size: 1.15em;
+}
+
+.md-h2 {
+  font-size: 1.05em;
+}
+
+.md-list {
+  margin: 2px 0;
+  padding-left: 20px;
+}
+
+.md-quote {
+  margin: 2px 0;
+  padding-left: 8px;
+  border-left: 3px solid var(--line);
+  color: var(--muted);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  margin: 0 0 2px 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.meta:empty {
+  display: none;
+}
+
+/* Notiz-Vorschau: bis zu zwei Zeilen, danach „…". */
+.note-preview {
+  flex: 1 1 100%;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.due {
+  flex: none;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11.5px;
+  line-height: 18px;
+}
+
+.due.today {
+  border-color: var(--today);
+  color: var(--today);
+}
+
+.due.overdue {
+  border-color: var(--overdue);
+  color: var(--overdue);
+}
+
+.task.done .due {
+  border-color: var(--line);
+  color: var(--faint);
+}
+
+/* Papierkorb: nur in der Aufgabe sichtbar, die gerade bearbeitet wird. */
+.del {
+  margin-top: 1px;
+  visibility: hidden;
+}
+
+.task.expanded > .row .del {
+  visibility: visible;
+}
+
+.del:hover {
+  color: var(--danger);
+}
+
+/* --- Bearbeiten-Modus: Details & Datum (wie Google Tasks) ------------------ */
+
+.details {
+  margin: 0 6px 8px 42px;
+}
+
+.notes-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.notes-icon {
+  flex: none;
+  padding-top: 3px;
+}
+
+.notes-icon .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.notes {
+  flex: 1;
+  min-width: 0;
+}
+
+.notes .md-view,
+.notes .md-edit {
+  min-height: 20px;
+  padding: 1px 2px;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.notes .md-view.placeholder {
+  color: var(--muted);
+}
+
+.detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chip {
+  padding: 1px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.chip.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.date-input {
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12.5px;
+}
+
+.link-btn .ico {
+  width: 14px;
+  height: 14px;
+}
+
+.link-btn:hover {
+  background: var(--accent-soft);
+}
+
+.link-btn.danger {
+  margin-left: auto;
+  color: var(--danger);
+}
+
+.link-btn.danger:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+/* --- Drag & Drop --------------------------------------------------------- */
+
+.task.dragging > .row {
+  opacity: 0.4;
+}
+
+.row.drop-before::before,
+.row.drop-after::after,
+.row.drop-inside::after {
+  content: "";
+  position: absolute;
+  left: 20px;
+  right: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+.row.drop-before::before {
+  top: -1px;
+}
+
+.row.drop-after::after,
+.row.drop-inside::after {
+  bottom: -1px;
+}
+
+/* Als Unteraufgabe ablegen: Linie eine Ebene weiter eingerückt. */
+.row.drop-inside::after {
+  left: 44px;
+}
+
+/* --- Leerer Zustand ---------------------------------------------------------- */
+
+.empty {
+  padding: 28px 16px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 12.5px;
+}
+
+.empty p {
+  margin: 0 0 8px;
+}
+
+.empty .hint {
+  color: var(--faint);
+  line-height: 2;
+}
+
+/* --- Erledigt (unten verankert) -------------------------------------------- */
+
+.done-section {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  max-height: 45%;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.done-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 6px 6px;
+}
+
+.done-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px 4px 4px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.done-toggle:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.done-chevron .ico {
+  width: 14px;
+  height: 14px;
+  transform: rotate(-90deg);
+  transition: transform 0.15s;
+}
+
+.done-toggle[aria-expanded="true"] .done-chevron .ico {
+  transform: none;
+}
+
+.done-head .link-btn {
+  color: var(--muted);
+}
+
+.done-head .link-btn:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.done-list {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 4px 10px;
+}
+
+/* --- Hinweis mit „Rückgängig" -------------------------------------------- */
+
+.toast {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: var(--text);
+  color: var(--bg);
+  box-shadow: var(--shadow);
+  font-size: 12.5px;
+}
+
+.toast span {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast button {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent-soft);
+  font-weight: 650;
+}
+
+.toast button:hover {
+  text-decoration: underline;
+}

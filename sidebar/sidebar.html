@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="de" data-theme="system">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="sidebar.css" />
+    <title>Tasks</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <select id="listSelect" class="list-select" aria-label="Liste wählen"></select>
+      <input id="listNameInput" class="list-name-input" type="text" maxlength="100" placeholder="Name der Liste" hidden />
+      <span id="count" class="count" title="Offene Aufgaben">0</span>
+      <button id="listMenuBtn" class="icon-btn" type="button" title="Listen verwalten" aria-label="Listen verwalten" aria-haspopup="menu" aria-expanded="false"></button>
+      <button id="themeToggle" class="icon-btn" type="button"></button>
+      <div id="listMenu" class="menu" role="menu" hidden>
+        <button type="button" role="menuitem" data-action="new">Neue Liste</button>
+        <button type="button" role="menuitem" data-action="rename">Liste umbenennen</button>
+        <button type="button" role="menuitem" data-action="delete" class="danger">Liste löschen</button>
+        <hr />
+        <button type="button" role="menuitem" data-action="help">Tastenkürzel &amp; Markdown</button>
+      </div>
+    </header>
+
+    <div id="banner" class="banner" role="alert" hidden></div>
+
+    <div id="help" class="help" hidden>
+      <div class="help-grid">
+        <kbd>Enter</kbd><span>neue Aufgabe darunter</span>
+        <kbd>Tab</kbd><span>einrücken</span>
+        <kbd>Shift+Tab</kbd><span>ausrücken</span>
+        <kbd>Strg+Enter</kbd><span>abhaken</span>
+        <kbd>Backspace</kbd><span>leere Zeile löschen</span>
+        <kbd>↑ / ↓</kbd><span>zur Aufgabe darüber/darunter</span>
+        <kbd>Alt+↑ / ↓</kbd><span>Aufgabe verschieben</span>
+        <kbd>Esc</kbd><span>Bearbeiten/Details schließen</span>
+      </div>
+      <p>Markdown: <code>**fett**</code> <code>*kursiv*</code> <code>~~durch~~</code> <code>`code`</code> <code>[Text](https://…)</code>, Links werden automatisch erkannt. In Notizen zusätzlich <code>- Liste</code>, <code>1. Liste</code>, <code># Überschrift</code>, <code>&gt; Zitat</code>.</p>
+      <button id="helpClose" class="link-btn" type="button">Schließen</button>
+    </div>
+
+    <button id="addBtn" class="add-btn" type="button">
+      <span id="addIcon" class="add-icon" aria-hidden="true"></span>
+      Aufgabe hinzufügen
+    </button>
+
+    <main id="main" class="scroll">
+      <ul id="openList" class="tasks"></ul>
+      <div id="empty" class="empty" hidden>
+        <p>Keine offenen Aufgaben.</p>
+        <p class="hint">„Aufgabe hinzufügen" klicken, dann <kbd>Enter</kbd> neue Zeile · <kbd>Tab</kbd> einrücken · <kbd>Strg+Enter</kbd> abhaken</p>
+      </div>
+    </main>
+
+    <section id="doneSection" class="done-section" hidden>
+      <div class="done-head">
+        <button id="doneToggle" class="done-toggle" type="button" aria-expanded="false">
+          <span id="doneChevron" class="done-chevron"></span>
+          <span id="doneLabel"></span>
+        </button>
+        <button id="clearDone" class="link-btn" type="button">Erledigte löschen</button>
+      </div>
+      <ul id="doneList" class="tasks done-list" hidden></ul>
+    </section>
+
+    <div id="toast" class="toast" role="status" hidden>
+      <span id="toastText"></span>
+      <button id="toastUndo" type="button">Rückgängig</button>
+    </div>
+
+    <script src="sidebar.js"></script>
+  </body>
+</html>

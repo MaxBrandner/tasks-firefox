@@ -1,0 +1,12 @@
+{
+  "addons": {
+    "tasks@brandner.name": {
+      "updates": [
+        {
+          "version": "0.1.1",
+          "update_link": "https://github.com/MaxBrandner/tasks-firefox/releases/download/v0.1.1/tasks-0.1.1.xpi"
+        }
+      ]
+    }
+  }
+}

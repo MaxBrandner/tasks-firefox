@@ -1,0 +1,41 @@
+{
+  "manifest_version": 2,
+  "name": "Tasks",
+  "version": "0.1.1",
+  "description": "Aufgabenlisten mit Unteraufgaben, Notizen und Fälligkeitsdatum in der Seitenleiste – synchronisiert über Firefox Sync.",
+  "permissions": [
+    "storage"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "browser_action": {
+    "default_title": "Tasks – Seitenleiste ein-/ausblenden",
+    "default_icon": {
+      "48": "icons/icon.svg",
+      "96": "icons/icon.svg"
+    }
+  },
+  "sidebar_action": {
+    "default_title": "Tasks",
+    "default_panel": "sidebar/sidebar.html",
+    "default_icon": {
+      "48": "icons/icon.svg",
+      "96": "icons/icon.svg"
+    }
+  },
+  "icons": {
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "tasks@brandner.name",
+      "strict_min_version": "140.0",
+      "update_url": "https://raw.githubusercontent.com/MaxBrandner/tasks-firefox/main/updates.json",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    }
+  }
+}
