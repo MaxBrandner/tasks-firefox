@@ -29,6 +29,29 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   ok(!$("chatPanel").hidden && !H.li("Folien").classList.contains("expanded"), "Esc: erst die aufgeklappte Aufgabe zu …");
   d.body.dispatchEvent(new H.w.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); await H.tick();
   ok($("chatPanel").hidden, "… dann der Chat");
+  // narrow layout (jsdom has no matchMedia → narrow): tabs, quick card, Esc steps back
+  const key = (k, el = d.body) => el.dispatchEvent(new H.w.KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
+  $("chatBtn").click(); await H.tick();
+  ok(d.body.dataset.chat === "full" && $("tabChat").getAttribute("aria-pressed") === "true", "schmal: Chat-Knopf zeigt den Reiter „Chat“");
+  $("tabTasks").click(); await H.tick();
+  ok(d.body.dataset.chat === "tasks" && !$("chatPanel").hidden && $("tabTasks").getAttribute("aria-pressed") === "true", "Reiter „Aufgaben“: Chat bleibt offen");
+  key("/"); await H.tick();
+  ok(d.body.dataset.chat === "quick" && d.activeElement === $("chatInput"), "/ über den Aufgaben öffnet die Schnell-Karte");
+  $("chatExpand").click(); await H.tick();
+  ok(d.body.dataset.chat === "full", "„Ganzer Chat“ wechselt in den Reiter");
+  $("chatClose").click(); await H.tick();
+  key("/"); await H.tick(); key("Escape", $("chatInput")); await H.tick();
+  ok(!d.body.dataset.chat && $("chatPanel").hidden, "Esc in der Schnell-Karte ohne Markierung schließt ganz");
+  key("/"); await H.tick();
+  await say("Was ist bei DL dran?", { reply: "[[T:b1]].", actions: [], highlight: ["b1"] });
+  ok(!$("tabMarks").hidden && $("tabMarks").textContent === "1 markiert", "Reiter „Aufgaben“ zählt Markierungen");
+  key("Escape", $("chatInput")); await H.tick();
+  ok(d.body.dataset.chat === "tasks" && H.li("Blatt 1").classList.contains("chat-mark"), "Esc mit Markierung: Karte zu, Markierung bleibt");
+  $("tabChat").click(); await H.tick();
+  last().querySelector(".ref-chip").click(); await H.tick();
+  ok(d.body.dataset.chat === "tasks", "Chip-Klick im Reiter „Chat“ wechselt zu den Aufgaben");
+  key("Escape"); await H.tick();
+  ok(!d.body.dataset.chat && $("tabMarks").hidden && !d.querySelector(".chat-mark"), "nächstes Esc schließt den Chat, Markierung und Zähler weg");
   $("chatBtn").click(); await H.tick();
   // question with references + highlight
   H.edit("Blatt 1"); await H.tick();
@@ -36,7 +59,7 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   const chips = [...last().querySelectorAll(".ref-chip")].map((c) => c.textContent);
   ok(chips.join() === "Blatt 1,Uni", "Antwort zeigt Verweise als Chips: " + chips);
   ok(H.li("Blatt 1").classList.contains("chat-mark") && !d.querySelector(".chat-mark:not([data-id='b1'])"), "besprochene Aufgabe in der Liste markiert");
-  const prompt = H.chatPrompts[0];
+  const prompt = H.chatPrompts[H.chatPrompts.length - 1];
   ok(/Blatt 1 \(id: b1, fällig 2026-10-21 12:00, Links: Abgabe <https:\/\/ilias\.hhu\.de\/b1>\)/.test(prompt) && /Gerade aufgeklappt: „Blatt 1“ \(id: b1\)/.test(prompt) && /<<<\nWas ist diese Woche fällig\?\n>>>/.test(prompt), "an die KI: Baum mit IDs/Links, aufgeklappte Aufgabe, Nachricht");
   // highlight in another list → sidebar switches there
   d.getElementById("listSelect").value = "priv"; d.getElementById("listSelect").dispatchEvent(new H.w.Event("change")); await H.tick();

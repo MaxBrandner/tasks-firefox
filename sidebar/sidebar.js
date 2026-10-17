@@ -1418,9 +1418,9 @@
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || e.defaultPrevented) return;
     closeMenu();
-    // Innermost first: an expanded task collapses, the next Esc closes the chat.
+    // Innermost first: an expanded task collapses, the next Esc steps the chat back.
     if (expandedId) setExpanded(null);
-    else if (!chatPanelEl.hidden) toggleChat(false);
+    else if (chatMode) chatStepBack();
   });
 
   // --- Backup export / import -------------------------------------------------
@@ -2248,6 +2248,11 @@
   let chat = [];
   let chatLoaded = false;
   let chatBusy = false;
+  // null = closed; "full" / "tasks" / "quick" = which view a narrow sidebar
+  // shows (tab "Chat", tab "Aufgaben", quick card). Wide shows both side by side.
+  let chatMode = null;
+  const wideQuery = window.matchMedia ? window.matchMedia("(min-width: 600px)") : null; // same as the CSS
+  const isWide = () => !!(wideQuery && wideQuery.matches);
 
   function refChip(kind, id) {
     const item = kind === "T" ? tasks.get(id) : lists.get(id);
@@ -2258,6 +2263,7 @@
       onclick: (e) => {
         e.stopPropagation();
         if (!item) return;
+        if (chatMode === "full" && !isWide()) setChatMode("tasks"); // the list sits behind the tab "Aufgaben"
         if (kind === "T") revealTask(id);
         else setCurrentList(id);
       },
@@ -2565,6 +2571,15 @@
     chatLogEl.replaceChildren(...items);
     chatLogEl.scrollTop = chatLogEl.scrollHeight;
     $("chatSend").disabled = chatBusy;
+    updateChatTabs();
+  }
+
+  function updateChatTabs() {
+    $("tabTasks").setAttribute("aria-pressed", String(chatMode !== "full"));
+    $("tabChat").setAttribute("aria-pressed", String(chatMode === "full"));
+    const n = new Set([...chatMarks, ...chatChanged].filter((id) => tasks.has(id))).size;
+    $("tabMarks").hidden = !n;
+    $("tabMarks").textContent = n + " markiert";
   }
 
   // Make what the AI marked or changed visible: if none of it is in the open
@@ -2616,22 +2631,42 @@
     renderChat();
   }
 
-  async function toggleChat(open = chatPanelEl.hidden) {
-    chatPanelEl.hidden = !open;
-    $("chatBtn").setAttribute("aria-expanded", String(open));
-    if (open) {
-      await loadChat();
-      renderChat();
-      chatInputEl.focus();
-    } else {
+  // Open/close the chat or switch its view (see "Tasks / chat layout" in the CSS).
+  async function setChatMode(mode) {
+    const wasOpen = !!chatMode;
+    chatMode = mode;
+    chatPanelEl.hidden = !mode;
+    if (mode) document.body.dataset.chat = mode;
+    else delete document.body.dataset.chat;
+    $("chatBtn").setAttribute("aria-expanded", String(!!mode));
+    if (!mode) {
       chatInputEl.blur(); // a hidden field must not keep the focus
       chatMarks.clear();
       chatChanged.clear();
       render();
+      updateChatTabs();
+      return;
     }
+    if (!wasOpen) await loadChat();
+    renderChat();
+    if (mode === "tasks" && !isWide()) chatInputEl.blur();
+    else chatInputEl.focus();
   }
 
-  $("chatBtn").addEventListener("click", () => toggleChat());
+  function toggleChat(open = chatPanelEl.hidden) {
+    return setChatMode(open ? "full" : null);
+  }
+
+  // Esc: quick card → tab "Aufgaben" (if something is marked there) → closed.
+  function chatStepBack() {
+    if (chatMode === "quick" && !isWide() && (chatMarks.size || chatChanged.size)) setChatMode("tasks");
+    else setChatMode(null);
+  }
+
+  $("chatBtn").addEventListener("click", () => setChatMode(chatMode === "full" || (chatMode && isWide()) ? null : "full"));
+  $("tabTasks").addEventListener("click", () => setChatMode("tasks"));
+  $("tabChat").addEventListener("click", () => setChatMode("full"));
+  $("chatExpand").addEventListener("click", () => setChatMode("full"));
   $("chatClose").addEventListener("click", () => toggleChat(false));
   $("chatNew").addEventListener("click", () => {
     chat = [];
@@ -2652,17 +2687,18 @@
       sendChat(chatInputEl.value);
     } else if (e.key === "Escape") {
       e.preventDefault();
-      toggleChat(false);
+      chatStepBack();
     }
   });
   chatInputEl.addEventListener("input", () => autosize(chatInputEl));
-  // "/" opens the chat (when not typing somewhere).
+  // "/" opens the chat (when not typing somewhere): narrow as a quick card over
+  // the list, unless the full chat view is already showing.
   document.addEventListener("keydown", (e) => {
     if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey || modalOpen()) return;
     const a = document.activeElement;
     if (a && a.matches("textarea, input, select")) return;
     e.preventDefault();
-    toggleChat(true);
+    setChatMode(chatMode === "full" || isWide() ? "full" : "quick");
   });
 
   // --- Start -----------------------------------------------------------------

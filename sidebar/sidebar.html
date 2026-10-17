@@ -48,7 +48,7 @@
         <kbd>Strg+Z / Strg+Y</kbd><span>rückgängig / wiederholen (alle Schritte: ⋯ → Verlauf …)</span>
         <kbd>Alt+↑ / ↓</kbd><span>Aufgabe verschieben</span>
         <kbd>Esc</kbd><span>Bearbeiten/Details schließen</span>
-        <kbd>/</kbd><span>KI-Chat öffnen</span>
+        <kbd>/</kbd><span>KI-Chat öffnen (schmale Seitenleiste: Schnell-Chat über den Aufgaben)</span>
         <kbd>Strg+Alt+A</kbd><span>Tasks öffnen/schließen (überall in Firefox)</span>
       </div>
       <p>Markdown: <code>**fett**</code> <code>*kursiv*</code> <code>~~durch~~</code> <code>`code`</code> <code>[Text](https://…)</code>, Links werden automatisch erkannt. In Notizen zusätzlich <code>- Liste</code>, <code>1. Liste</code>, <code># Überschrift</code>, <code>&gt; Zitat</code>.</p>
@@ -137,43 +137,56 @@
       <button id="aiStatusClose" class="icon-btn small" type="button" title="Ausblenden" aria-label="Ausblenden">×</button>
     </div>
 
-    <button id="addBtn" class="add-btn" type="button">
-      <span id="addIcon" class="add-icon" aria-hidden="true"></span>
-      Aufgabe hinzufügen
-    </button>
+    <!-- Narrow sidebar with the chat open: switch between tasks and chat. -->
+    <nav id="viewTabs" class="view-tabs" aria-label="Ansicht">
+      <button id="tabTasks" type="button">Aufgaben<span id="tabMarks" class="tab-badge" hidden></span></button>
+      <button id="tabChat" type="button">Chat</button>
+    </nav>
 
-    <main id="main" class="scroll">
-      <ul id="openList" class="tasks"></ul>
-      <div id="empty" class="empty" hidden>
-        <p>Keine offenen Aufgaben.</p>
-        <p class="hint">„Aufgabe hinzufügen" klicken, dann <kbd>Enter</kbd> neue Zeile · <kbd>Tab</kbd> einrücken · <kbd>Strg+Enter</kbd> abhaken</p>
-      </div>
-    </main>
-
-    <section id="doneSection" class="done-section" hidden>
-      <div class="done-head">
-        <button id="doneToggle" class="done-toggle" type="button" aria-expanded="false">
-          <span id="doneChevron" class="done-chevron"></span>
-          <span id="doneLabel"></span>
+    <!-- Tasks and chat: switched by tabs (narrow) or side by side (wide, from 600 px). -->
+    <div class="workspace">
+      <div id="tasksPane" class="tasks-pane">
+        <button id="addBtn" class="add-btn" type="button">
+          <span id="addIcon" class="add-icon" aria-hidden="true"></span>
+          Aufgabe hinzufügen
         </button>
-        <button id="clearDone" class="link-btn" type="button">Erledigte löschen</button>
-      </div>
-      <ul id="doneList" class="tasks done-list" hidden></ul>
-    </section>
 
-    <!-- AI chat: docked at the bottom so the list (and what the AI marks) stays visible. -->
-    <section id="chatPanel" class="chat" aria-label="KI-Chat" hidden>
-      <div class="chat-head">
-        <span class="chat-title">KI-Chat</span>
-        <button id="chatNew" class="link-btn" type="button">Neuer Chat</button>
-        <button id="chatClose" class="icon-btn small" type="button" title="Chat schließen" aria-label="Chat schließen"></button>
+        <main id="main" class="scroll">
+          <ul id="openList" class="tasks"></ul>
+          <div id="empty" class="empty" hidden>
+            <p>Keine offenen Aufgaben.</p>
+            <p class="hint">„Aufgabe hinzufügen" klicken, dann <kbd>Enter</kbd> neue Zeile · <kbd>Tab</kbd> einrücken · <kbd>Strg+Enter</kbd> abhaken</p>
+          </div>
+        </main>
+
+        <section id="doneSection" class="done-section" hidden>
+          <div class="done-head">
+            <button id="doneToggle" class="done-toggle" type="button" aria-expanded="false">
+              <span id="doneChevron" class="done-chevron"></span>
+              <span id="doneLabel"></span>
+            </button>
+            <button id="clearDone" class="link-btn" type="button">Erledigte löschen</button>
+          </div>
+          <ul id="doneList" class="tasks done-list" hidden></ul>
+        </section>
       </div>
-      <div id="chatLog" class="chat-log" aria-live="polite"></div>
-      <form id="chatForm" class="chat-form" autocomplete="off">
-        <textarea id="chatInput" rows="1" maxlength="2000" placeholder="Frag oder sag, was passieren soll … (Enter = senden)" aria-label="Nachricht an die KI"></textarea>
-        <button id="chatSend" class="icon-btn" type="submit" title="Senden" aria-label="Senden"></button>
-      </form>
-    </section>
+
+      <!-- AI chat: column on the right when wide; narrow a full view (tab "Chat")
+           or a quick card over the list ("/"). -->
+      <section id="chatPanel" class="chat" aria-label="KI-Chat" hidden>
+        <div class="chat-head">
+          <span class="chat-title">KI-Chat</span>
+          <button id="chatNew" class="link-btn" type="button">Neuer Chat</button>
+          <button id="chatExpand" class="link-btn" type="button" title="Ganzen Chat im Reiter „Chat“ anzeigen">Ganzer Chat</button>
+          <button id="chatClose" class="icon-btn small" type="button" title="Chat schließen" aria-label="Chat schließen"></button>
+        </div>
+        <div id="chatLog" class="chat-log" aria-live="polite"></div>
+        <form id="chatForm" class="chat-form" autocomplete="off">
+          <textarea id="chatInput" rows="1" maxlength="2000" placeholder="Frag oder sag, was passieren soll … (Enter = senden)" aria-label="Nachricht an die KI"></textarea>
+          <button id="chatSend" class="icon-btn" type="submit" title="Senden" aria-label="Senden"></button>
+        </form>
+      </section>
+    </div>
 
     <div id="toast" class="toast" role="status" hidden>
       <span id="toastText"></span>

@@ -1339,14 +1339,134 @@ kbd {
   visibility: visible;
 }
 
+/* --- Tasks / chat layout ----------------------------------------------------- */
+/* Wide (from 600 px): list and chat side by side. Narrow: tabs switch between
+   the list and a full-height chat; "/" opens a quick card over the list.
+   While the chat is open, body[data-chat] is "full", "tasks" or "quick". */
+
+.workspace {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tasks-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.view-tabs {
+  display: none;
+  flex: none;
+  gap: 4px;
+  margin: 0 10px 8px;
+  padding: 3px;
+  border-radius: 8px;
+  background: var(--hover);
+}
+
+.view-tabs button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.view-tabs button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.tab-badge {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--soon) 18%, transparent);
+  color: var(--soon);
+  font-size: 11px;
+}
+
+#chatExpand {
+  display: none;
+}
+
+@media (max-width: 599.98px) {
+  body[data-chat] .view-tabs {
+    display: flex;
+  }
+
+  body[data-chat="full"] .tasks-pane,
+  body[data-chat="tasks"] .chat {
+    display: none;
+  }
+
+  body[data-chat="full"] .chat {
+    flex: 1;
+  }
+
+  body[data-chat="quick"] .chat {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    z-index: 20;
+    max-height: 60%;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+
+  /* The quick card shows only the latest message; the tab "Chat" has all. */
+  body[data-chat="quick"] .chat-log > :not(:last-child),
+  body[data-chat="quick"] #chatNew {
+    display: none;
+  }
+
+  body[data-chat="quick"] #chatExpand {
+    display: inline-flex;
+  }
+
+  body[data-chat="quick"] .chat-msg.assistant {
+    background: var(--bg);
+  }
+
+  body[data-chat="quick"] .scroll {
+    padding-bottom: 220px;
+  }
+}
+
+@media (min-width: 600px) {
+  .workspace {
+    flex-direction: row;
+  }
+
+  .chat {
+    width: clamp(280px, 45%, 560px);
+    border-left: 1px solid var(--line);
+  }
+}
+
 /* --- AI chat ----------------------------------------------------------------- */
 
 .chat {
   flex: none;
   display: flex;
   flex-direction: column;
-  max-height: 55%;
-  border-top: 1px solid var(--line);
+  min-height: 0;
   background: var(--bg);
 }
 
