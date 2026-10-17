@@ -829,3 +829,57 @@ kbd {
 .toast button:hover {
   text-decoration: underline;
 }
+
+/* --- Uhrzeit, Countdown, Wiederholung -------------------------------------- */
+
+:root {
+  --soon: #b26a00;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --soon: #f0b35a;
+  }
+}
+
+:root[data-theme="dark"] {
+  --soon: #f0b35a;
+}
+
+.due {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.due .ico {
+  width: 11px;
+  height: 11px;
+}
+
+.due.soon {
+  border-color: var(--soon);
+  color: var(--soon);
+  font-weight: 600;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chip .ico {
+  width: 12px;
+  height: 12px;
+}
+
+/* Symbol-Knopf (Wiederholen): nur das Symbol, etwas größer. */
+.chip.icon-only {
+  padding: 2px 7px;
+}
+
+.chip.icon-only .ico {
+  width: 14px;
+  height: 14px;
+}

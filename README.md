@@ -22,6 +22,11 @@ kein Server, keine Berechtigungen auf Webseiten.
 - **Abgehakte Unteraufgaben** bleiben an ihrem Platz; Enter darauf legt
   darunter eine neue an.
 - **↑ / ↓ ohne Auswahl** – springt in die unterste bzw. oberste Aufgabe.
+- **Uhrzeit & Countdown** – Fälligkeit mit Uhrzeit; unter 48 h zeigt der Chip
+  „noch 1 T 18 Std", danach „überfällig".
+- **↻ Wöchentlich** – ist eine Abgabe fällig oder abgehakt, entsteht die nächste
+  eine Woche später (Zahl am Titelende zählt mit: „Blatt 3" → „Blatt 4"). Die
+  Vorwoche bleibt als eigene Aufgabe stehen und wird nicht überschrieben.
 - **Design** – System / Hell / Dunkel (Knopf oben rechts).
 
 Toolbar-Symbol oder **Strg+Alt+A**: blendet die Seitenleiste ein und aus.

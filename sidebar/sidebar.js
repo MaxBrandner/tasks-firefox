@@ -88,6 +88,7 @@
     close: "M6 6l12 12M18 6L6 18",
     trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
     notes: "M4 6h16M4 12h16M4 18h10",
+    repeat: "M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3",
     monitor: "M3 4.5h18v12H3zM8.5 20.5h7M12 16.5v4",
     sun: "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8zM12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4",
     moon: "M20.5 13.5A8.5 8.5 0 1 1 10.5 3.5a6.5 6.5 0 0 0 10 10z",
@@ -809,6 +810,7 @@
       for (const a of ancestors(id)) if (tasks.get(a).x) set(a, { x: false, xa: "" });
     }
     write(updates);
+    rollRecurring();
     render();
   }
 
@@ -860,10 +862,79 @@
     toast(n === 1 ? "1 Aufgabe gelöscht" : `${n} Aufgaben gelöscht`, removed);
   }
 
+  // Datum entfernen nimmt auch Uhrzeit und Wiederholung weg (beide brauchen ein Datum).
   function setDue(id, d) {
     checkpoint();
-    patchTask(id, { d });
+    patchTask(id, d ? { d } : { d: "", h: "", r: "" });
+    rollRecurring();
     render();
+  }
+
+  // Uhrzeit ohne Datum → heute.
+  function setTime(id, h) {
+    checkpoint();
+    const t = tasks.get(id);
+    patchTask(id, { h, d: t.d || (h ? isoDate(0) : "") });
+    rollRecurring();
+    render();
+  }
+
+  // Wöchentlich wiederholen (ohne Datum → ab heute).
+  function setWeekly(id, on) {
+    checkpoint();
+    const t = tasks.get(id);
+    patchTask(id, on ? { r: "w", s: t.s || id, d: t.d || isoDate(0) } : { r: "" });
+    rollRecurring();
+    render();
+  }
+
+  // --- Wöchentliche Wiederholung ---------------------------------------------
+  // Ist die aktuelle Instanz fällig geworden oder abgehakt, entsteht die
+  // nächste: eine Woche später, eine Zahl am Titelende zählt mit („Blatt 3" →
+  // „Blatt 4"). Die alte bleibt als eigene Aufgabe stehen – auch überfällig –
+  // und wird nie überschrieben. Die ID der neuen Instanz ergibt sich aus Serie
+  // + Datum, damit zwei Geräte über Firefox Sync nicht doppelt anlegen.
+
+  // Fälligkeit als Zeitpunkt: mit Uhrzeit genau, ohne Uhrzeit Ende des Tages.
+  function dueAt(t) {
+    const [y, m, day] = t.d.split("-").map(Number);
+    const [hh, mm] = t.h ? t.h.split(":").map(Number) : [23, 59];
+    return new Date(y, m - 1, day, hh, mm, t.h ? 0 : 59).getTime();
+  }
+
+  function addDays(d, n) {
+    const [y, m, day] = d.split("-").map(Number);
+    const x = new Date(y, m - 1, day + n);
+    return x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" +
+      String(x.getDate()).padStart(2, "0");
+  }
+
+  const bumpNumber = (title) => title.replace(/(\d+)(\s*)$/, (_, n, sp) => String(Number(n) + 1) + sp);
+
+  function rollRecurring() {
+    const now = Date.now();
+    let changed = false;
+    for (const [startId, start] of [...tasks]) {
+      if (start.r !== "w" || !start.d) continue;
+      let id = startId;
+      for (let guard = 0; guard < 12; guard++) {
+        const cur = tasks.get(id);
+        if (!cur || (!cur.x && dueAt(cur) > now)) break;
+        const series = cur.s || id;
+        const nextD = addDays(cur.d, 7);
+        const nid = series + "-" + nextD.replace(/-/g, "");
+        patchTask(id, { r: "", s: series });
+        if (!tasks.has(nid)) {
+          tasks.set(nid, compact({ l: cur.l, t: bumpNumber(cur.t || ""), n: cur.n, d: nextD, h: cur.h, r: "w", s: series }));
+          const par = parentOf(id);
+          const idx = visibleChildren(cur.l, par).findIndex((x) => x.id === id);
+          placeTask(nid, par, idx < 0 ? 0 : idx + 1);
+        }
+        changed = true;
+        id = nid;
+      }
+    }
+    if (changed) scheduleRender();
   }
 
   // Titel verlassen: speichern. Ob eine leere Aufgabe verschwindet, entscheidet
@@ -1110,7 +1181,20 @@
 
   // --- Darstellung -----------------------------------------------------------
 
-  function dueInfo(d) {
+  function formatLeft(ms) {
+    const min = Math.floor(ms / 60000);
+    const d = Math.floor(min / 1440);
+    const h = Math.floor((min % 1440) / 60);
+    const m = min % 60;
+    if (d) return `${d} T ${h} Std`;
+    if (h) return `${h} Std ${m} Min`;
+    return `${Math.max(m, 1)} Min`;
+  }
+
+  // Beschriftung des Datums-Chips. Mit Uhrzeit und weniger als 48 h übrig:
+  // Countdown („noch 1 T 18 Std"); danach „überfällig".
+  function dueInfo(t) {
+    const d = t.d;
     const [y, m, day] = d.split("-").map(Number);
     const due = new Date(y, m - 1, day);
     const today = new Date();
@@ -1128,15 +1212,49 @@
         year: due.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
       });
     }
-    return { label, cls: diff < 0 ? "overdue" : diff === 0 ? "today" : "" };
+    if (t.h) label += ", " + t.h;
+    let cls = diff < 0 ? "overdue" : diff === 0 ? "today" : "";
+    if (!t.x) {
+      const left = dueAt(t) - Date.now();
+      if (left <= 0) {
+        cls = "overdue";
+        if (t.h) label = "überfällig · " + label;
+      } else if (t.h && left < 48 * 3600 * 1000) {
+        cls = "soon";
+        label = "noch " + formatLeft(left);
+      }
+    }
+    return { label, cls };
   }
+
+  function dueTitle(t) {
+    const [y, m, day] = t.d.split("-").map(Number);
+    const full = new Date(y, m - 1, day).toLocaleDateString("de-DE", {
+      weekday: "short", day: "numeric", month: "short", year: "numeric",
+    });
+    return "Fällig: " + full + (t.h ? ", " + t.h + " Uhr" : "") + (t.r === "w" ? " · wöchentlich" : "");
+  }
+
+  // Countdown live halten und fällig gewordene Wiederholungen anlegen.
+  setInterval(() => {
+    rollRecurring();
+    for (const el of document.querySelectorAll(".due[data-id]")) {
+      const t = tasks.get(el.dataset.id);
+      if (!t || !t.d) continue;
+      const info = dueInfo(t);
+      el.className = "due " + info.cls;
+      el.querySelector(".due-label").textContent = info.label;
+    }
+  }, 30000);
 
   function buildMeta(t, isExpanded) {
     const meta = h("div", { class: "meta" });
     if (isExpanded) return meta;
     if (t.d) {
-      const due = dueInfo(t.d);
-      meta.append(h("span", { class: "due " + due.cls, title: "Fällig: " + t.d }, due.label));
+      const due = dueInfo(t);
+      meta.append(h("span", { class: "due " + due.cls, title: dueTitle(t), dataset: { id: t.id } },
+        t.r === "w" && icon("repeat"),
+        h("span", { class: "due-label" }, due.label)));
     }
     if (t.n && t.n.trim()) {
       const preview = h("div", { class: "note-preview md-view" });
@@ -1190,6 +1308,13 @@
           "aria-label": "Fälligkeitsdatum",
           onchange: (e) => setDue(id, e.target.value),
         }),
+        h("input", {
+          class: "date-input",
+          type: "time",
+          value: t.h || "",
+          "aria-label": "Uhrzeit",
+          onchange: (e) => setTime(id, e.target.value),
+        }),
         t.d && h("button", {
           class: "icon-btn small",
           type: "button",
@@ -1198,8 +1323,16 @@
           onclick: () => setDue(id, ""),
         }, icon("close"))
       ),
-      !t.x && h("div", { class: "detail-row" },
+      h("div", { class: "detail-row" },
         h("button", {
+          class: "chip icon-only" + (t.r === "w" ? " active" : ""),
+          type: "button",
+          title: "Wöchentlich wiederholen – die Vorwoche bleibt stehen",
+          "aria-label": "Wöchentlich wiederholen",
+          "aria-pressed": String(t.r === "w"),
+          onclick: () => setWeekly(id, t.r !== "w"),
+        }, icon("repeat")),
+        !t.x && h("button", {
           class: "link-btn",
           type: "button",
           title: "Tipp: Tab in einer Zeile rückt sie unter die Aufgabe darüber ein",
@@ -1473,6 +1606,7 @@
     currentList = local[CURRENT_KEY] || null;
     await reloadAll();
     ensureCurrentList();
+    rollRecurring();
     render();
   }
 
