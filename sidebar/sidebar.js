@@ -102,6 +102,7 @@
     close: "M6 6l12 12M18 6L6 18",
     trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
     notes: "M4 6h16M4 12h16M4 18h10",
+    link: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
     repeat: "M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3",
     monitor: "M3 4.5h18v12H3zM8.5 20.5h7M12 16.5v4",
     sun: "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8zM12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4",
@@ -123,7 +124,7 @@
   function compact(obj) {
     const out = {};
     for (const [k, v] of Object.entries(obj)) {
-      if (v !== "" && v != null && v !== false) out[k] = v;
+      if (v !== "" && v != null && v !== false && !(Array.isArray(v) && !v.length)) out[k] = v;
     }
     return out;
   }
@@ -1372,6 +1373,106 @@
     }
   }, 30000);
 
+  // --- Links ----------------------------------------------------------------
+  // Feld u: [{ url, t: Name }]. „Alle öffnen" nimmt die Links der Aufgabe und
+  // aller Unteraufgaben (ohne Doppelte) und öffnet sie als Tab-Gruppe.
+
+  const isWebUrl = (url) => /^https?:\/\//i.test(url || "");
+  const linksOf = (t) => ((t && t.u) || []).filter((l) => l && isWebUrl(l.url));
+  const plainTitle = (s) => (s || "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[*_~`]/g, "").trim();
+
+  function collectLinks(id) {
+    const out = [];
+    const seen = new Set();
+    const walk = (tid) => {
+      for (const l of linksOf(tasks.get(tid))) {
+        if (!seen.has(l.url)) {
+          seen.add(l.url);
+          out.push(l);
+        }
+      }
+      const t = tasks.get(tid);
+      if (!t) return;
+      const kids = [];
+      for (const [cid, c] of tasks) if (c.p === tid && c.l === t.l) kids.push({ id: cid, ...c });
+      kids.sort(byOrder).forEach((k) => walk(k.id));
+    };
+    walk(id);
+    return out;
+  }
+
+  // Ein Link → ein Tab; mehrere → Tab-Gruppe mit dem Namen der Aufgabe.
+  async function openLinks(id) {
+    const links = collectLinks(id);
+    if (!links.length) return;
+    try {
+      if (links.length === 1) {
+        await browser.tabs.create({ url: links[0].url, active: true });
+        return;
+      }
+      const tabs = [];
+      for (const l of links) tabs.push(await browser.tabs.create({ url: l.url, active: false }));
+      if (browser.tabs.group) {
+        const groupId = await browser.tabs.group({ tabIds: tabs.map((t) => t.id) });
+        if (browser.tabGroups) {
+          await browser.tabGroups.update(groupId, { title: plainTitle((tasks.get(id) || {}).t) || "Tasks", color: "blue" });
+        }
+      }
+      await browser.tabs.update(tabs[0].id, { active: true });
+    } catch (err) {
+      showBanner("Links konnten nicht geöffnet werden: " + ((err && err.message) || err));
+    }
+  }
+
+  function addLink(id, value) {
+    let raw = (value || "").trim();
+    if (!raw) return false;
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(raw)) raw = "https://" + raw; // „ilias.hhu.de/…" ohne https://
+    let url;
+    try {
+      url = new URL(raw);
+    } catch (_) {
+      return false;
+    }
+    if (!isWebUrl(url.href)) return false;
+    const t = tasks.get(id);
+    if (linksOf(t).some((l) => l.url === url.href)) return true;
+    checkpoint();
+    patchTask(id, { u: [...linksOf(t), { url: url.href, t: url.hostname }] });
+    render();
+    return true;
+  }
+
+  function removeLink(id, url) {
+    checkpoint();
+    patchTask(id, { u: linksOf(tasks.get(id)).filter((l) => l.url !== url) });
+    render();
+  }
+
+  // Einmalig: früher hing „[Zur Seite](…)" als Zeile an der Notiz – ins Feld u.
+  function migrateNoteLinks() {
+    const re = /^\[Zur Seite\]\((https?:[^)\s]+)\)\s*$/;
+    const updates = {};
+    for (const [id, t] of tasks) {
+      if (!t.n || !t.n.includes("[Zur Seite](")) continue;
+      const keep = [];
+      const u = [...linksOf(t)];
+      for (const line of t.n.split("\n")) {
+        const m = line.match(re);
+        if (!m) {
+          keep.push(line);
+          continue;
+        }
+        const url = m[1].replace(/%28/g, "(").replace(/%29/g, ")");
+        if (!u.some((l) => l.url === url)) u.push({ url, t: new URL(url).hostname });
+      }
+      const next = compact({ ...t, n: keep.join("\n").trim(), u });
+      tasks.set(id, next);
+      updates[TASK + id] = next;
+    }
+    if (Object.keys(updates).length) write(updates);
+  }
+
   function buildMeta(t, isExpanded) {
     const meta = h("div", { class: "meta" });
     if (isExpanded) return meta;
@@ -1380,6 +1481,20 @@
       meta.append(h("span", { class: "due " + due.cls, title: dueTitle(t), dataset: { id: t.id } },
         t.r === "w" && icon("repeat"),
         h("span", { class: "due-label" }, due.label)));
+    }
+    const links = collectLinks(t.id);
+    if (links.length) {
+      const own = linksOf(t).length;
+      meta.append(h("button", {
+        class: "links-chip",
+        type: "button",
+        title: links.length === 1 ? "Öffnen: " + links[0].t + " – " + links[0].url
+          : `${links.length} Links${own < links.length ? " (inkl. Unteraufgaben)" : ""} als Tab-Gruppe „${plainTitle(t.t)}" öffnen`,
+        onclick: (e) => {
+          e.stopPropagation();
+          openLinks(t.id);
+        },
+      }, icon("link"), links.length > 1 && String(links.length)));
     }
     if (t.n && t.n.trim()) {
       const preview = h("div", { class: "note-preview md-view" });
@@ -1422,6 +1537,45 @@
 
     return h("div", { class: "details" },
       h("div", { class: "notes-row" }, h("span", { class: "notes-icon" }, icon("notes")), notes),
+      h("div", { class: "notes-row links-row" },
+        h("span", { class: "notes-icon" }, icon("link")),
+        h("div", { class: "links-list" },
+          linksOf(t).map((l) => h("span", { class: "link-chip" },
+            h("a", { href: l.url, target: "_blank", rel: "noopener noreferrer", title: l.url }, l.t || l.url),
+            h("button", {
+              class: "link-x",
+              type: "button",
+              title: "Link entfernen",
+              "aria-label": "Link entfernen",
+              onclick: () => removeLink(id, l.url),
+            }, icon("close")))),
+          h("input", {
+            class: "link-add",
+            type: "url",
+            placeholder: "+ Link einfügen (Enter)",
+            "aria-label": "Link hinzufügen",
+            onkeydown: (e) => {
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              const ok = addLink(id, e.target.value);
+              if (!ok) {
+                e.target.classList.add("invalid");
+                return;
+              }
+              const li = findLi(id);
+              const next = li && li.querySelector(":scope > .details .link-add");
+              if (next) next.focus();
+            },
+            oninput: (e) => e.target.classList.remove("invalid"),
+          })
+        ),
+        collectLinks(id).length > 1 && h("button", {
+          class: "link-btn",
+          type: "button",
+          title: "Alle Links (inkl. Unteraufgaben) als Tab-Gruppe öffnen",
+          onclick: () => openLinks(id),
+        }, "Alle öffnen")
+      ),
       h("div", { class: "detail-row" },
         chip("Heute", 0),
         chip("Morgen", 1),
@@ -1521,7 +1675,8 @@
   function isBusy() {
     if (dragging) return true;
     const a = document.activeElement;
-    return !!a && a.tagName === "TEXTAREA" && !!a.closest(".task");
+    const typing = a && (a.tagName === "TEXTAREA" || (a.tagName === "INPUT" && a.type !== "date" && a.type !== "time"));
+    return !!typing && !!a.closest(".task");
   }
 
   // Zeichnet neu, aber nicht während getippt oder gezogen wird – sonst würde
@@ -1732,6 +1887,7 @@
     currentList = local[CURRENT_KEY] || null;
     await reloadAll();
     ensureCurrentList();
+    migrateNoteLinks();
     rollRecurring();
     render();
     // KI-Status nachholen, falls die Seitenleiste gerade erst geöffnet wurde.

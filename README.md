@@ -23,6 +23,10 @@ Google, kein eigener Server.
 - **↻ Wöchentlich** – ist eine Abgabe fällig oder abgehakt, entsteht die nächste
   eine Woche später (Zahl am Titelende zählt mit: „Blatt 3" → „Blatt 4"). Die
   Vorwoche bleibt als eigene Aufgabe stehen und wird nicht überschrieben.
+- **Links** – eigenes Feld je Aufgabe, beliebig viele (im Bearbeitungsmodus
+  „+ Link einfügen"). Eingeklappt zeigt 🔗 die Anzahl – inklusive der Links aller
+  Unteraufgaben; ein Klick öffnet einen Link direkt bzw. mehrere zusammen als
+  **Firefox-Tab-Gruppe** mit dem Namen der Aufgabe (z. B. alles zu „DL").
 - **Markdown** in Titel und Notiz: `**fett**`, `*kursiv*`, `~~durch~~`,
   `` `code` ``, `[Text](https://…)`; Links werden automatisch erkannt. In
   Notizen zusätzlich `- Liste`, `1. Liste`, `# Überschrift`, `> Zitat`.
@@ -60,7 +64,7 @@ Seitenleiste unter `⋯` → „Tastenkürzel & Markdown".
 Text auf einer Webseite markieren → Rechtsklick → **Zu Tasks hinzufügen**. Die
 KI sucht die passende Liste und Elternaufgabe (z. B. „nat Info"), wählt den Titel
 im Stil der Geschwister („Blatt 4"), trägt die Abgabefrist mit Uhrzeit ein und
-hängt den Link zur Seite an. Gibt es die Aufgabe schon, wird sie ergänzt statt
+speichert die Seite als **Link** mit kurzem Namen (z. B. „Abgabe Blatt 1"). Gibt es die Aufgabe schon, wird sie ergänzt statt
 doppelt angelegt. Strg+Z nimmt das wieder zurück.
 
 Eingestellt wird das unter `⋯` → **KI einrichten …**:
@@ -134,6 +138,7 @@ Updates installiert Firefox automatisch.
 | `contextMenus` | Eintrag „Zu Tasks hinzufügen" |
 | `activeTab` | markierten Text nur nach dem Klick auf diesen Eintrag lesen |
 | `nativeMessaging` | mit dem Hilfsprogramm für Claude Code sprechen |
+| `tabGroups` | „Alle öffnen": Links als benannte Tab-Gruppe |
 | optional: Adresse des eigenen Modells | nur wenn ein eigenes Modell gespeichert wird, nur für dessen Adresse |
 
 Die Erweiterung liest keine Webseiten von sich aus. Nur bei „Zu Tasks

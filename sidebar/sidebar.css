@@ -1085,3 +1085,105 @@ kbd {
   color: var(--danger) !important;
   line-height: 1.45 !important;
 }
+
+/* --- Links ----------------------------------------------------------------- */
+
+.links-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11.5px;
+  line-height: 18px;
+}
+
+.links-chip:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.links-chip .ico {
+  width: 12px;
+  height: 12px;
+}
+
+.links-row {
+  margin-top: 6px;
+}
+
+.links-list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.link-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0 2px 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.link-chip a {
+  overflow: hidden;
+  color: var(--accent);
+  text-decoration: none;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.link-chip a:hover {
+  text-decoration: underline;
+}
+
+.link-x {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--faint);
+}
+
+.link-x:hover {
+  color: var(--danger);
+}
+
+.link-x .ico {
+  width: 10px;
+  height: 10px;
+}
+
+.link-add {
+  flex: 1 1 140px;
+  min-width: 0;
+  padding: 2px 4px;
+  border: 0;
+  border-bottom: 1px dashed var(--line);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+
+.link-add:focus {
+  border-bottom-color: var(--accent);
+}
+
+.link-add.invalid {
+  border-bottom-color: var(--danger);
+}

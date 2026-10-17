@@ -57,7 +57,7 @@ const newId = () => crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 function compact(obj) {
   const out = {};
   for (const [k, v] of Object.entries(obj)) {
-    if (v !== "" && v != null && v !== false) out[k] = v;
+    if (v !== "" && v != null && v !== false && !(Array.isArray(v) && !v.length)) out[k] = v;
   }
   return out;
 }
@@ -125,7 +125,8 @@ So entscheidest du:
 - Ort: Wähle die Liste und die Elternaufgabe, unter die die neue Aufgabe thematisch gehört. Achte auf Abkürzungen und Kurznamen (z. B. „nat Info" für „Einführung in die naturwissenschaftliche Informatik"). Passt keine Elternaufgabe, lass parent_id leer – die Aufgabe kommt dann auf die oberste Ebene der passendsten Liste.
 - Titel: kurz, auf Deutsch, im Stil der vorhandenen Geschwister. Heißen sie „Blatt 3", heißt das neue z. B. „Blatt 4"; die Nummer kommt aus dem markierten Text.
 - Fälligkeit: Der Abgabetermin / die Deadline wird due_date (JJJJ-MM-TT) und due_time (HH:MM, 24 Stunden). Startzeiten und Veröffentlichungsdaten sind keine Fälligkeit. Fehlt etwas, lass das Feld leer.
-- notes: höchstens zwei kurze Zeilen mit dem Wichtigsten (z. B. Thema der Übung), als einfaches Markdown. Kein Link – die Seitenadresse wird automatisch angehängt.
+- notes: höchstens zwei kurze Zeilen mit dem Wichtigsten (z. B. Thema der Übung), als einfaches Markdown. Kein Link – die Seitenadresse wird automatisch als Link gespeichert.
+- link_title: kurzer Name für diesen Link zur Seite (z. B. „Abgabe Blatt 1", „Folien", „Aufgabenblatt"), höchstens vier Wörter.
 - Gibt es die Aufgabe schon (gleiche Sache, z. B. ein bereits angelegtes „Blatt 1" am selben Ort), gib ihre ID als update_task_id an, statt eine neue anzulegen; sonst leer.
 - summary: ein kurzer deutscher Satz für den Nutzer, was du wo angelegt hast (z. B. „„Blatt 1" unter nat Info angelegt, fällig Mo 19. Okt, 08:30").`;
 
@@ -139,9 +140,10 @@ const SCHEMA = {
     notes: { type: "string" },
     due_date: { type: "string", description: "JJJJ-MM-TT oder leer" },
     due_time: { type: "string", description: "HH:MM oder leer" },
+    link_title: { type: "string", description: "kurzer Name für den Link zur Seite" },
     summary: { type: "string" },
   },
-  required: ["list_id", "parent_id", "update_task_id", "title", "notes", "due_date", "due_time", "summary"],
+  required: ["list_id", "parent_id", "update_task_id", "title", "notes", "due_date", "due_time", "link_title", "summary"],
   additionalProperties: false,
 };
 
@@ -197,7 +199,7 @@ const originPattern = (baseUrl) => {
 const endpoint = (cfg, path) => cfg.baseUrl.replace(/\/+$/, "") + path;
 
 // Kleine Modelle halten sich nicht immer an ein Schema: Felder zusätzlich nennen.
-const JSON_HINT = "\n\nAntworte ausschließlich mit einem JSON-Objekt mit genau diesen Feldern (alle als Text, leer wenn unbekannt): list_id, parent_id, update_task_id, title, notes, due_date, due_time, summary.";
+const JSON_HINT = "\n\nAntworte ausschließlich mit einem JSON-Objekt mit genau diesen Feldern (alle als Text, leer wenn unbekannt): list_id, parent_id, update_task_id, title, notes, due_date, due_time, link_title, summary.";
 
 function httpError(cfg, status, message) {
   const who = cfg.label || "API";
@@ -332,9 +334,12 @@ async function addFromSelection(info, tab) {
   const parentId = parent && parent.l === listId ? r.parent_id : "";
   const d = /^\d{4}-\d{2}-\d{2}$/.test(r.due_date) ? r.due_date : "";
   const h = d && /^\d{2}:\d{2}$/.test(r.due_time) ? r.due_time : "";
-  const safeUrl = tab.url.replace(/\(/g, "%28").replace(/\)/g, "%29");
-  const link = `[Zur Seite](${safeUrl})`;
-  const notes = [r.notes.trim(), link].filter(Boolean).join("\n");
+  const notes = r.notes.trim();
+  // Die Seite kommt als Link ins Feld u (nur http/https).
+  const link = /^https?:/i.test(tab.url)
+    ? { url: tab.url, t: r.link_title.trim().slice(0, 60) || (tab.title || "").slice(0, 60) || new URL(tab.url).hostname }
+    : null;
+  const withLink = (u) => (link && !(u || []).some((l) => l.url === link.url) ? [...(u || []), link] : u || []);
 
   const before = {};
   const after = {};
@@ -348,7 +353,8 @@ async function addFromSelection(info, tab) {
       t: cur.t || r.title,
       d: d || cur.d,
       h: d ? h : cur.h,
-      n: cur.n && cur.n.includes(safeUrl) ? cur.n : [cur.n, notes].filter(Boolean).join("\n"),
+      n: cur.n || notes,
+      u: withLink(cur.u),
     });
   } else {
     // Neu: als letzte Unteraufgabe der Elternaufgabe bzw. ganz oben in der Liste.
@@ -358,7 +364,7 @@ async function addFromSelection(info, tab) {
       : parentId ? Math.max(...sibs.map((s) => s.o || 0)) + 1
         : Math.min(...sibs.map((s) => s.o || 0)) - 1;
     before[TASK + taskId] = null;
-    after[TASK + taskId] = compact({ l: listId, p: parentId, t: r.title.trim() || "Neue Aufgabe", n: notes, d, h, o });
+    after[TASK + taskId] = compact({ l: listId, p: parentId, t: r.title.trim() || "Neue Aufgabe", n: notes, d, h, o, u: withLink([]) });
   }
 
   await browser.storage.sync.set(after);
