@@ -65,7 +65,10 @@ Text auf einer Webseite markieren → Rechtsklick → **Zu Tasks hinzufügen**. 
 KI sucht die passende Liste und Elternaufgabe (z. B. „nat Info"), wählt den Titel
 im Stil der Geschwister („Blatt 4"), trägt die Abgabefrist mit Uhrzeit ein und
 speichert die Seite als **Link** mit kurzem Namen (z. B. „Abgabe Blatt 1"). Gibt es die Aufgabe schon, wird sie ergänzt statt
-doppelt angelegt. Strg+Z nimmt das wieder zurück.
+doppelt angelegt. Gibt es zu einem Thema noch keine Oberkategorie, landet der erste Eintrag oben
+in der Liste; beim zweiten Eintrag zum selben Thema legt die KI die
+Oberkategorie an (z. B. „DL") und schiebt beide hinein. Strg+Z nimmt das
+wieder zurück.
 
 Eingestellt wird das unter `⋯` → **KI einrichten …**:
 

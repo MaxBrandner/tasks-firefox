@@ -115,7 +115,11 @@ function describeTree(lists, tasks) {
   const walk = (listId, parentId, depth) => {
     for (const t of childrenOf(tasks, listId, parentId)) {
       const due = t.d ? `, fällig ${t.d}${t.h ? " " + t.h : ""}` : "";
-      lines.push(`${"  ".repeat(depth)}- [${t.x ? "x" : " "}] ${t.t || "(ohne Titel)"} (id: ${t.id}${due})`);
+      // First note line and links help the model recognize the topic/course.
+      const firstLine = (t.n || "").split("\n").map((l) => l.trim()).find(Boolean);
+      const note = firstLine ? `, Notiz: „${firstLine.slice(0, 80)}“` : "";
+      const links = (t.u || []).slice(0, 2).map((l) => `${l.t}: ${String(l.url).slice(0, 140)}`).join("; ");
+      lines.push(`${"  ".repeat(depth)}- [${t.x ? "x" : " "}] ${t.t || "(ohne Titel)"} (id: ${t.id}${due}${note}${links ? ", Links: " + links : ""})`);
       walk(listId, t.id, depth + 1);
     }
   };
@@ -137,10 +141,11 @@ So entscheidest du:
 - Ort: Wähle die Liste und die Elternaufgabe, unter die die neue Aufgabe thematisch gehört. Achte auf Abkürzungen und Kurznamen (z. B. „nat Info" für „Einführung in die naturwissenschaftliche Informatik"). Passt keine Elternaufgabe, lass parent_id leer – die Aufgabe kommt dann auf die oberste Ebene der passendsten Liste.
 - Titel: kurz, auf Deutsch, im Stil der vorhandenen Geschwister. Heißen sie „Blatt 3", heißt das neue z. B. „Blatt 4"; die Nummer kommt aus dem markierten Text.
 - Fälligkeit: Der Abgabetermin / die Deadline wird due_date (JJJJ-MM-TT) und due_time (HH:MM, 24 Stunden). Startzeiten und Veröffentlichungsdaten sind keine Fälligkeit. Fehlt etwas, lass das Feld leer.
-- notes: höchstens zwei kurze Zeilen mit dem Wichtigsten (z. B. Thema der Übung), als einfaches Markdown. Kein Link – die Seitenadresse wird automatisch als Link gespeichert.
+- Neue Elternaufgabe: Gibt es für das Thema/den Kurs noch keine Elternaufgabe, aber auf derselben Ebene schon mindestens eine Aufgabe zum selben Thema (erkennbar an Notiz, Link-Adresse – bei ILIAS z. B. gleiche ref_id – oder Titel), dann setze new_parent_title auf einen kurzen Namen im Stil der vorhandenen Elternaufgaben (z. B. „DL", „nat Info") und move_task_ids auf die IDs dieser vorhandenen Aufgaben (kommagetrennt). Die neue Aufgabe kommt dann ebenfalls darunter; parent_id ist die Ebene, auf der die neue Elternaufgabe entsteht (meist leer). Gibt es keine solche vorhandene Aufgabe, lass new_parent_title und move_task_ids leer – eine einzelne Aufgabe bekommt keine eigene Elternaufgabe.
+- notes: höchstens zwei kurze Zeilen mit dem Wichtigsten (z. B. Thema der Übung), als einfaches Markdown. Kein Link – die Seitenadresse wird automatisch als Link gespeichert. Hat die Aufgabe keine Elternaufgabe, beginne die Notiz mit dem Kurs- bzw. Themennamen (z. B. „Einführung in Deep Learning – …"), damit spätere Einträge zugeordnet werden können.
 - link_title: kurzer Name für diesen Link zur Seite (z. B. „Abgabe Blatt 1", „Folien", „Aufgabenblatt"), höchstens vier Wörter.
 - Gibt es die Aufgabe schon (gleiche Sache, z. B. ein bereits angelegtes „Blatt 1" am selben Ort), gib ihre ID als update_task_id an, statt eine neue anzulegen; sonst leer.
-- summary: ein kurzer deutscher Satz für den Nutzer, was du wo angelegt hast (z. B. „„Blatt 1" unter nat Info angelegt, fällig Mo 19. Okt, 08:30").`;
+- summary: ein kurzer deutscher Satz für den Nutzer, was du wo angelegt hast (z. B. „„Blatt 1" unter nat Info angelegt, fällig Mo 19. Okt, 08:30" oder „Neue Gruppe „DL" mit „Blatt 1" und „Folien" angelegt").`;
 
 const SCHEMA = {
   type: "object",
@@ -153,9 +158,11 @@ const SCHEMA = {
     due_date: { type: "string", description: "JJJJ-MM-TT oder leer" },
     due_time: { type: "string", description: "HH:MM oder leer" },
     link_title: { type: "string", description: "kurzer Name für den Link zur Seite" },
+    new_parent_title: { type: "string", description: "Name einer neu anzulegenden Elternaufgabe oder leer" },
+    move_task_ids: { type: "string", description: "kommagetrennte IDs vorhandener Aufgaben, die in die neue Elternaufgabe wandern, oder leer" },
     summary: { type: "string" },
   },
-  required: ["list_id", "parent_id", "update_task_id", "title", "notes", "due_date", "due_time", "link_title", "summary"],
+  required: ["list_id", "parent_id", "update_task_id", "title", "notes", "due_date", "due_time", "link_title", "new_parent_title", "move_task_ids", "summary"],
   additionalProperties: false,
 };
 
@@ -211,7 +218,7 @@ const originPattern = (baseUrl) => {
 const endpoint = (cfg, path) => cfg.baseUrl.replace(/\/+$/, "") + path;
 
 // Small models don't always follow a schema: list the fields in the prompt too.
-const JSON_HINT = "\n\nAntworte ausschließlich mit einem JSON-Objekt mit genau diesen Feldern (alle als Text, leer wenn unbekannt): list_id, parent_id, update_task_id, title, notes, due_date, due_time, link_title, summary.";
+const JSON_HINT = "\n\nAntworte ausschließlich mit einem JSON-Objekt mit genau diesen Feldern (alle als Text, leer wenn unbekannt): list_id, parent_id, update_task_id, title, notes, due_date, due_time, link_title, new_parent_title, move_task_ids, summary.";
 
 function httpError(cfg, status, message) {
   const who = cfg.label || "API";
@@ -355,13 +362,43 @@ async function addFromSelection(info, tab) {
 
   const before = {};
   const after = {};
+  // Latest planned version of a task (planned changes win over storage).
+  const current = (id) => after[TASK + id] || tasks.get(id);
+  const change = (id, fields) => {
+    if (!(TASK + id in before)) before[TASK + id] = tasks.get(id) || null;
+    after[TASK + id] = compact({ ...current(id), ...fields });
+  };
+
+  // Optional new parent (e.g. "DL" for the second DL item). Only created if at
+  // least one existing task moves into it – a single task gets no category of
+  // its own – and only tasks from the level where the parent is created, so
+  // structure elsewhere stays untouched.
+  let targetParent = parentId;
+  const newParentTitle = r.new_parent_title.trim().slice(0, 80);
+  const moveIds = [...new Set(r.move_task_ids.split(/[\s,;]+/).filter(Boolean))]
+    .filter((id) => tasks.has(id) && tasks.get(id).l === listId && (tasks.get(id).p || "") === parentId)
+    .sort((x, y) => (tasks.get(x).o || 0) - (tasks.get(y).o || 0));
+  if (newParentTitle && moveIds.length) {
+    const groupId = newId();
+    before[TASK + groupId] = null;
+    // Takes the place of the first task that moves into it.
+    after[TASK + groupId] = compact({ l: listId, p: parentId, t: newParentTitle, o: tasks.get(moveIds[0]).o || 0 });
+    // "DL Blatt 1" inside the new group "DL" becomes "Blatt 1" (also "DL – …", "DL: …").
+    const esc = newParentTitle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const prefix = new RegExp("^" + esc + "\\s*[–:-]?\\s+", "i");
+    moveIds.forEach((id, i) => {
+      const title = tasks.get(id).t || "";
+      const short = title.replace(prefix, "");
+      change(id, { p: groupId, o: i, ...(short && short !== title ? { t: short } : {}) });
+    });
+    targetParent = groupId;
+  }
+
   let taskId = tasks.has(r.update_task_id) ? r.update_task_id : "";
   if (taskId) {
     // Extend the existing task instead of creating a duplicate.
-    const cur = tasks.get(taskId);
-    before[TASK + taskId] = cur;
-    after[TASK + taskId] = compact({
-      ...cur,
+    const cur = current(taskId);
+    change(taskId, {
       t: cur.t || r.title,
       d: d || cur.d,
       h: d ? h : cur.h,
@@ -369,14 +406,19 @@ async function addFromSelection(info, tab) {
       u: withLink(cur.u),
     });
   } else {
-    // New: last child of the parent, or at the top of the list.
+    // New: last child of the parent (after the moved tasks), or at the top of the list.
     taskId = newId();
-    const sibs = childrenOf(tasks, listId, parentId).filter((s) => parentId || !s.x);
-    const o = !sibs.length ? 0
-      : parentId ? Math.max(...sibs.map((s) => s.o || 0)) + 1
-        : Math.min(...sibs.map((s) => s.o || 0)) - 1;
+    let o;
+    if (targetParent !== parentId) {
+      o = moveIds.length;
+    } else {
+      const sibs = childrenOf(tasks, listId, parentId).filter((x) => parentId || !x.x);
+      o = !sibs.length ? 0
+        : parentId ? Math.max(...sibs.map((x) => x.o || 0)) + 1
+          : Math.min(...sibs.map((x) => x.o || 0)) - 1;
+    }
     before[TASK + taskId] = null;
-    after[TASK + taskId] = compact({ l: listId, p: parentId, t: r.title.trim() || "Neue Aufgabe", n: notes, d, h, o, u: withLink([]) });
+    after[TASK + taskId] = compact({ l: listId, p: targetParent, t: r.title.trim() || "Neue Aufgabe", n: notes, d, h, o, u: withLink([]) });
   }
 
   await browser.storage.sync.set(after);
