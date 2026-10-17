@@ -45,6 +45,8 @@ kein Server, keine Berechtigungen auf Webseiten.
   der Zugriff auf die Adresse wird erst beim Speichern erfragt. „Verbindung
   testen" ruft nur die Modellliste ab und kostet nichts. Kann ein Server kein
   festes JSON-Schema, fragt die Erweiterung nach einfachem JSON.
+  **Keine KI** ist ebenfalls wählbar – dann verschwindet „Zu Tasks
+  hinzufügen" aus dem Rechtsklick-Menü.
   > ⚠️ **Der Weg über ein eigenes Modell ist ungetestet** – ich habe ihn selbst
   > nie ausprobiert (weder Claude-API noch andere Anbieter noch lokale Modelle).
   > Getestet ist nur der Weg über Claude Code.

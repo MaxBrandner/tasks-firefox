@@ -26,7 +26,7 @@
   const DONE_OPEN_KEY = "tk:doneOpen";
   // Claude-Anbindung (Kontextmenü „Zu Tasks hinzufügen", siehe background.js).
   const AI_STATUS = "tk:aiStatus";
-  const AI_MODE = "tk:aiMode"; // "claude-code" (Standard) oder "api"
+  const AI_MODE = "tk:aiMode"; // "claude-code" (Standard), "api" oder "none"
   // Eigenes Modell: { preset, label, protocol, baseUrl, model, key } – nur storage.local.
   const API_CONFIG = "tk:api";
   // Vorlagen: füllen Adresse/Protokoll vor; Modellnamen nur, wo sie feststehen.
@@ -712,10 +712,17 @@
 
   const modalOpen = () => !!document.querySelector("dialog.modal[open]");
 
+  // Ein Popup kann sich gegen das Schließen sperren: dlg.beforeClose() gibt
+  // false zurück (und zeigt selbst, was fehlt).
+  const mayClose = (dlg) => !dlg.beforeClose || dlg.beforeClose();
+
   for (const dlg of document.querySelectorAll("dialog.modal")) {
     dlg.addEventListener("click", (e) => {
       // Klick auf den Hintergrund trifft das <dialog> selbst (Inhalt liegt in .modal-body).
-      if (e.target === dlg || e.target.closest("[data-close]")) dlg.close();
+      if ((e.target === dlg || e.target.closest("[data-close]")) && mayClose(dlg)) dlg.close();
+    });
+    dlg.addEventListener("cancel", (e) => {
+      if (!mayClose(dlg)) e.preventDefault(); // Esc
     });
   }
 
@@ -1684,9 +1691,10 @@
     apiKeyInputEl.value = "";
     const st = await browser.storage.local.get([AI_MODE, API_CONFIG]);
     savedCfg = st[API_CONFIG] || null;
-    const mode = st[AI_MODE] === "api" ? "api" : "claude-code";
+    const mode = st[AI_MODE] === "api" || st[AI_MODE] === "none" ? st[AI_MODE] : "claude-code";
     for (const r of modeInputs) r.checked = r.value === mode;
-    showModeSection(null); // beim Öffnen alles zu – aufklappen erst per Klick
+    showModeSection(mode); // gewählte Option gleich aufgeklappt
+    warnedUnsaved = false;
     presetEl.value = savedCfg && PRESETS[savedCfg.preset] ? savedCfg.preset : "anthropic";
     baseUrlEl.value = savedCfg ? savedCfg.baseUrl : PRESETS[presetEl.value].baseUrl;
     modelEl.value = savedCfg ? savedCfg.model : PRESETS[presetEl.value].model;
@@ -1695,19 +1703,53 @@
     openModal(aiPanelEl);
   }
 
-  // Klick auf eine Option (auch die schon gewählte): Wahl speichern und ihren
-  // Teil aufklappen, den anderen zuklappen.
+  // Unter der gewählten Option steht ihr Teil; die anderen sind zugeklappt.
   function showModeSection(mode) {
     $("ccSection").hidden = mode !== "claude-code";
     $("apiSection").hidden = mode !== "api";
+    $("noneSection").hidden = mode !== "none";
+    $("aiTestRow").hidden = mode === "none"; // ohne KI nichts zu testen
+    aiWarnEl.hidden = true;
   }
 
   for (const r of modeInputs) {
-    r.addEventListener("click", () => {
+    r.addEventListener("change", () => {
       browser.storage.local.set({ [AI_MODE]: r.value });
       showModeSection(r.value);
     });
   }
+
+  // Verlassen nur, wenn die gewählte Option vollständig ist. Fehlt beim eigenen
+  // Modell etwas, bleibt das Popup offen; ungespeicherte Änderungen an einem
+  // schon gespeicherten Modell nur einmal anmahnen (zweites Schließen verwirft).
+  const aiWarnEl = $("aiWarn");
+  let warnedUnsaved = false;
+
+  function aiProblem() {
+    const mode = (modeInputs.find((r) => r.checked) || {}).value;
+    if (mode !== "api") return null;
+    const filled = baseUrlEl.value.trim() && modelEl.value.trim();
+    if (!apiReady(savedCfg)) {
+      return { hard: true, text: filled
+        ? "Eigenes Modell ist noch nicht gespeichert – bitte „Speichern“ klicken oder eine andere Option wählen."
+        : "Für das eigene Modell fehlen Adresse und/oder Modell – bitte eintragen und speichern oder eine andere Option wählen." };
+    }
+    const changed = presetEl.value !== savedCfg.preset || baseUrlEl.value.trim().replace(/\/+$/, "") !== savedCfg.baseUrl ||
+      modelEl.value.trim() !== savedCfg.model || apiKeyInputEl.value.trim() !== "";
+    if (changed && !warnedUnsaved) {
+      return { hard: false, text: "Änderungen am eigenen Modell sind nicht gespeichert – „Speichern“ klicken oder erneut schließen, um sie zu verwerfen." };
+    }
+    return null;
+  }
+
+  aiPanelEl.beforeClose = () => {
+    const p = aiProblem();
+    if (!p) return true;
+    if (!p.hard) warnedUnsaved = true;
+    aiWarnEl.textContent = p.text;
+    aiWarnEl.hidden = false;
+    return false;
+  };
 
   // Vorlage gewählt: Adresse (und ggf. Modell) vorfüllen.
   presetEl.addEventListener("change", () => {
@@ -1753,6 +1795,7 @@
     apiKeyInputEl.value = "";
     apiKeyInputEl.placeholder = keyPlaceholder(cfg);
     apiStateEl.textContent = "✓ gespeichert: " + cfg.label + " · " + cfg.model;
+    aiWarnEl.hidden = true;
   });
   apiKeyInputEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter") $("apiSave").click();

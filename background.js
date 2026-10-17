@@ -13,8 +13,8 @@
 const LIST = "L:";
 const TASK = "T:";
 const AI_STATUS = "tk:aiStatus";
+const AI_MODE = "tk:aiMode"; // "claude-code" (Standard), "api" oder "none"
 const NATIVE_HOST = "tasks_claude";
-const AI_MODE = "tk:aiMode"; // "claude-code" (Standard) oder "api"
 // Eigenes Modell: { label, protocol: "anthropic" | "openai", baseUrl, model, key }
 // – nur in storage.local, bleibt auf diesem Gerät.
 const API_CONFIG = "tk:api";
@@ -25,14 +25,22 @@ browser.browserAction.onClicked.addListener(() => {
   browser.sidebarAction.toggle();
 });
 
-browser.contextMenus.create({
-  id: "tasks-add-selection",
-  title: "Zu Tasks hinzufügen",
-  contexts: ["selection"],
+// Kontextmenü nur anbieten, wenn eine KI gewählt ist (nicht bei „Keine KI").
+const MENU_ID = "tasks-add-selection";
+async function syncMenu() {
+  const { [AI_MODE]: mode } = await browser.storage.local.get(AI_MODE);
+  await browser.contextMenus.removeAll();
+  if (mode !== "none") {
+    browser.contextMenus.create({ id: MENU_ID, title: "Zu Tasks hinzufügen", contexts: ["selection"] });
+  }
+}
+syncMenu();
+browser.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes[AI_MODE]) syncMenu();
 });
 
 browser.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId !== "tasks-add-selection") return;
+  if (info.menuItemId !== MENU_ID) return;
   browser.sidebarAction.open(); // vor jedem await – sonst keine Nutzeraktion mehr
   addFromSelection(info, tab).catch((err) => {
     setStatus({ state: "error", text: (err && err.message) || String(err) });

@@ -1075,3 +1075,13 @@ kbd {
 .mode-section p {
   margin-top: 4px;
 }
+
+/* Hinweis, wenn das Popup noch nicht verlassen werden kann. */
+.form-warn {
+  margin: 10px 0 0 !important;
+  padding: 7px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  color: var(--danger) !important;
+  line-height: 1.45 !important;
+}

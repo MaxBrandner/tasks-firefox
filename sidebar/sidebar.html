@@ -78,8 +78,13 @@
             <span id="apiState" class="muted"></span>
           </div>
         </div>
+        <label><input type="radio" name="aiMode" value="none" /> Keine KI</label>
+        <div id="noneSection" class="mode-section" hidden>
+          <p class="muted">„Zu Tasks hinzufügen" erscheint dann nicht im Rechtsklick-Menü. Alles andere funktioniert wie gewohnt.</p>
+        </div>
       </fieldset>
-      <div class="detail-row">
+      <p id="aiWarn" class="form-warn" role="alert" hidden></p>
+      <div id="aiTestRow" class="detail-row">
         <button id="aiTest" class="chip" type="button">Verbindung testen</button>
         <span id="aiTestState" class="muted"></span>
       </div>
