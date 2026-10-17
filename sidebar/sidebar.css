@@ -1636,13 +1636,23 @@ kbd {
 }
 
 /* Tasks the AI talks about (amber) / changed (accent). */
+/* --mark-o goes from 1 to 0 when the marks fade (see tickMarks in sidebar.js). */
 .task.chat-mark > .row {
-  background: color-mix(in srgb, var(--soon) 12%, transparent);
-  box-shadow: inset 3px 0 0 var(--soon);
+  background: color-mix(in srgb, var(--soon) calc(12% * var(--mark-o, 1)), transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--soon) calc(100% * var(--mark-o, 1)), transparent);
 }
 
 .task.chat-changed > .row {
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) calc(100% * var(--mark-o, 1)), transparent);
+}
+
+/* An answer whose marks can be shown again by clicking it. */
+.chat-msg.has-marks {
+  cursor: pointer;
+}
+
+.chat-msg.has-marks:hover {
+  border-color: var(--accent);
 }
 
 /* Where the chat is visible, the undo toast moves to the top (it would cover the input). */

@@ -126,6 +126,12 @@ Fälligkeit", „Öffne alle Links zu DL".
   Antwort) – praktisch für kurze Befehle; „Ganzer Chat" wechselt in den Reiter.
   **Esc** geht eine Stufe zurück: Karte bzw. Reiter „Chat" → Aufgaben (die
   Markierungen bleiben) → Markierungen weg.
+- **Markierungen:** Nach einer Antwort sind die besprochenen (Bernstein) und
+  geänderten (grün) Aufgaben eine Minute lang markiert – auch wenn der Chat
+  nicht zu sehen ist –, dann verblassen sie. Eine Aufgabe, die du anfasst
+  (anklicken, bearbeiten, abhaken, verschieben), verliert ihre Markierung
+  sofort. Eine neue Antwort ersetzt alle Markierungen; ein Klick auf eine
+  frühere Antwort zeigt deren Markierungen wieder.
 
 - **Wie sie arbeitet:** Die KI antwortet mit Text und mit **Aktionen aus einem
   festen Katalog** (Aufgabe anlegen/ändern/abhaken/verschieben/löschen, Links

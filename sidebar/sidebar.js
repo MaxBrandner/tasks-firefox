@@ -2516,6 +2516,13 @@
     renderBlock(m.text || "", body);
     const el = h("div", { class: "chat-msg " + m.role + (m.error ? " error" : "") }, body);
     if (m.role !== "assistant" || m.error) return el;
+    if ((m.highlight && m.highlight.length) || (m.changed && m.changed.length && !m.undone)) {
+      el.classList.add("has-marks");
+      el.title = "Klicken: Markierungen dieser Antwort wieder zeigen";
+      el.addEventListener("click", (e) => {
+        if (!e.target.closest("button, a")) showMsgMarks(m);
+      });
+    }
     if (m.pending) {
       el.append(h("div", { class: "chat-pending" },
         h("span", null, describeActions(m.actions)),
@@ -2528,6 +2535,7 @@
               saveChat();
               render();
               showChatFocus([...chatChanged]);
+              stampChatMarks();
               renderChat();
             },
           }, "Ausführen"),
@@ -2621,7 +2629,8 @@
     } else {
       const data = normalizeChat(reply.data);
       const msg = { role: "assistant", text: data.reply || "(keine Antwort)", actions: data.actions, request: text, at: Date.now() };
-      for (const id of data.highlight) if (tasks.has(id)) chatMarks.add(id);
+      msg.highlight = data.highlight.filter((id) => tasks.has(id));
+      for (const id of msg.highlight) chatMarks.add(id);
       if (data.actions.length) {
         if (data.actions.some((a) => a.op === "delete_task")) msg.pending = true;
         else runChatActions(msg);
@@ -2631,6 +2640,7 @@
     saveChat();
     render();
     showChatFocus([...chatMarks, ...chatChanged]);
+    stampChatMarks();
     renderChat();
   }
 
@@ -2647,7 +2657,55 @@
     else chatInputEl.focus();
   }
 
+  // AI marks: fully visible for a minute after the answer (even with the chat
+  // out of sight), then they fade out. Touching a task counts as "seen" and
+  // drops its mark at once; clicking an answer brings its marks back.
+  const MARK_HOLD = 60000;
+  const MARK_FADE = 18000;
+  let chatMarksAt = 0;
+  let markTimer = null;
+
+  function stampChatMarks() {
+    chatMarksAt = Date.now();
+    tickMarks();
+  }
+
+  // Sets --mark-o (1 → 0) on the body; the mark colors in the CSS scale with it,
+  // so re-rendering doesn't disturb the fade.
+  function tickMarks() {
+    clearTimeout(markTimer);
+    if (!chatMarks.size && !chatChanged.size) return clearChatMarks();
+    const age = Date.now() - chatMarksAt;
+    const o = age < MARK_HOLD ? 1 : 1 - (age - MARK_HOLD) / MARK_FADE;
+    if (o <= 0) return clearChatMarks();
+    document.body.style.setProperty("--mark-o", o.toFixed(3));
+    markTimer = setTimeout(tickMarks, age < MARK_HOLD ? MARK_HOLD - age : 250);
+  }
+
+  // Without re-rendering: this runs in the middle of a click or keystroke.
+  function unmarkTask(id) {
+    const hadMark = chatMarks.delete(id);
+    const hadChange = chatChanged.delete(id);
+    if (!hadMark && !hadChange) return;
+    const li = findLi(id);
+    if (li) li.classList.remove("chat-mark", "chat-changed");
+    updateChatTabs();
+  }
+
+  function showMsgMarks(m) {
+    chatMarks.clear();
+    chatChanged.clear();
+    for (const id of m.highlight || []) if (tasks.has(id)) chatMarks.add(id);
+    if (!m.undone) for (const id of m.changed || []) if (tasks.has(id)) chatChanged.add(id);
+    if (chatMode === "full" && !isWide()) setChatMode("tasks"); // the list sits behind the tab "Aufgaben"
+    stampChatMarks();
+    showChatFocus([...chatMarks, ...chatChanged]);
+    updateChatTabs();
+  }
+
   function clearChatMarks() {
+    clearTimeout(markTimer);
+    document.body.style.removeProperty("--mark-o");
     if (!chatMarks.size && !chatChanged.size) return;
     chatMarks.clear();
     chatChanged.clear();
@@ -2674,6 +2732,17 @@
   $("tabChat").addEventListener("click", () => setChatMode("full"));
   $("chatExpand").addEventListener("click", () => setChatMode("full"));
   $("chatClose").addEventListener("click", () => closeQuick());
+  // Touching a task (click, typing, dragging, shortcuts like Tab or Alt+↑) drops
+  // its AI mark; merely moving through the list with the arrow keys does not.
+  for (const ul of [openListEl, doneListEl]) {
+    for (const type of ["click", "input", "keydown", "dragstart"]) {
+      ul.addEventListener(type, (e) => {
+        if (type === "keydown" && (/^(Shift|Control|Alt|Meta|Escape)$/.test(e.key) || (/^Arrow(Up|Down)$/.test(e.key) && !e.altKey))) return;
+        const li = e.target.closest(".task");
+        if (li) unmarkTask(li.dataset.id);
+      }, true);
+    }
+  }
   $("chatNew").addEventListener("click", () => {
     chat = [];
     chatMarks.clear();
