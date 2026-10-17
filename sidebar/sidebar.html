@@ -56,6 +56,18 @@
       </header>
       <p>Text auf einer Webseite markieren → Rechtsklick → <strong>Zu Tasks hinzufügen</strong>. Claude sucht die passende Liste und Stelle und trägt Titel, Fälligkeit (mit Uhrzeit) und den Link zur Seite ein.</p>
       <p class="muted">Läuft über Claude Code auf diesem Rechner, also über dein Claude-Abo – kein API-Schlüssel, keine Extrakosten (zählt zum normalen Nutzungslimit). Einmal einrichten: im Projektordner <code>native/install.sh</code> ausführen. Gesendet werden der markierte Text, Adresse und Titel der Seite sowie die Titel deiner Listen und Aufgaben.</p>
+      <fieldset class="ai-mode">
+        <legend>Verbindung</legend>
+        <label><input type="radio" name="aiMode" value="claude-code" /> Claude Code (Abo) – Standard</label>
+        <label><input type="radio" name="aiMode" value="api" /> Claude-API (eigener Schlüssel, kostenpflichtig)</label>
+      </fieldset>
+      <p class="muted">Findet sich Claude Code nicht und ist ein API-Schlüssel gespeichert, wird automatisch die API benutzt. Der API-Weg ist bisher ungetestet.</p>
+      <input id="apiKeyInput" class="key-input" type="password" placeholder="API-Schlüssel (sk-ant-…), optional" autocomplete="off" spellcheck="false" />
+      <div class="detail-row">
+        <button id="apiKeySave" class="chip" type="button">Schlüssel speichern</button>
+        <button id="apiKeyRemove" class="link-btn" type="button">Entfernen</button>
+        <span id="apiKeyState" class="muted"></span>
+      </div>
       <div class="detail-row">
         <button id="aiTest" class="chip" type="button">Verbindung testen</button>
         <span id="aiTestState" class="muted"></span>

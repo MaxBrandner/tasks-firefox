@@ -26,6 +26,9 @@
   const DONE_OPEN_KEY = "tk:doneOpen";
   // Claude-Anbindung (Kontextmenü „Zu Tasks hinzufügen", siehe background.js).
   const AI_STATUS = "tk:aiStatus";
+  const AI_MODE = "tk:aiMode"; // "claude-code" (Standard) oder "api"
+  const API_KEY = "tk:apiKey"; // nur in storage.local – bleibt auf diesem Gerät
+  const API_ORIGIN = "https://api.anthropic.com/*";
 
   const lists = new Map(); // id -> { t, o }
   const tasks = new Map(); // id -> { l, p, t, n, d, x, xa, o }
@@ -1646,19 +1649,66 @@
   const aiStatusEl = $("aiStatus");
   const aiTestStateEl = $("aiTestState");
 
-  function openAiPanel() {
+  const apiKeyInputEl = $("apiKeyInput");
+  const apiKeyStateEl = $("apiKeyState");
+  const modeInputs = [...document.querySelectorAll('input[name="aiMode"]')];
+
+  const keyLabel = (key) => (key ? "✓ gespeichert (…" + key.slice(-4) + ")" : "kein Schlüssel");
+
+  async function openAiPanel() {
     aiTestStateEl.textContent = "";
+    apiKeyInputEl.value = "";
+    const st = await browser.storage.local.get([AI_MODE, API_KEY]);
+    const mode = st[AI_MODE] === "api" ? "api" : "claude-code";
+    for (const r of modeInputs) r.checked = r.value === mode;
+    apiKeyStateEl.textContent = keyLabel(st[API_KEY]);
     openModal(aiPanelEl);
   }
 
-  // Verbindungstest: fragt das Hilfsprogramm nach der Claude-Code-Version.
+  for (const r of modeInputs) {
+    r.addEventListener("change", () => browser.storage.local.set({ [AI_MODE]: r.value }));
+  }
+
+  // Schlüssel speichern: erst jetzt den Zugriff auf api.anthropic.com erbitten
+  // (optionale Berechtigung – wer nur Claude Code nutzt, wird nie gefragt).
+  $("apiKeySave").addEventListener("click", async () => {
+    const key = apiKeyInputEl.value.trim();
+    if (!key) return;
+    const granted = await browser.permissions.request({ origins: [API_ORIGIN] });
+    if (!granted) {
+      apiKeyStateEl.textContent = "✗ Zugriff auf api.anthropic.com abgelehnt";
+      return;
+    }
+    await browser.storage.local.set({ [API_KEY]: key });
+    apiKeyInputEl.value = "";
+    apiKeyStateEl.textContent = keyLabel(key);
+  });
+  apiKeyInputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("apiKeySave").click();
+  });
+  $("apiKeyRemove").addEventListener("click", async () => {
+    await browser.storage.local.remove(API_KEY);
+    apiKeyStateEl.textContent = keyLabel("");
+  });
+
+  // Verbindungstest. Claude Code: fragt das Hilfsprogramm nach der Version.
+  // API: nur Schlüssel + Berechtigung prüfen – kein (kostenpflichtiger) Aufruf.
   $("aiTest").addEventListener("click", async () => {
     aiTestStateEl.textContent = "Prüfe …";
+    const st = await browser.storage.local.get([AI_MODE, API_KEY]);
+    if (st[AI_MODE] === "api") {
+      const allowed = await browser.permissions.contains({ origins: [API_ORIGIN] });
+      aiTestStateEl.textContent = !st[API_KEY] ? "✗ kein API-Schlüssel gespeichert"
+        : !allowed ? "✗ Zugriff auf api.anthropic.com fehlt – Schlüssel erneut speichern"
+          : "✓ API bereit (ohne Testaufruf, um keine Kosten zu verursachen)";
+      return;
+    }
     try {
       const r = await browser.runtime.sendNativeMessage("tasks_claude", { ping: true });
       aiTestStateEl.textContent = r && r.ok ? "✓ Verbunden: " + r.version : "✗ " + ((r && r.error) || "Fehler");
     } catch (_) {
-      aiTestStateEl.textContent = "✗ Hilfsprogramm nicht gefunden – native/install.sh ausführen";
+      aiTestStateEl.textContent = "✗ Claude Code nicht gefunden – native/install.sh ausführen" +
+        (st[API_KEY] ? " (bis dahin wird die API benutzt)" : "");
     }
   });
   $("aiStatusClose").addEventListener("click", () => {

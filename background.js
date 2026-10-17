@@ -2,16 +2,22 @@
 // 1. Toolbar-Symbol blendet die Seitenleiste ein/aus.
 // 2. Kontextmenü „Zu Tasks hinzufügen": schickt den markierten Text an Claude,
 //    das die passende Liste/Stelle findet; die Aufgabe wird hier angelegt.
-//    Claude läuft über Claude Code auf diesem Rechner (Hilfsprogramm
+//    Standard: Claude Code auf diesem Rechner (Hilfsprogramm
 //    native/tasks_claude_host.py, Native Messaging) – also über das
-//    Claude-Abo, ohne API-Schlüssel. Fortschritt und Ergebnis meldet
-//    "tk:aiStatus" (storage.local) an die Seitenleiste.
+//    Claude-Abo, ohne API-Schlüssel. Alternative: Claude-API mit eigenem
+//    Schlüssel (wenn bevorzugt oder Claude Code fehlt; ungetestet).
+//    Fortschritt und Ergebnis meldet "tk:aiStatus" (storage.local) an die
+//    Seitenleiste.
 
 const LIST = "L:";
 const TASK = "T:";
 const AI_STATUS = "tk:aiStatus";
 const NATIVE_HOST = "tasks_claude";
-const SETUP_HINT = "Hilfsprogramm für Claude nicht eingerichtet: im Projektordner einmal native/install.sh ausführen (Details unter ⋯ → „Claude einrichten …“).";
+const AI_MODE = "tk:aiMode"; // "claude-code" (Standard) oder "api"
+const API_KEY = "tk:apiKey"; // nur in storage.local – bleibt auf diesem Gerät
+const API_ORIGIN = "https://api.anthropic.com/*";
+const MODEL = "claude-opus-5-5";
+const SETUP_HINT = "Claude Code nicht gefunden: im Projektordner einmal native/install.sh ausführen – oder unter ⋯ → „Claude einrichten …“ einen API-Schlüssel hinterlegen.";
 
 // sidebarAction.toggle()/open() sind nur direkt aus einer Nutzeraktion heraus erlaubt.
 browser.browserAction.onClicked.addListener(() => {
@@ -130,8 +136,25 @@ const SCHEMA = {
   additionalProperties: false,
 };
 
-// Anfrage an Claude Code über das Hilfsprogramm (Native Messaging).
+// Weg wählen: Claude Code (Standard); API, wenn bevorzugt oder wenn Claude Code
+// fehlt und ein Schlüssel hinterlegt ist.
 async function askClaude(userText) {
+  const { [AI_MODE]: mode, [API_KEY]: apiKey } = await browser.storage.local.get([AI_MODE, API_KEY]);
+  if (mode === "api") {
+    if (!apiKey) throw new Error("API bevorzugt, aber kein API-Schlüssel hinterlegt (⋯ → „Claude einrichten …“).");
+    return askClaudeApi(apiKey, userText);
+  }
+  try {
+    return await askClaudeCode(userText);
+  } catch (err) {
+    if (!err.hostMissing || !apiKey) throw err;
+    await setStatus({ state: "working", text: "Claude Code nicht gefunden – nutze die API …" });
+    return askClaudeApi(apiKey, userText);
+  }
+}
+
+// Anfrage an Claude Code über das Hilfsprogramm (Native Messaging).
+async function askClaudeCode(userText) {
   let reply;
   try {
     reply = await browser.runtime.sendNativeMessage(NATIVE_HOST, {
@@ -140,11 +163,64 @@ async function askClaude(userText) {
       schema: SCHEMA,
     });
   } catch (_) {
-    throw new Error(SETUP_HINT); // Hilfsprogramm fehlt oder startet nicht
+    const err = new Error(SETUP_HINT); // Hilfsprogramm fehlt oder startet nicht
+    err.hostMissing = true;
+    throw err;
   }
   if (!reply || !reply.ok) throw new Error("Claude: " + ((reply && reply.error) || "unbekannter Fehler"));
   if (!reply.data || typeof reply.data !== "object") throw new Error("Claude-Antwort war nicht lesbar – bitte erneut versuchen.");
   return reply.data;
+}
+
+// Anfrage an die Claude-API (eigener Schlüssel, kostenpflichtig). Ungetestet.
+function httpErrorText(status, message) {
+  if (status === 401) return "Claude-API: Schlüssel ungültig (⋯ → „Claude einrichten …“).";
+  if (status === 403) return "Claude-API: Dieser Schlüssel darf das Modell nicht nutzen.";
+  if (status === 429) return "Claude-API: Zu viele Anfragen oder Guthaben aufgebraucht.";
+  if (status >= 500) return "Claude-API ist gerade überlastet – bitte gleich noch einmal versuchen.";
+  return "Claude-API: " + (message || "Fehler " + status);
+}
+
+async function askClaudeApi(apiKey, userText) {
+  if (!(await browser.permissions.contains({ origins: [API_ORIGIN] }))) {
+    throw new Error("Zugriff auf api.anthropic.com nicht erlaubt – Schlüssel unter ⋯ → „Claude einrichten …“ erneut speichern.");
+  }
+  let res;
+  try {
+    res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        // Ablehnungen automatisch von einem passenden anderen Modell beantworten lassen.
+        "anthropic-beta": "server-side-fallback-2026-07-01",
+        // Aufruf aus dem Browser (Erweiterung) statt von einem Server.
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 4000,
+        fallbacks: "default",
+        // Einfache Extraktion: wenig Denkaufwand; Antwort als festes JSON.
+        output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userText }],
+      }),
+    });
+  } catch (_) {
+    throw new Error("Claude-API nicht erreichbar – keine Internetverbindung?");
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(httpErrorText(res.status, data.error && data.error.message));
+  if (data.stop_reason === "refusal") throw new Error("Claude hat die Anfrage abgelehnt.");
+  if (data.stop_reason === "max_tokens") throw new Error("Claude-Antwort wurde abgeschnitten – bitte erneut versuchen.");
+  const block = (data.content || []).find((b) => b.type === "text");
+  try {
+    return JSON.parse(block.text);
+  } catch (_) {
+    throw new Error("Claude-Antwort war nicht lesbar – bitte erneut versuchen.");
+  }
 }
 
 // --- Ablauf ------------------------------------------------------------------

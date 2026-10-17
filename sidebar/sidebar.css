@@ -1004,3 +1004,30 @@ kbd {
 :root[data-theme="dark"] .modal::backdrop {
   background: rgba(0, 0, 0, 0.5);
 }
+
+/* Auswahl Claude Code / API im Popup „Claude einrichten". */
+.ai-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.ai-mode legend {
+  margin-bottom: 4px;
+  padding: 0;
+  font-weight: 650;
+}
+
+.ai-mode label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.ai-mode input {
+  accent-color: var(--accent);
+}

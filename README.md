@@ -36,6 +36,12 @@ kein Server, keine Berechtigungen auf Webseiten.
   Hilfsprogramm `native/tasks_claude_host.py` bei Firefox an), dann unter
   ⋯ → „Claude einrichten …" → „Verbindung testen". Gesendet werden markierter
   Text, Seitenadresse/-titel und die Titel der Listen/Aufgaben.
+  **Alternative: Claude-API** mit eigenem (kostenpflichtigem) Schlüssel – im
+  selben Popup wählbar; wird außerdem automatisch benutzt, wenn Claude Code
+  nicht gefunden wird und ein Schlüssel gespeichert ist. Der Zugriff auf
+  `api.anthropic.com` wird erst beim Speichern eines Schlüssels erfragt.
+  > ⚠️ **Der API-Weg ist ungetestet** – ich habe ihn selbst nie ausprobiert.
+  > Getestet ist nur der Weg über Claude Code.
 - **Design** – System / Hell / Dunkel (Knopf oben rechts).
 
 Toolbar-Symbol oder **Strg+Alt+A**: blendet die Seitenleiste ein und aus.
