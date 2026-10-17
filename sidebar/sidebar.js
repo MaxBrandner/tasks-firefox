@@ -568,6 +568,7 @@
     const isUndo = k === "z" && !e.shiftKey;
     const isRedo = k === "y" || (k === "z" && e.shiftKey);
     if (!isUndo && !isRedo) return;
+    if (modalOpen()) return;
     const a = document.activeElement;
     if (a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT")) {
       if (a._startValue === undefined || a.value !== a._startValue) return;
@@ -680,13 +681,27 @@
     } else if (action === "delete") {
       deleteList(currentList);
     } else if (action === "help") {
-      helpEl.hidden = !helpEl.hidden;
+      openModal(helpEl);
     }
   });
 
-  $("helpClose").addEventListener("click", () => {
-    helpEl.hidden = true;
-  });
+  // --- Popups (Tastenkürzel, Claude einrichten, …) ---------------------------
+  // Echte Modals (<dialog>): Hintergrund abgedunkelt und unscharf, dahinter
+  // nichts bedienbar. Schließen über ×, Klick auf den Hintergrund oder Esc.
+  function openModal(dlg) {
+    closeMenu();
+    setExpanded(null);
+    if (!dlg.open) dlg.showModal();
+  }
+
+  const modalOpen = () => !!document.querySelector("dialog.modal[open]");
+
+  for (const dlg of document.querySelectorAll("dialog.modal")) {
+    dlg.addEventListener("click", (e) => {
+      // Klick auf den Hintergrund trifft das <dialog> selbst (Inhalt liegt in .modal-body).
+      if (e.target === dlg || e.target.closest("[data-close]")) dlg.close();
+    });
+  }
 
   function deleteList(id) {
     if (lists.size <= 1) return;
@@ -1074,6 +1089,7 @@
   document.addEventListener("keydown", (e) => {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    if (modalOpen()) return;
     const a = document.activeElement;
     if (a && a.matches("textarea, input, select")) return;
     const lis = document.querySelectorAll("#openList li.task, #doneList li.task");
@@ -1143,7 +1159,6 @@
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || e.defaultPrevented) return;
     closeMenu();
-    helpEl.hidden = true;
     setExpanded(null);
   });
 
@@ -1600,6 +1615,7 @@
     listMenuBtnEl.append(icon("more", "ico-dots"));
     $("addIcon").append(icon("plus"));
     $("doneChevron").append(icon("chevron"));
+    for (const b of document.querySelectorAll(".modal-close")) b.append(icon("close"));
     const local = await browser.storage.local.get([THEME_KEY, CURRENT_KEY, DONE_OPEN_KEY]);
     applyTheme(local[THEME_KEY]);
     doneOpen = !!local[DONE_OPEN_KEY];

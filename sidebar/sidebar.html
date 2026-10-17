@@ -24,7 +24,13 @@
 
     <div id="banner" class="banner" role="alert" hidden></div>
 
-    <div id="help" class="help" hidden>
+    <!-- Popups: abgedunkelter, unscharfer Hintergrund; schließen per ×, Klick daneben oder Esc. -->
+    <dialog id="help" class="modal" aria-labelledby="helpTitle">
+      <div class="modal-body">
+      <header class="modal-head">
+        <h2 id="helpTitle">Tastenkürzel &amp; Markdown</h2>
+        <button class="icon-btn modal-close" type="button" data-close aria-label="Schließen" title="Schließen"></button>
+      </header>
       <div class="help-grid">
         <kbd>Enter</kbd><span>neue Aufgabe darunter</span>
         <kbd>Tab</kbd><span>einrücken</span>
@@ -38,7 +44,8 @@
         <kbd>Strg+Alt+A</kbd><span>Tasks öffnen/schließen (überall in Firefox)</span>
       </div>
       <p>Markdown: <code>**fett**</code> <code>*kursiv*</code> <code>~~durch~~</code> <code>`code`</code> <code>[Text](https://…)</code>, Links werden automatisch erkannt. In Notizen zusätzlich <code>- Liste</code>, <code>1. Liste</code>, <code># Überschrift</code>, <code>&gt; Zitat</code>.</p>
-      <button id="helpClose" class="link-btn" type="button">Schließen</button>
+      </div>
+    </dialog>
     </div>
 
     <button id="addBtn" class="add-btn" type="button">
