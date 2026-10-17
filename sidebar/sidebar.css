@@ -1340,7 +1340,7 @@ kbd {
 }
 
 /* --- Tasks / chat layout ----------------------------------------------------- */
-/* Wide (from 600 px): list and chat side by side. Narrow: tabs switch between
+/* Wide (from 690 px): list and chat side by side. Narrow: tabs switch between
    the list and a full-height chat; "/" opens a quick card over the list.
    While the chat is open, body[data-chat] is "full", "tasks" or "quick". */
 
@@ -1403,7 +1403,7 @@ kbd {
   display: none;
 }
 
-@media (max-width: 599.98px) {
+@media (max-width: 689.98px) {
   body[data-chat] .view-tabs {
     display: flex;
   }
@@ -1449,7 +1449,7 @@ kbd {
   }
 }
 
-@media (min-width: 600px) {
+@media (min-width: 690px) {
   .workspace {
     flex-direction: row;
   }

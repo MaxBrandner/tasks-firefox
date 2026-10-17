@@ -118,7 +118,7 @@ Claude Code über das Abo). Beispiele: „Was ist diese Woche fällig?", „Lege
 unter DS 2 „Klausur anmelden" an, fällig nächsten Freitag", „Sortiere Uni nach
 Fälligkeit", „Öffne alle Links zu DL".
 
-- **Platz:** Ist die Seitenleiste breit (ab 600 px), stehen Liste und Chat
+- **Platz:** Ist die Seitenleiste breit (ab 690 px), stehen Liste und Chat
   nebeneinander. Schmal wechselt man über die Reiter „Aufgaben | Chat"; am
   Reiter „Aufgaben" steht, wie viel die KI markiert hat. `/` öffnet schmal
   stattdessen eine **Schnell-Karte** über den Aufgaben (Eingabe + letzte

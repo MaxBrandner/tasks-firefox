@@ -2251,7 +2251,7 @@
   // null = closed; "full" / "tasks" / "quick" = which view a narrow sidebar
   // shows (tab "Chat", tab "Aufgaben", quick card). Wide shows both side by side.
   let chatMode = null;
-  const wideQuery = window.matchMedia ? window.matchMedia("(min-width: 600px)") : null; // same as the CSS
+  const wideQuery = window.matchMedia ? window.matchMedia("(min-width: 690px)") : null; // same as the CSS
   const isWide = () => !!(wideQuery && wideQuery.matches);
 
   function refChip(kind, id) {
