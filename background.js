@@ -395,6 +395,7 @@ async function addFromSelection(info, tab) {
   }
 
   let taskId = tasks.has(r.update_task_id) ? r.update_task_id : "";
+  const isNew = !taskId;
   if (taskId) {
     // Extend the existing task instead of creating a duplicate.
     const cur = current(taskId);
@@ -421,6 +422,25 @@ async function addFromSelection(info, tab) {
     after[TASK + taskId] = compact({ l: listId, p: targetParent, t: r.title.trim() || "Neue Aufgabe", n: notes, d, h, o, u: withLink([]) });
   }
 
+  // The deliberate action (adding) and the model's own idea (grouping) are
+  // separate undo steps: insertOnly is the state of the task without grouping.
+  let insertOnly = null;
+  if (targetParent !== parentId) {
+    const t = after[TASK + taskId];
+    if (isNew) {
+      const sibs = childrenOf(tasks, listId, parentId).filter((x) => parentId || !x.x);
+      const o = !sibs.length ? 0
+        : parentId ? Math.max(...sibs.map((x) => x.o || 0)) + 1
+          : Math.min(...sibs.map((x) => x.o || 0)) - 1;
+      insertOnly = { [TASK + taskId]: compact({ ...t, p: parentId, o }) };
+    } else {
+      const old = tasks.get(taskId);
+      insertOnly = { [TASK + taskId]: compact({ ...t, p: old.p, o: old.o, t: old.t || t.t }) };
+    }
+  }
+  const taskTitle = (after[TASK + taskId].t || "").slice(0, 60);
+  const groupTitle = insertOnly ? newParentTitle : "";
+
   await browser.storage.sync.set(after);
-  await setStatus({ state: "done", text: r.summary || "Aufgabe angelegt", taskId, before, after });
+  await setStatus({ state: "done", text: r.summary || "Aufgabe angelegt", taskId, before, after, insertOnly, taskTitle, groupTitle, updated: !isNew });
 }

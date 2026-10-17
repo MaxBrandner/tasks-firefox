@@ -107,6 +107,7 @@
     notes: "M4 6h16M4 12h16M4 18h10",
     link: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
     alert: "M12 3.5l9 16H3zM12 10v4M12 17h.01",
+    undo: "M9 14L4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3",
     repeat: "M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3",
     monitor: "M3 4.5h18v12H3zM8.5 20.5h7M12 16.5v4",
     sun: "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8zM12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4",
@@ -334,7 +335,7 @@
       // First keystroke in this field: remember the previous state for Ctrl+Z.
       if (!ta._checkpointed) {
         ta._checkpointed = true;
-        checkpoint();
+        checkpoint(multiline ? "Notiz bearbeitet" : "Titel bearbeitet");
       }
       if (!multiline && ta.value.includes("\n")) ta.value = ta.value.replace(/\s*\n\s*/g, " ");
       autosize(ta);
@@ -518,25 +519,76 @@
     write(updates);
   }
 
-  // --- Undo / redo (Ctrl+Z / Ctrl+Y) ------------------------------------------
-  // Before every action the state of all lists and tasks is recorded (as JSON
-  // text, ~100 KB at most). Undo restores it and writes only the entries that
-  // actually differ.
+  // --- History: undo tree (Ctrl+Z / Ctrl+Y, ⋯ → "Verlauf …") -----------------
+  // Every action becomes a node holding the full state after it (JSON, ~100 KB
+  // at most). Undo moves to the parent, redo to the child visited last. Acting
+  // after an undo starts a new branch – the old one is kept, nothing gets
+  // overwritten. The history popup shows the tree: jump to any state, or take
+  // back a single step while later ones stay (only if no later step touched the
+  // same entries). Kept in memory for this sidebar session only.
 
-  const HISTORY_MAX = 100;
-  const undoStack = [];
-  const redoStack = [];
+  const HISTORY_MAX = 200;
+  const hist = new Map(); // id -> { id, parent, kids: [], lastKid, label, at, state }
+  let histSeq = 0;
+  let histRoot = null;
+  let histCurrent = null;
+  let pendingLabel = null; // label of the action whose result isn't recorded yet
 
   const serialize = () => JSON.stringify({ l: [...lists], t: [...tasks] });
+  const q = (id) => "„" + ((plainTitle((tasks.get(id) || {}).t) || "Aufgabe").slice(0, 40)) + "“";
 
-  function checkpoint() {
+  function addNode(label, state) {
+    const node = { id: ++histSeq, parent: histCurrent, kids: [], lastKid: null, label, at: Date.now(), state };
+    hist.set(node.id, node);
+    if (histCurrent) {
+      const parent = hist.get(histCurrent);
+      parent.kids.push(node.id);
+      parent.lastKid = node.id;
+    } else {
+      histRoot = node.id;
+    }
+    histCurrent = node.id;
+    pruneHistory();
+    return node;
+  }
+
+  function ensureHistoryRoot() {
+    if (!histRoot) addNode("Start", serialize());
+  }
+
+  // Records the changes since the current node as a node for the pending action.
+  function commitPending() {
+    ensureHistoryRoot();
     flushPending();
     const s = serialize();
-    if (undoStack[undoStack.length - 1] !== s) {
-      undoStack.push(s);
-      if (undoStack.length > HISTORY_MAX) undoStack.shift();
+    if (s !== hist.get(histCurrent).state) addNode(pendingLabel || "Änderung", s);
+    pendingLabel = null;
+  }
+
+  // Called right before an action: record the previous one, name the next.
+  function checkpoint(label) {
+    commitPending();
+    pendingLabel = label || "Änderung";
+  }
+
+  // Drops the oldest steps beyond HISTORY_MAX; side branches of the old root
+  // go with it (never the branch leading to the current state).
+  function pruneHistory() {
+    while (hist.size > HISTORY_MAX) {
+      const root = hist.get(histRoot);
+      if (root.id === histCurrent || !root.kids.length) return;
+      const path = new Set();
+      for (let c = hist.get(histCurrent); c; c = c.parent ? hist.get(c.parent) : null) path.add(c.id);
+      const keep = root.kids.find((k) => path.has(k)) || root.lastKid || root.kids[root.kids.length - 1];
+      const drop = (id) => {
+        hist.get(id).kids.forEach(drop);
+        hist.delete(id);
+      };
+      for (const k of root.kids) if (k !== keep) drop(k);
+      hist.delete(root.id);
+      hist.get(keep).parent = null;
+      histRoot = keep;
     }
-    redoStack.length = 0;
   }
 
   function applyState(serial) {
@@ -564,19 +616,72 @@
     render();
   }
 
-  function stepHistory(from, to) {
-    flushPending();
-    const cur = serialize();
-    // Skip entries equal to the current state.
-    while (from.length && from[from.length - 1] === cur) from.pop();
-    if (!from.length) return;
-    to.push(cur);
+  // Jump to any recorded state – also into another branch.
+  function jumpTo(id) {
+    commitPending();
+    const node = hist.get(id);
+    if (!node || id === histCurrent) return;
+    for (let c = node; c.parent; c = hist.get(c.parent)) hist.get(c.parent).lastKid = c.id;
+    histCurrent = id;
     hideToast();
-    applyState(from.pop());
+    applyState(node.state);
   }
 
-  const undo = () => stepHistory(undoStack, redoStack);
-  const redo = () => stepHistory(redoStack, undoStack);
+  function undo() {
+    commitPending();
+    const node = hist.get(histCurrent);
+    if (node && node.parent) jumpTo(node.parent);
+  }
+
+  function redo() {
+    commitPending();
+    const node = hist.get(histCurrent);
+    if (node && node.lastKid) jumpTo(node.lastKid);
+  }
+
+  const toEntries = (state) => {
+    const s = JSON.parse(state);
+    return new Map([...s.l.map(([i, v]) => [LIST + i, v]), ...s.t.map(([i, v]) => [TASK + i, v])]);
+  };
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  // Takes back one step while later steps stay – only if none of its entries
+  // changed since. Becomes a step itself (so it can be undone). Returns an
+  // error text, or "" on success.
+  function revertStep(id) {
+    commitPending();
+    const node = hist.get(id);
+    const parent = node && node.parent ? hist.get(node.parent) : null;
+    if (!parent) return "Der Startpunkt lässt sich nicht zurücknehmen.";
+    const before = toEntries(parent.state);
+    const after = toEntries(node.state);
+    const now = toEntries(serialize());
+    const keys = [...new Set([...before.keys(), ...after.keys()])].filter((k) => !same(before.get(k), after.get(k)));
+    if (!keys.length) return "Dieser Schritt hat nichts geändert.";
+    if (keys.some((k) => !same(now.get(k), after.get(k)))) {
+      return "Geht nicht: Spätere Schritte haben dieselben Aufgaben geändert. Springe stattdessen zu einem Stand davor.";
+    }
+    checkpoint("Zurückgenommen: " + node.label);
+    const sets = {};
+    const gone = [];
+    for (const k of keys) {
+      const map = k.startsWith(TASK) ? tasks : lists;
+      const v = before.get(k);
+      if (v === undefined) {
+        map.delete(k.slice(2));
+        gone.push(k);
+      } else {
+        map.set(k.slice(2), v);
+        sets[k] = v;
+      }
+    }
+    if (Object.keys(sets).length) write(sets);
+    if (gone.length) remove(gone);
+    ensureCurrentList();
+    render();
+    commitPending();
+    return "";
+  }
 
   // In the field being edited the browser's normal text undo comes first; only
   // once the text is back to its initial state does Ctrl+Z act on the tasks
@@ -680,7 +785,7 @@
     const action = btn.dataset.action;
     if (action === "new") {
       editListName("", (name) => {
-        checkpoint();
+        checkpoint("Liste „" + name + "“ angelegt");
         const id = newId();
         const maxO = Math.max(0, ...[...lists.values()].map((l) => l.o || 0));
         const list = { t: name, o: maxO + 1 };
@@ -691,7 +796,7 @@
     } else if (action === "rename") {
       const id = currentList;
       editListName(lists.get(id).t || "", (name) => {
-        checkpoint();
+        checkpoint("Liste umbenannt in „" + name + "“");
         const list = { ...lists.get(id), t: name };
         lists.set(id, list);
         write({ [LIST + id]: list });
@@ -699,6 +804,8 @@
       });
     } else if (action === "delete") {
       deleteList(currentList);
+    } else if (action === "history") {
+      openHistory();
     } else if (action === "export") {
       exportBackup();
     } else if (action === "import") {
@@ -737,7 +844,7 @@
 
   function deleteList(id) {
     if (lists.size <= 1) return;
-    checkpoint();
+    checkpoint("Liste „" + (lists.get(id).t || "") + "“ gelöscht");
     const removed = { [LIST + id]: lists.get(id) };
     for (const [tid, t] of tasks) {
       if (t.l === id) removed[TASK + tid] = t;
@@ -760,7 +867,7 @@
   // "Aufgabe hinzufügen": empty task at the top, directly in edit mode – the
   // same code as editing an existing task.
   function addTask() {
-    checkpoint();
+    checkpoint("Aufgabe hinzugefügt");
     const id = createTask({});
     placeTask(id, "", 0);
     focusAfterRender = { id, caret: "end" };
@@ -769,7 +876,7 @@
 
   // "+ Unteraufgabe" button: new empty line as last child.
   function addChild(parentId) {
-    checkpoint();
+    checkpoint("Unteraufgabe zu " + q(parentId) + " hinzugefügt");
     const id = createTask({});
     placeTask(id, parentId, visibleChildren(currentList, parentId).length);
     focusAfterRender = { id, caret: "end" };
@@ -800,7 +907,7 @@
     const sibs = visibleChildren(t.l, parentOf(id));
     const i = sibs.findIndex((s) => s.id === id);
     if (i <= 0) return;
-    checkpoint();
+    checkpoint(q(id) + " eingerückt");
     const newParent = sibs[i - 1].id;
     placeTask(id, newParent, visibleChildren(t.l, newParent).length);
     focusAfterRender = { id, caret };
@@ -812,7 +919,7 @@
     const t = tasks.get(id);
     const par = parentOf(id);
     if (!t || !par) return;
-    checkpoint();
+    checkpoint(q(id) + " ausgerückt");
     const gp = parentOf(par);
     const sibs = visibleChildren(t.l, gp);
     const i = sibs.findIndex((s) => s.id === par);
@@ -830,7 +937,7 @@
     const i = sibs.findIndex((s) => s.id === id);
     const j = i + delta;
     if (i < 0 || j < 0 || j >= sibs.length) return;
-    checkpoint();
+    checkpoint(q(id) + " verschoben");
     placeTask(id, par, j);
     focusAfterRender = { id, caret };
     render();
@@ -839,7 +946,7 @@
   function toggleDone(id) {
     const t = tasks.get(id);
     if (!t) return;
-    checkpoint();
+    checkpoint(q(id) + (t.x ? " wieder geöffnet" : " abgehakt"));
     const now = Date.now();
     const updates = {};
     const set = (tid, fields) => {
@@ -885,7 +992,7 @@
   // disappears on switching to another line).
   function deleteTask(id, { silent = false, deferRender = false } = {}) {
     if (!tasks.has(id)) return;
-    if (!silent) checkpoint();
+    if (!silent) checkpoint(q(id) + " gelöscht");
     const removed = withDescendants(id);
     applyRemoval(removed);
     if (deferRender) scheduleRender();
@@ -903,7 +1010,7 @@
     }
     const n = Object.keys(removed).length;
     if (!n) return;
-    checkpoint();
+    checkpoint("Erledigte gelöscht");
     applyRemoval(removed);
     render();
     toast(n === 1 ? "1 Aufgabe gelöscht" : `${n} Aufgaben gelöscht`, removed);
@@ -911,7 +1018,7 @@
 
   // Removing the date also removes time and repeat (both need a date).
   function setDue(id, d) {
-    checkpoint();
+    checkpoint(q(id) + (d ? " fällig " + d : ": Datum entfernt"));
     patchTask(id, d ? { d } : { d: "", h: "", r: "" });
     rollRecurring();
     render();
@@ -919,7 +1026,7 @@
 
   // Time without a date → today.
   function setTime(id, h) {
-    checkpoint();
+    checkpoint(q(id) + ": Uhrzeit " + (h || "entfernt"));
     const t = tasks.get(id);
     patchTask(id, { h, d: t.d || (h ? isoDate(0) : "") });
     rollRecurring();
@@ -928,7 +1035,7 @@
 
   // Weekly repeat (without a date → starting today).
   function setWeekly(id, on) {
-    checkpoint();
+    checkpoint(q(id) + (on ? " wöchentlich" : ": Wiederholung aus"));
     const t = tasks.get(id);
     patchTask(id, on ? { r: "w", s: t.s || id, d: t.d || isoDate(0) } : { r: "" });
     rollRecurring();
@@ -1004,7 +1111,7 @@
   // Backspace in an empty line: delete it and jump to the line above.
   function removeEmpty(id) {
     if (hasChildren(id)) return;
-    checkpoint();
+    checkpoint("Leere Zeile gelöscht");
     const cur = tasks.get(id);
     const prev = neighbor(id, -1);
     const silent = !cur.n && !cur.d;
@@ -1067,7 +1174,7 @@
         }
       } else {
         // Text right of the caret moves into the new line (as in Notion).
-        checkpoint();
+        checkpoint("Neue Zeile unter " + q(id));
         cancelDebounce("t:" + id);
         patchTask(id, { t: ta.value.slice(0, pos).trimEnd() });
         insertBelow(id, ta.value.slice(end).trim());
@@ -1252,7 +1359,7 @@
     if (!pendingImport) return;
     const data = pendingImport;
     pendingImport = null;
-    checkpoint();
+    checkpoint(replace ? "Sicherung eingespielt (ersetzt)" : "Sicherung zusammengeführt");
     const gone = [];
     if (replace) {
       for (const id of lists.keys()) if (!(LIST + id in data)) gone.push(LIST + id);
@@ -1299,7 +1406,7 @@
       restore();
       return;
     }
-    checkpoint();
+    checkpoint("Gelöschtes wiederhergestellt");
     for (const [key, value] of Object.entries(restore)) {
       (key.startsWith(TASK) ? tasks : lists).set(key.slice(2), value);
     }
@@ -1441,14 +1548,14 @@
     if (!isWebUrl(url.href)) return false;
     const t = tasks.get(id);
     if (linksOf(t).some((l) => l.url === url.href)) return true;
-    checkpoint();
+    checkpoint("Link zu " + q(id) + " hinzugefügt");
     patchTask(id, { u: [...linksOf(t), { url: url.href, t: url.hostname }] });
     render();
     return true;
   }
 
   function removeLink(id, url) {
-    checkpoint();
+    checkpoint("Link von " + q(id) + " entfernt");
     patchTask(id, { u: linksOf(tasks.get(id)).filter((l) => l.url !== url) });
     render();
   }
@@ -1833,7 +1940,7 @@
     if (!dragging || !dropInfo) return;
     e.preventDefault();
     const { id: target, mode } = dropInfo;
-    checkpoint();
+    checkpoint(q(dragging.id) + " verschoben");
     if (mode === "inside") {
       placeTask(dragging.id, target, 0);
     } else {
@@ -1877,6 +1984,78 @@
     applyTheme(next);
     await browser.storage.local.set({ [THEME_KEY]: next });
   });
+
+  // --- History popup ----------------------------------------------------------
+  // Rows in chronological order; the branch followed by Ctrl+Y continues at the
+  // same indentation, other branches are indented below their fork.
+  const historyDlgEl = $("historyDlg");
+  const historyMsgEl = $("historyMsg");
+
+  function timeAgo(ms) {
+    const s = Math.round((Date.now() - ms) / 1000);
+    if (s < 60) return "gerade eben";
+    if (s < 3600) return "vor " + Math.round(s / 60) + " Min";
+    return new Date(ms).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function historyRows() {
+    const rows = [];
+    const walk = (id, depth) => {
+      for (let nid = id; nid;) {
+        const n = hist.get(nid);
+        rows.push({ n, depth });
+        const main = n.kids.includes(n.lastKid) ? n.lastKid : n.kids[n.kids.length - 1];
+        for (const k of n.kids) if (k !== main) walk(k, depth + 1);
+        nid = main;
+      }
+    };
+    if (histRoot) walk(histRoot, 0);
+    return rows;
+  }
+
+  function renderHistory() {
+    const onPath = new Set();
+    for (let c = hist.get(histCurrent); c; c = c.parent ? hist.get(c.parent) : null) onPath.add(c.id);
+    $("historyList").replaceChildren(...historyRows().map(({ n, depth }) => {
+      const row = h("li", {
+        class: "hist-row" + (n.id === histCurrent ? " current" : "") + (onPath.has(n.id) ? " on-path" : " off-path") + (depth ? " branch" : ""),
+        dataset: { id: String(n.id) },
+      },
+        h("button", {
+          class: "hist-jump",
+          type: "button",
+          title: n.id === histCurrent ? "Aktueller Stand" : "Zu diesem Stand springen",
+          onclick: () => {
+            jumpTo(n.id);
+            historyMsgEl.hidden = true;
+            renderHistory();
+          },
+        }, h("span", { class: "hist-label" }, n.label), h("span", { class: "hist-time" }, timeAgo(n.at))),
+        n.parent && h("button", {
+          class: "hist-revert icon-btn small",
+          type: "button",
+          title: "Nur diesen Schritt zurücknehmen (spätere bleiben)",
+          "aria-label": "Nur diesen Schritt zurücknehmen",
+          onclick: () => {
+            const err = revertStep(n.id);
+            historyMsgEl.textContent = err;
+            historyMsgEl.hidden = !err;
+            renderHistory();
+          },
+        }, icon("undo")));
+      row.style.marginLeft = depth * 16 + "px";
+      return row;
+    }));
+    const cur = $("historyList").querySelector(".current");
+    if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest" });
+  }
+
+  function openHistory() {
+    commitPending();
+    historyMsgEl.hidden = true;
+    openModal(historyDlgEl);
+    renderHistory();
+  }
 
   // --- Real version vs. test copy ------------------------------------------
   // The real sidebar pings "Tasks DEV" (every 5 s and on window focus) and
@@ -1925,6 +2104,7 @@
     migrateNoteLinks();
     rollRecurring();
     render();
+    ensureHistoryRoot();
     // Catch up on the AI status in case the sidebar was just opened.
     const { [AI_STATUS]: st } = await browser.storage.local.get(AI_STATUS);
     if (st && Date.now() - st.at < 60000) showAiStatus(st);
@@ -2139,17 +2319,34 @@
   function onAiDone(st) {
     const before = st.before || {};
     const after = st.after || {};
-    // State before the change = current state with the old values.
-    const l = new Map(lists);
-    const t = new Map(tasks);
     for (const [k, v] of Object.entries(after)) (k.startsWith(TASK) ? tasks : lists).set(k.slice(2), v);
-    for (const [k, v] of Object.entries(before)) {
-      const m = k.startsWith(TASK) ? t : l;
-      if (v == null) m.delete(k.slice(2));
-      else m.set(k.slice(2), v);
+    const finalState = serialize();
+    // State = current state with some entries overridden (null = absent).
+    const stateWith = (overrides) => {
+      const l = new Map(lists);
+      const t = new Map(tasks);
+      for (const [k, v] of Object.entries(overrides)) {
+        const m = k.startsWith(TASK) ? t : l;
+        if (v == null) m.delete(k.slice(2));
+        else m.set(k.slice(2), v);
+      }
+      return JSON.stringify({ l: [...l], t: [...t] });
+    };
+    // Local edits still pending belong before the AI result. Then: the
+    // deliberate action (adding) and – separately – the model's grouping, so
+    // Ctrl+Z first takes back only the grouping.
+    ensureHistoryRoot();
+    flushPending();
+    const s0 = stateWith(before);
+    if (s0 !== hist.get(histCurrent).state) addNode(pendingLabel || "Änderung", s0);
+    pendingLabel = null;
+    const name = st.taskTitle ? "„" + plainTitle(st.taskTitle) + "“" : "Aufgabe";
+    if (st.insertOnly) {
+      addNode("KI: " + name + " hinzugefügt", stateWith({ ...before, ...st.insertOnly }));
+      addNode("KI: Gruppe „" + st.groupTitle + "“ angelegt", finalState);
+    } else {
+      addNode("KI: " + name + (st.updated ? " ergänzt" : " hinzugefügt"), finalState);
     }
-    undoStack.push(JSON.stringify({ l: [...l], t: [...t] }));
-    redoStack.length = 0;
 
     const task = tasks.get(st.taskId);
     if (task && task.l !== currentList) setCurrentList(task.l);

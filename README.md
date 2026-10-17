@@ -36,6 +36,11 @@ Google, kein eigener Server.
 - **Rückgängig / Wiederholen** – **Strg+Z** / **Strg+Y** für alle Änderungen;
   beim Tippen wirkt Strg+Z zuerst auf den Text im Feld. Nach dem Löschen
   zusätzlich ein „Rückgängig"-Knopf.
+- **Verlauf** (`⋯` → „Verlauf …") – alle Schritte als Baum: Wer nach Strg+Z
+  etwas Neues macht, bekommt einen **Zweig**, der alte Weg bleibt erhalten. Klick
+  auf einen Schritt springt zu diesem Stand; ↶ nimmt **nur diesen einen Schritt**
+  zurück, spätere bleiben (abgelehnt, wenn spätere Schritte dieselben Aufgaben
+  geändert haben). Gilt für die geöffnete Seitenleiste.
 - **Zu Tasks hinzufügen (KI)** – markierten Text einer Webseite per Rechtsklick
   als Aufgabe einsortieren lassen, siehe unten.
 - **Design** – System / Hell / Dunkel (Knopf oben rechts). Einstellungen und
@@ -67,8 +72,9 @@ im Stil der Geschwister („Blatt 4"), trägt die Abgabefrist mit Uhrzeit ein un
 speichert die Seite als **Link** mit kurzem Namen (z. B. „Abgabe Blatt 1"). Gibt es die Aufgabe schon, wird sie ergänzt statt
 doppelt angelegt. Gibt es zu einem Thema noch keine Oberkategorie, landet der erste Eintrag oben
 in der Liste; beim zweiten Eintrag zum selben Thema legt die KI die
-Oberkategorie an (z. B. „DL") und schiebt beide hinein. Strg+Z nimmt das
-wieder zurück.
+Oberkategorie an (z. B. „DL") und schiebt beide hinein. Einfügen und
+Gruppieren sind getrennte Schritte: Das erste Strg+Z nimmt nur die Gruppierung
+zurück, das Eingefügte bleibt.
 
 Eingestellt wird das unter `⋯` → **KI einrichten …**:
 

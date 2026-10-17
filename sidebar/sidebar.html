@@ -18,6 +18,7 @@
         <button type="button" role="menuitem" data-action="rename">Liste umbenennen</button>
         <button type="button" role="menuitem" data-action="delete" class="danger">Liste löschen</button>
         <hr />
+        <button type="button" role="menuitem" data-action="history">Verlauf …</button>
         <button type="button" role="menuitem" data-action="export">Sicherung exportieren</button>
         <button type="button" role="menuitem" data-action="import">Sicherung importieren …</button>
         <hr />
@@ -43,7 +44,7 @@
         <kbd>Strg+Enter</kbd><span>abhaken</span>
         <kbd>Backspace</kbd><span>leere Zeile löschen</span>
         <kbd>↑ / ↓</kbd><span>zur Aufgabe darüber/darunter; ohne Auswahl: unterste/oberste</span>
-        <kbd>Strg+Z / Strg+Y</kbd><span>rückgängig / wiederholen</span>
+        <kbd>Strg+Z / Strg+Y</kbd><span>rückgängig / wiederholen (alle Schritte: ⋯ → Verlauf …)</span>
         <kbd>Alt+↑ / ↓</kbd><span>Aufgabe verschieben</span>
         <kbd>Esc</kbd><span>Bearbeiten/Details schließen</span>
         <kbd>Strg+Alt+A</kbd><span>Tasks öffnen/schließen (überall in Firefox)</span>
@@ -92,6 +93,18 @@
         <button id="aiTest" class="chip" type="button">Verbindung testen</button>
         <span id="aiTestState" class="muted"></span>
       </div>
+      </div>
+    </dialog>
+
+    <dialog id="historyDlg" class="modal" aria-labelledby="historyTitle">
+      <div class="modal-body">
+      <header class="modal-head">
+        <h2 id="historyTitle">Verlauf</h2>
+        <button class="icon-btn modal-close" type="button" data-close aria-label="Schließen" title="Schließen"></button>
+      </header>
+      <p class="muted">Klick auf einen Schritt springt zu diesem Stand. Machst du nach Strg+Z etwas Neues, entsteht ein Zweig – der alte bleibt erhalten. ↶ nimmt nur diesen einen Schritt zurück, spätere bleiben.</p>
+      <ol id="historyList" class="history"></ol>
+      <p id="historyMsg" class="form-warn" role="alert" hidden></p>
       </div>
     </dialog>
 
