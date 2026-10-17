@@ -925,6 +925,65 @@ kbd {
   height: 12px;
 }
 
+/* --- Claude: Einstellungen & Status -------------------------------------- */
+
+.muted {
+  color: var(--muted);
+}
+
+.key-input {
+  width: 100%;
+  margin-top: 4px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  font: 12px ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+.key-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.ai-status {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 10px 8px;
+  padding: 7px 6px 7px 10px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12.5px;
+}
+
+.ai-status span {
+  flex: 1;
+  min-width: 0;
+}
+
+.ai-status.error {
+  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  color: var(--danger);
+}
+
+/* Frisch von Claude angelegte Aufgabe kurz hervorheben. */
+.task.flash > .row {
+  animation: flash 2.4s ease-out;
+}
+
+@keyframes flash {
+  0%,
+  30% {
+    background: var(--accent-soft);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
 /* Symbol-Knopf (Wiederholen): nur das Symbol, etwas größer. */
 .chip.icon-only {
   padding: 2px 7px;

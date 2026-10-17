@@ -17,3 +17,8 @@ web-ext-artifacts/
 .DS_Store
 *.swp
 .amo-upload-uuid
+
+# Python / Sicherungen
+__pycache__/
+*.bak
+*.bak2

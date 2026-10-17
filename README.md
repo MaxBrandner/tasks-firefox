@@ -27,6 +27,15 @@ kein Server, keine Berechtigungen auf Webseiten.
 - **↻ Wöchentlich** – ist eine Abgabe fällig oder abgehakt, entsteht die nächste
   eine Woche später (Zahl am Titelende zählt mit: „Blatt 3" → „Blatt 4"). Die
   Vorwoche bleibt als eigene Aufgabe stehen und wird nicht überschrieben.
+- **Zu Tasks hinzufügen (Claude)** – Text auf einer Webseite markieren →
+  Rechtsklick → „Zu Tasks hinzufügen". Claude sucht Liste und Elternaufgabe,
+  wählt den Titel im Stil der Geschwister und trägt die Fälligkeit mit Uhrzeit
+  ein; der Link zur Seite kommt in die Notiz. Läuft über **Claude Code** auf
+  diesem Rechner, also über das Claude-Abo – kein API-Schlüssel, keine
+  Extrakosten. Einmal einrichten: `native/install.sh` ausführen (meldet das
+  Hilfsprogramm `native/tasks_claude_host.py` bei Firefox an), dann unter
+  ⋯ → „Claude einrichten …" → „Verbindung testen". Gesendet werden markierter
+  Text, Seitenadresse/-titel und die Titel der Listen/Aufgaben.
 - **Design** – System / Hell / Dunkel (Knopf oben rechts).
 
 Toolbar-Symbol oder **Strg+Alt+A**: blendet die Seitenleiste ein und aus.

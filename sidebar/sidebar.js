@@ -24,6 +24,8 @@
   const THEME_KEY = "tk:themeMode";
   const CURRENT_KEY = "tk:currentList";
   const DONE_OPEN_KEY = "tk:doneOpen";
+  // Claude-Anbindung (Kontextmenü „Zu Tasks hinzufügen", siehe background.js).
+  const AI_STATUS = "tk:aiStatus";
 
   const lists = new Map(); // id -> { t, o }
   const tasks = new Map(); // id -> { l, p, t, n, d, x, xa, o }
@@ -680,6 +682,8 @@
       });
     } else if (action === "delete") {
       deleteList(currentList);
+    } else if (action === "ai") {
+      openAiPanel();
     } else if (action === "help") {
       openModal(helpEl);
     }
@@ -1184,6 +1188,10 @@
     const restore = toastUndo;
     hideToast();
     if (!restore) return;
+    if (typeof restore === "function") {
+      restore();
+      return;
+    }
     checkpoint();
     for (const [key, value] of Object.entries(restore)) {
       (key.startsWith(TASK) ? tasks : lists).set(key.slice(2), value);
@@ -1624,7 +1632,84 @@
     ensureCurrentList();
     rollRecurring();
     render();
+    // KI-Status nachholen, falls die Seitenleiste gerade erst geöffnet wurde.
+    const { [AI_STATUS]: st } = await browser.storage.local.get(AI_STATUS);
+    if (st && Date.now() - st.at < 60000) showAiStatus(st);
   }
+
+  // --- Claude: „Zu Tasks hinzufügen" -----------------------------------------
+  // Das Hintergrundskript (background.js) ruft Claude auf und schreibt die
+  // Aufgabe; hier wird nur der Fortschritt gezeigt, die neue Aufgabe
+  // angesprungen und Strg+Z dafür vorbereitet.
+
+  const aiPanelEl = $("aiPanel");
+  const aiStatusEl = $("aiStatus");
+  const aiTestStateEl = $("aiTestState");
+
+  function openAiPanel() {
+    aiTestStateEl.textContent = "";
+    openModal(aiPanelEl);
+  }
+
+  // Verbindungstest: fragt das Hilfsprogramm nach der Claude-Code-Version.
+  $("aiTest").addEventListener("click", async () => {
+    aiTestStateEl.textContent = "Prüfe …";
+    try {
+      const r = await browser.runtime.sendNativeMessage("tasks_claude", { ping: true });
+      aiTestStateEl.textContent = r && r.ok ? "✓ Verbunden: " + r.version : "✗ " + ((r && r.error) || "Fehler");
+    } catch (_) {
+      aiTestStateEl.textContent = "✗ Hilfsprogramm nicht gefunden – native/install.sh ausführen";
+    }
+  });
+  $("aiStatusClose").addEventListener("click", () => {
+    aiStatusEl.hidden = true;
+  });
+
+  function showAiStatus(st) {
+    if (st.state === "done") {
+      aiStatusEl.hidden = true;
+      return;
+    }
+    aiStatusEl.hidden = false;
+    aiStatusEl.classList.toggle("error", st.state === "error");
+    $("aiStatusText").textContent = st.text;
+  }
+
+  // Fertig: Ergebnis übernehmen, Strg+Z-Stand von vorher merken, hinspringen.
+  function onAiDone(st) {
+    const before = st.before || {};
+    const after = st.after || {};
+    // Stand vor der Änderung = aktueller Stand mit den alten Werten.
+    const l = new Map(lists);
+    const t = new Map(tasks);
+    for (const [k, v] of Object.entries(after)) (k.startsWith(TASK) ? tasks : lists).set(k.slice(2), v);
+    for (const [k, v] of Object.entries(before)) {
+      const m = k.startsWith(TASK) ? t : l;
+      if (v == null) m.delete(k.slice(2));
+      else m.set(k.slice(2), v);
+    }
+    undoStack.push(JSON.stringify({ l: [...l], t: [...t] }));
+    redoStack.length = 0;
+
+    const task = tasks.get(st.taskId);
+    if (task && task.l !== currentList) setCurrentList(task.l);
+    else render();
+    toast(st.text, () => undo());
+    const li = st.taskId && findLi(st.taskId);
+    if (li) {
+      li.scrollIntoView({ block: "center" });
+      li.classList.add("flash");
+      setTimeout(() => li.classList.remove("flash"), 2500);
+    }
+  }
+
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes[AI_STATUS]) return;
+    const st = changes[AI_STATUS].newValue;
+    if (!st) return;
+    showAiStatus(st);
+    if (st.state === "done") onAiDone(st);
+  });
 
   init();
 })();
