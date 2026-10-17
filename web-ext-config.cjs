@@ -17,6 +17,10 @@ module.exports = {
     "dev",
     // Tests (npm test).
     "tests",
+    // Local only: personal backups (real tasks!), test data, design prototypes.
+    "backups",
+    "testdata",
+    "prototypes",
     "**/*.bak",
     "**/*.bak2",
     // Secrets/config never go into the package (web-ext ignores dotfiles

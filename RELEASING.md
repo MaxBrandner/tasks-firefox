@@ -62,6 +62,16 @@ npm run build          # erzeugt web-ext-artifacts/tasks-X.Y.Z.zip
 npm run sign           # liest die AMO-Keys aus .env, signiert per API
 ```
 
+**Vor dem Signieren den Paketinhalt prüfen** – drin sein dürfen nur
+`manifest.json`, `background.js`, `icons/` und `sidebar/`:
+
+```bash
+unzip -l web-ext-artifacts/tasks-X.Y.Z.zip
+```
+
+Lokale Ordner wie `backups/` (echte Aufgaben!), `testdata/` und `prototypes/`
+schließt `web-ext-config.cjs` aus; neue lokale Ordner dort ebenfalls eintragen.
+
 `npm run sign` (→ `scripts/sign.sh`) lädt die AMO-Credentials aus der lokalen
 **`.env`** und lässt `web-ext sign` die fertig **signierte** `.xpi` direkt nach
 `web-ext-artifacts/` laden (Kanal `unlisted` ist in `web-ext-config.cjs` gesetzt).
