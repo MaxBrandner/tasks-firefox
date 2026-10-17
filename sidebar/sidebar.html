@@ -102,9 +102,12 @@
         <h2 id="historyTitle">Verlauf</h2>
         <button class="icon-btn modal-close" type="button" data-close aria-label="Schließen" title="Schließen"></button>
       </header>
-      <p class="muted">Klick auf einen Schritt springt zu diesem Stand. Machst du nach Strg+Z etwas Neues, entsteht ein Zweig – der alte bleibt erhalten. ↶ nimmt nur diesen einen Schritt zurück, spätere bleiben.</p>
+      <p class="muted">Klick auf einen Schritt springt zu diesem Stand. Machst du nach Strg+Z etwas Neues, entsteht ein Zweig – der alte bleibt erhalten. ↶ nimmt nur diesen einen Schritt zurück, spätere bleiben. Der Verlauf bleibt auf diesem Rechner gespeichert.</p>
       <ol id="historyList" class="history"></ol>
       <p id="historyMsg" class="form-warn" role="alert" hidden></p>
+      <div class="detail-row">
+        <button id="historyClear" class="link-btn danger" type="button" title="Der aktuelle Stand wird der neue Start">Verlauf leeren</button>
+      </div>
       </div>
     </dialog>
 

@@ -333,9 +333,14 @@
     });
     ta.addEventListener("input", () => {
       // First keystroke in this field: remember the previous state for Ctrl+Z.
+      // Further typing extends the step until a 0.7 s pause records it.
+      const label = multiline ? "Notiz bearbeitet" : "Titel bearbeitet";
       if (!ta._checkpointed) {
         ta._checkpointed = true;
-        checkpoint(multiline ? "Notiz bearbeitet" : "Titel bearbeitet");
+        checkpoint(label);
+      } else {
+        if (!pendingLabel) pendingLabel = label;
+        scheduleCommit();
       }
       if (!multiline && ta.value.includes("\n")) ta.value = ta.value.replace(/\s*\n\s*/g, " ");
       autosize(ta);
@@ -525,23 +530,40 @@
   // after an undo starts a new branch – the old one is kept, nothing gets
   // overwritten. The history popup shows the tree: jump to any state, or take
   // back a single step while later ones stay (only if no later step touched the
-  // same entries). Kept in memory for this sidebar session only.
+  // same entries).
+  //
+  // Persistent per device (storage.local, not synced – far too big for the
+  // sync quota): the root state once, then only each step's diff to its
+  // parent. States are serialized canonically (sorted keys), so a state
+  // rebuilt from diffs compares equal to the live one.
 
   const HISTORY_MAX = 200;
-  const hist = new Map(); // id -> { id, parent, kids: [], lastKid, label, at, state }
+  const HISTORY_KEY = "tk:history";
+  const instanceId = newId(); // this sidebar (every window has its own)
+  const hist = new Map(); // id -> { id, parent, kids: [], lastKid, label, at, state, diff }
   let histSeq = 0;
   let histRoot = null;
   let histCurrent = null;
   let pendingLabel = null; // label of the action whose result isn't recorded yet
 
-  const serialize = () => JSON.stringify({ l: [...lists], t: [...tasks] });
+  const canon = (v) => (Array.isArray(v) ? v.map(canon)
+    : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v);
+  const byId = ([a], [b]) => (a < b ? -1 : a > b ? 1 : 0);
+  const stateOf = (l, t) => JSON.stringify({
+    l: [...l].sort(byId).map(([id, v]) => [id, canon(v)]),
+    t: [...t].sort(byId).map(([id, v]) => [id, canon(v)]),
+  });
+  const serialize = () => stateOf(lists, tasks);
   const q = (id) => "„" + ((plainTitle((tasks.get(id) || {}).t) || "Aufgabe").slice(0, 40)) + "“";
 
   function addNode(label, state) {
-    const node = { id: ++histSeq, parent: histCurrent, kids: [], lastKid: null, label, at: Date.now(), state };
+    const parent = histCurrent ? hist.get(histCurrent) : null;
+    const node = {
+      id: ++histSeq, parent: histCurrent, kids: [], lastKid: null, label, at: Date.now(), state,
+      diff: parent ? diffStates(parent.state, state) : null,
+    };
     hist.set(node.id, node);
-    if (histCurrent) {
-      const parent = hist.get(histCurrent);
+    if (parent) {
       parent.kids.push(node.id);
       parent.lastKid = node.id;
     } else {
@@ -549,8 +571,90 @@
     }
     histCurrent = node.id;
     pruneHistory();
+    saveHistory();
     return node;
   }
+
+  // --- Persistence ---
+  const toEntries = (state) => {
+    const s = JSON.parse(state);
+    return new Map([...s.l.map(([i, v]) => [LIST + i, v]), ...s.t.map(([i, v]) => [TASK + i, v])]);
+  };
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  function diffStates(fromState, toState) {
+    const a = toEntries(fromState);
+    const b = toEntries(toState);
+    const set = {};
+    for (const [k, v] of b) if (!same(a.get(k), v)) set[k] = v;
+    return { set, del: [...a.keys()].filter((k) => !b.has(k)) };
+  }
+
+  function applyDiff(state, diff) {
+    const m = toEntries(state);
+    for (const [k, v] of Object.entries(diff.set)) m.set(k, v);
+    for (const k of diff.del) m.delete(k);
+    const l = new Map();
+    const t = new Map();
+    for (const [k, v] of m) (k.startsWith(TASK) ? t : l).set(k.slice(2), v);
+    return stateOf(l, t);
+  }
+
+  function saveHistory() {
+    if (!histRoot) return;
+    const nodes = {};
+    for (const [id, n] of hist) nodes[id] = { p: n.parent, k: n.kids, lk: n.lastKid, l: n.label, a: n.at, d: n.diff };
+    browser.storage.local.set({
+      [HISTORY_KEY]: { v: 1, by: instanceId, seq: histSeq, root: histRoot, cur: histCurrent, rootState: hist.get(histRoot).state, nodes },
+    }).catch(() => {});
+  }
+
+  // Rebuilds the tree from storage (root state + diffs). Returns false if none.
+  async function loadHistory() {
+    const { [HISTORY_KEY]: saved } = await browser.storage.local.get(HISTORY_KEY);
+    if (!saved || saved.v !== 1 || !saved.nodes || !saved.nodes[saved.root]) return false;
+    hist.clear();
+    const build = (id, state) => {
+      const raw = saved.nodes[id];
+      hist.set(id, { id, parent: raw.p, kids: raw.k.filter((k) => saved.nodes[k]), lastKid: raw.lk, label: raw.l, at: raw.a, state, diff: raw.d });
+      for (const k of raw.k) if (saved.nodes[k]) build(k, applyDiff(state, saved.nodes[k].d));
+    };
+    build(saved.root, saved.rootState);
+    histSeq = saved.seq;
+    histRoot = saved.root;
+    histCurrent = hist.has(saved.cur) ? saved.cur : saved.root;
+    return true;
+  }
+
+  // On opening: load the saved tree; if the data changed while the sidebar was
+  // closed (other device, AI, migration), record that as its own step.
+  async function initHistory() {
+    if (await loadHistory()) {
+      pendingLabel = "Änderungen außerhalb der Seitenleiste";
+      commitPending();
+    } else {
+      ensureHistoryRoot();
+    }
+  }
+
+  // "Verlauf leeren": the current state becomes the new start.
+  function clearHistory() {
+    commitPending();
+    hist.clear();
+    histRoot = null;
+    histCurrent = null;
+    ensureHistoryRoot();
+  }
+
+  // Another sidebar (other window) saved the tree: take it over.
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes[HISTORY_KEY]) return;
+    const saved = changes[HISTORY_KEY].newValue;
+    if (!saved || saved.by === instanceId) return;
+    loadHistory().then(() => {
+      if (historyDlgEl.open) renderHistory();
+    });
+  });
 
   function ensureHistoryRoot() {
     if (!histRoot) addNode("Start", serialize());
@@ -566,10 +670,20 @@
   }
 
   // Called right before an action: record the previous one, name the next.
+  // The action's own result is recorded shortly after (scheduleCommit), so the
+  // saved history is complete even if the sidebar is closed right away.
   function checkpoint(label) {
     commitPending();
     pendingLabel = label || "Änderung";
+    scheduleCommit();
   }
+
+  let commitTimer = null;
+  function scheduleCommit() {
+    clearTimeout(commitTimer);
+    commitTimer = setTimeout(commitPending, 700);
+  }
+  window.addEventListener("pagehide", () => commitPending());
 
   // Drops the oldest steps beyond HISTORY_MAX; side branches of the old root
   // go with it (never the branch leading to the current state).
@@ -587,6 +701,7 @@
       for (const k of root.kids) if (k !== keep) drop(k);
       hist.delete(root.id);
       hist.get(keep).parent = null;
+      hist.get(keep).diff = null;
       histRoot = keep;
     }
   }
@@ -623,6 +738,7 @@
     if (!node || id === histCurrent) return;
     for (let c = node; c.parent; c = hist.get(c.parent)) hist.get(c.parent).lastKid = c.id;
     histCurrent = id;
+    saveHistory();
     hideToast();
     applyState(node.state);
   }
@@ -638,12 +754,6 @@
     const node = hist.get(histCurrent);
     if (node && node.lastKid) jumpTo(node.lastKid);
   }
-
-  const toEntries = (state) => {
-    const s = JSON.parse(state);
-    return new Map([...s.l.map(([i, v]) => [LIST + i, v]), ...s.t.map(([i, v]) => [TASK + i, v])]);
-  };
-  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
   // Takes back one step while later steps stay – only if none of its entries
   // changed since. Becomes a step itself (so it can be undone). Returns an
@@ -1995,7 +2105,10 @@
     const s = Math.round((Date.now() - ms) / 1000);
     if (s < 60) return "gerade eben";
     if (s < 3600) return "vor " + Math.round(s / 60) + " Min";
-    return new Date(ms).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    const d = new Date(ms);
+    const time = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    return d.toDateString() === new Date().toDateString() ? time
+      : d.toLocaleDateString("de-DE", { day: "numeric", month: "numeric" }) + " " + time;
   }
 
   function historyRows() {
@@ -2049,6 +2162,12 @@
     const cur = $("historyList").querySelector(".current");
     if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: "nearest" });
   }
+
+  $("historyClear").addEventListener("click", () => {
+    clearHistory();
+    historyMsgEl.hidden = true;
+    renderHistory();
+  });
 
   function openHistory() {
     commitPending();
@@ -2104,7 +2223,7 @@
     migrateNoteLinks();
     rollRecurring();
     render();
-    ensureHistoryRoot();
+    await initHistory();
     // Catch up on the AI status in case the sidebar was just opened.
     const { [AI_STATUS]: st } = await browser.storage.local.get(AI_STATUS);
     if (st && Date.now() - st.at < 60000) showAiStatus(st);
@@ -2330,7 +2449,7 @@
         if (v == null) m.delete(k.slice(2));
         else m.set(k.slice(2), v);
       }
-      return JSON.stringify({ l: [...l], t: [...t] });
+      return stateOf(l, t);
     };
     // Local edits still pending belong before the AI result. Then: the
     // deliberate action (adding) and – separately – the model's grouping, so

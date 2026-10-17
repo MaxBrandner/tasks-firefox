@@ -40,7 +40,9 @@ Google, kein eigener Server.
   etwas Neues macht, bekommt einen **Zweig**, der alte Weg bleibt erhalten. Klick
   auf einen Schritt springt zu diesem Stand; ↶ nimmt **nur diesen einen Schritt**
   zurück, spätere bleiben (abgelehnt, wenn spätere Schritte dieselben Aufgaben
-  geändert haben). Gilt für die geöffnete Seitenleiste.
+  geändert haben). Der Verlauf bleibt dauerhaft gespeichert (pro Rechner,
+  höchstens 200 Schritte, platzsparend als Änderungen); „Verlauf leeren" macht
+  den aktuellen Stand zum neuen Start.
 - **Zu Tasks hinzufügen (KI)** – markierten Text einer Webseite per Rechtsklick
   als Aufgabe einsortieren lassen, siehe unten.
 - **Design** – System / Hell / Dunkel (Knopf oben rechts). Einstellungen und
