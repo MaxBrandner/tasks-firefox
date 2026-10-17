@@ -1031,3 +1031,36 @@ kbd {
 .ai-mode input {
   accent-color: var(--accent);
 }
+
+/* Felder für das eigene Modell (Popup „KI einrichten"). */
+.api-form {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.api-form label {
+  display: contents;
+  color: var(--muted);
+}
+
+.api-form select,
+.api-form input {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.api-form select:focus,
+.api-form input:focus {
+  border-color: var(--accent);
+  outline: none;
+}

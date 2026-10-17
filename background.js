@@ -4,8 +4,9 @@
 //    das die passende Liste/Stelle findet; die Aufgabe wird hier angelegt.
 //    Standard: Claude Code auf diesem Rechner (Hilfsprogramm
 //    native/tasks_claude_host.py, Native Messaging) – also über das
-//    Claude-Abo, ohne API-Schlüssel. Alternative: Claude-API mit eigenem
-//    Schlüssel (wenn bevorzugt oder Claude Code fehlt; ungetestet).
+//    Claude-Abo, ohne API-Schlüssel. Alternative: eigenes Modell per API –
+//    Claude, OpenAI, OpenRouter … oder lokal (Ollama, LM Studio) – wenn
+//    bevorzugt oder wenn Claude Code fehlt (ungetestet).
 //    Fortschritt und Ergebnis meldet "tk:aiStatus" (storage.local) an die
 //    Seitenleiste.
 
@@ -14,10 +15,10 @@ const TASK = "T:";
 const AI_STATUS = "tk:aiStatus";
 const NATIVE_HOST = "tasks_claude";
 const AI_MODE = "tk:aiMode"; // "claude-code" (Standard) oder "api"
-const API_KEY = "tk:apiKey"; // nur in storage.local – bleibt auf diesem Gerät
-const API_ORIGIN = "https://api.anthropic.com/*";
-const MODEL = "claude-opus-5-5";
-const SETUP_HINT = "Claude Code nicht gefunden: im Projektordner einmal native/install.sh ausführen – oder unter ⋯ → „Claude einrichten …“ einen API-Schlüssel hinterlegen.";
+// Eigenes Modell: { label, protocol: "anthropic" | "openai", baseUrl, model, key }
+// – nur in storage.local, bleibt auf diesem Gerät.
+const API_CONFIG = "tk:api";
+const SETUP_HINT = "Claude Code nicht gefunden: im Projektordner einmal native/install.sh ausführen – oder unter ⋯ → „KI einrichten …“ ein eigenes Modell eintragen.";
 
 // sidebarAction.toggle()/open() sind nur direkt aus einer Nutzeraktion heraus erlaubt.
 browser.browserAction.onClicked.addListener(() => {
@@ -136,20 +137,23 @@ const SCHEMA = {
   additionalProperties: false,
 };
 
-// Weg wählen: Claude Code (Standard); API, wenn bevorzugt oder wenn Claude Code
-// fehlt und ein Schlüssel hinterlegt ist.
-async function askClaude(userText) {
-  const { [AI_MODE]: mode, [API_KEY]: apiKey } = await browser.storage.local.get([AI_MODE, API_KEY]);
+// Ist ein eigenes Modell vollständig eingetragen?
+const apiReady = (cfg) => !!(cfg && cfg.baseUrl && cfg.model);
+
+// Weg wählen: Claude Code (Standard); eigenes Modell per API, wenn bevorzugt
+// oder wenn Claude Code fehlt und eines eingetragen ist.
+async function askModel(userText) {
+  const { [AI_MODE]: mode, [API_CONFIG]: cfg } = await browser.storage.local.get([AI_MODE, API_CONFIG]);
   if (mode === "api") {
-    if (!apiKey) throw new Error("API bevorzugt, aber kein API-Schlüssel hinterlegt (⋯ → „Claude einrichten …“).");
-    return askClaudeApi(apiKey, userText);
+    if (!apiReady(cfg)) throw new Error("Eigenes Modell gewählt, aber nicht vollständig eingetragen (⋯ → „KI einrichten …“).");
+    return askApi(cfg, userText);
   }
   try {
     return await askClaudeCode(userText);
   } catch (err) {
-    if (!err.hostMissing || !apiKey) throw err;
-    await setStatus({ state: "working", text: "Claude Code nicht gefunden – nutze die API …" });
-    return askClaudeApi(apiKey, userText);
+    if (!err.hostMissing || !apiReady(cfg)) throw err;
+    await setStatus({ state: "working", text: `Claude Code nicht gefunden – nutze ${cfg.label || cfg.model} …` });
+    return askApi(cfg, userText);
   }
 }
 
@@ -172,61 +176,125 @@ async function askClaudeCode(userText) {
   return reply.data;
 }
 
-// Anfrage an die Claude-API (eigener Schlüssel, kostenpflichtig). Ungetestet.
-function httpErrorText(status, message) {
-  if (status === 401) return "Claude-API: Schlüssel ungültig (⋯ → „Claude einrichten …“).";
-  if (status === 403) return "Claude-API: Dieser Schlüssel darf das Modell nicht nutzen.";
-  if (status === 429) return "Claude-API: Zu viele Anfragen oder Guthaben aufgebraucht.";
-  if (status >= 500) return "Claude-API ist gerade überlastet – bitte gleich noch einmal versuchen.";
-  return "Claude-API: " + (message || "Fehler " + status);
+// --- Eigenes Modell per API (ungetestet) -------------------------------------
+// Zwei Protokolle decken fast alles ab: die Anthropic-API (Claude) und das
+// OpenAI-kompatible Chat-Format (OpenAI, OpenRouter, Mistral, Groq … und lokal
+// Ollama, LM Studio, llama.cpp, vLLM).
+
+// Muster für die Berechtigung – Firefox-Muster enthalten keinen Port.
+const originPattern = (baseUrl) => {
+  const u = new URL(baseUrl);
+  return `${u.protocol}//${u.hostname}/*`;
+};
+const endpoint = (cfg, path) => cfg.baseUrl.replace(/\/+$/, "") + path;
+
+// Kleine Modelle halten sich nicht immer an ein Schema: Felder zusätzlich nennen.
+const JSON_HINT = "\n\nAntworte ausschließlich mit einem JSON-Objekt mit genau diesen Feldern (alle als Text, leer wenn unbekannt): list_id, parent_id, update_task_id, title, notes, due_date, due_time, summary.";
+
+function httpError(cfg, status, message) {
+  const who = cfg.label || "API";
+  if (status === 401 || status === 403) return `${who}: Schlüssel ungültig oder ohne Zugriff (⋯ → „KI einrichten …“).`;
+  if (status === 404) return `${who}: Adresse oder Modell „${cfg.model}“ nicht gefunden.`;
+  if (status === 429) return `${who}: Zu viele Anfragen oder Guthaben aufgebraucht.`;
+  if (status >= 500) return `${who} ist gerade nicht erreichbar oder überlastet.`;
+  return `${who}: ${message || "Fehler " + status}`;
 }
 
-async function askClaudeApi(apiKey, userText) {
-  if (!(await browser.permissions.contains({ origins: [API_ORIGIN] }))) {
-    throw new Error("Zugriff auf api.anthropic.com nicht erlaubt – Schlüssel unter ⋯ → „Claude einrichten …“ erneut speichern.");
-  }
-  let res;
+const errorMessage = (data) => (data && (typeof data.error === "string" ? data.error : data.error && data.error.message)) || "";
+
+// Liest das JSON-Objekt auch aus ```-Blöcken oder nach „Denk“-Text lokaler Modelle.
+function parseJsonLoose(text) {
+  const t = String(text || "").replace(/<think>[\s\S]*?<\/think>/g, "");
   try {
-    res = await fetch("https://api.anthropic.com/v1/messages", {
+    return JSON.parse(t);
+  } catch (_) {
+    // weiter: erstes { … letztes }
+  }
+  const a = t.indexOf("{");
+  const b = t.lastIndexOf("}");
+  if (a >= 0 && b > a) {
+    try {
+      return JSON.parse(t.slice(a, b + 1));
+    } catch (_) {
+      // unten
+    }
+  }
+  throw new Error("Antwort des Modells war kein lesbares JSON – bitte erneut versuchen.");
+}
+
+async function post(cfg, url, headers, body) {
+  if (!(await browser.permissions.contains({ origins: [originPattern(cfg.baseUrl)] }))) {
+    throw new Error(`Zugriff auf ${new URL(cfg.baseUrl).host} nicht erlaubt – unter ⋯ → „KI einrichten …“ erneut speichern.`);
+  }
+  try {
+    return await fetch(url, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-        // Ablehnungen automatisch von einem passenden anderen Modell beantworten lassen.
-        "anthropic-beta": "server-side-fallback-2026-07-01",
-        // Aufruf aus dem Browser (Erweiterung) statt von einem Server.
-        "anthropic-dangerous-direct-browser-access": "true",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 4000,
-        fallbacks: "default",
-        // Einfache Extraktion: wenig Denkaufwand; Antwort als festes JSON.
-        output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userText }],
-      }),
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify(body),
     });
   } catch (_) {
-    throw new Error("Claude-API nicht erreichbar – keine Internetverbindung?");
+    throw new Error(`${cfg.label || "API"} nicht erreichbar – läuft der Server bzw. besteht eine Internetverbindung?`);
   }
+}
+
+const askApi = (cfg, userText) =>
+  cfg.protocol === "anthropic" ? askAnthropic(cfg, userText) : askOpenAiCompatible(cfg, userText);
+
+async function askAnthropic(cfg, userText) {
+  // Aufwand und automatischer Ersatz bei Ablehnung nur für Modelle, die das kennen.
+  const current = /^claude-(opus-5|fable-5|sonnet-5-5)/.test(cfg.model);
+  const res = await post(cfg, endpoint(cfg, "/messages"), {
+    "x-api-key": cfg.key || "",
+    "anthropic-version": "2023-06-01",
+    ...(current ? { "anthropic-beta": "server-side-fallback-2026-07-01" } : {}),
+    // Aufruf aus dem Browser (Erweiterung) statt von einem Server.
+    "anthropic-dangerous-direct-browser-access": "true",
+  }, {
+    model: cfg.model,
+    max_tokens: 4000,
+    ...(current ? { fallbacks: "default" } : {}),
+    output_config: {
+      ...(current ? { effort: "low" } : {}),
+      format: { type: "json_schema", schema: SCHEMA },
+    },
+    system: SYSTEM_PROMPT,
+    messages: [{ role: "user", content: userText }],
+  });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(httpErrorText(res.status, data.error && data.error.message));
+  if (!res.ok) throw new Error(httpError(cfg, res.status, errorMessage(data)));
   if (data.stop_reason === "refusal") throw new Error("Claude hat die Anfrage abgelehnt.");
-  if (data.stop_reason === "max_tokens") throw new Error("Claude-Antwort wurde abgeschnitten – bitte erneut versuchen.");
+  if (data.stop_reason === "max_tokens") throw new Error("Antwort wurde abgeschnitten – bitte erneut versuchen.");
   const block = (data.content || []).find((b) => b.type === "text");
-  try {
-    return JSON.parse(block.text);
-  } catch (_) {
-    throw new Error("Claude-Antwort war nicht lesbar – bitte erneut versuchen.");
-  }
+  return parseJsonLoose(block && block.text);
+}
+
+async function askOpenAiCompatible(cfg, userText) {
+  const headers = cfg.key ? { authorization: "Bearer " + cfg.key } : {};
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT + JSON_HINT },
+    { role: "user", content: userText },
+  ];
+  const ask = (responseFormat) => post(cfg, endpoint(cfg, "/chat/completions"), headers, {
+    model: cfg.model,
+    messages,
+    ...(responseFormat ? { response_format: responseFormat } : {}),
+  });
+  // Erst mit festem Schema; kennt der Server das nicht (400), einfaches JSON,
+  // dann ganz ohne Formatvorgabe (der Text wird trotzdem als JSON gelesen).
+  let res = await ask({ type: "json_schema", json_schema: { name: "aufgabe", strict: true, schema: SCHEMA } });
+  if (res.status === 400) res = await ask({ type: "json_object" });
+  if (res.status === 400) res = await ask(null);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(httpError(cfg, res.status, errorMessage(data)));
+  const choice = data.choices && data.choices[0];
+  if (choice && choice.finish_reason === "length") throw new Error("Antwort wurde abgeschnitten – bitte erneut versuchen.");
+  return parseJsonLoose(choice && choice.message && choice.message.content);
 }
 
 // --- Ablauf ------------------------------------------------------------------
 
 async function addFromSelection(info, tab) {
-  await setStatus({ state: "working", text: "Claude legt die Aufgabe an … (dauert einige Sekunden)" });
+  await setStatus({ state: "working", text: "KI legt die Aufgabe an … (dauert einige Sekunden)" });
 
   const selection = await readSelection(info, tab);
   const { lists, tasks } = loadStore(await browser.storage.sync.get(null));
@@ -245,7 +313,10 @@ async function addFromSelection(info, tab) {
     describeTree(lists, tasks),
   ].join("\n");
 
-  const r = await askClaude(userText);
+  // Alle Felder als Text – lokale Modelle liefern manchmal null oder Zahlen.
+  const raw = await askModel(userText);
+  const r = {};
+  for (const k of SCHEMA.required) r[k] = raw && raw[k] != null ? String(raw[k]) : "";
 
   // Antwort prüfen: nur vorhandene IDs, Datum/Uhrzeit im richtigen Format.
   const listId = lists.has(r.list_id) ? r.list_id : [...lists.keys()][0];

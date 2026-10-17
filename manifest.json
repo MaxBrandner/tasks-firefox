@@ -10,7 +10,7 @@
     "nativeMessaging"
   ],
   "optional_permissions": [
-    "https://api.anthropic.com/*"
+    "*://*/*"
   ],
   "background": {
     "scripts": ["background.js"]

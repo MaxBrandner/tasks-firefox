@@ -27,8 +27,17 @@
   // Claude-Anbindung (Kontextmenü „Zu Tasks hinzufügen", siehe background.js).
   const AI_STATUS = "tk:aiStatus";
   const AI_MODE = "tk:aiMode"; // "claude-code" (Standard) oder "api"
-  const API_KEY = "tk:apiKey"; // nur in storage.local – bleibt auf diesem Gerät
-  const API_ORIGIN = "https://api.anthropic.com/*";
+  // Eigenes Modell: { preset, label, protocol, baseUrl, model, key } – nur storage.local.
+  const API_CONFIG = "tk:api";
+  // Vorlagen: füllen Adresse/Protokoll vor; Modellnamen nur, wo sie feststehen.
+  const PRESETS = {
+    anthropic: { label: "Anthropic (Claude)", protocol: "anthropic", baseUrl: "https://api.anthropic.com/v1", model: "claude-opus-5-5", local: false },
+    openai: { label: "OpenAI", protocol: "openai", baseUrl: "https://api.openai.com/v1", model: "", local: false },
+    openrouter: { label: "OpenRouter", protocol: "openai", baseUrl: "https://openrouter.ai/api/v1", model: "", local: false },
+    ollama: { label: "Ollama (lokal)", protocol: "openai", baseUrl: "http://localhost:11434/v1", model: "", local: true },
+    lmstudio: { label: "LM Studio (lokal)", protocol: "openai", baseUrl: "http://localhost:1234/v1", model: "", local: true },
+    custom: { label: "Andere (OpenAI-kompatibel)", protocol: "openai", baseUrl: "", model: "", local: false },
+  };
 
   const lists = new Map(); // id -> { t, o }
   const tasks = new Map(); // id -> { l, p, t, n, d, x, xa, o }
@@ -1649,19 +1658,39 @@
   const aiStatusEl = $("aiStatus");
   const aiTestStateEl = $("aiTestState");
 
+  const presetEl = $("apiPreset");
+  const baseUrlEl = $("apiBaseUrl");
+  const modelEl = $("apiModel");
   const apiKeyInputEl = $("apiKeyInput");
-  const apiKeyStateEl = $("apiKeyState");
+  const apiStateEl = $("apiState");
   const modeInputs = [...document.querySelectorAll('input[name="aiMode"]')];
 
-  const keyLabel = (key) => (key ? "✓ gespeichert (…" + key.slice(-4) + ")" : "kein Schlüssel");
+  presetEl.append(...Object.entries(PRESETS).map(([id, p]) => h("option", { value: id }, p.label)));
+
+  const apiReady = (cfg) => !!(cfg && cfg.baseUrl && cfg.model);
+  const originPattern = (u) => `${u.protocol}//${u.hostname}/*`;
+
+  function keyPlaceholder(cfg) {
+    const p = PRESETS[presetEl.value];
+    if (cfg && cfg.key && cfg.preset === presetEl.value) return "gespeichert (…" + cfg.key.slice(-4) + ") – leer lassen zum Behalten";
+    return p.local ? "meist leer bei lokalen Modellen" : "API-Schlüssel des Anbieters";
+  }
+
+  let savedCfg = null;
 
   async function openAiPanel() {
     aiTestStateEl.textContent = "";
+    apiStateEl.textContent = "";
     apiKeyInputEl.value = "";
-    const st = await browser.storage.local.get([AI_MODE, API_KEY]);
+    const st = await browser.storage.local.get([AI_MODE, API_CONFIG]);
+    savedCfg = st[API_CONFIG] || null;
     const mode = st[AI_MODE] === "api" ? "api" : "claude-code";
     for (const r of modeInputs) r.checked = r.value === mode;
-    apiKeyStateEl.textContent = keyLabel(st[API_KEY]);
+    presetEl.value = savedCfg && PRESETS[savedCfg.preset] ? savedCfg.preset : "anthropic";
+    baseUrlEl.value = savedCfg ? savedCfg.baseUrl : PRESETS[presetEl.value].baseUrl;
+    modelEl.value = savedCfg ? savedCfg.model : PRESETS[presetEl.value].model;
+    apiKeyInputEl.placeholder = keyPlaceholder(savedCfg);
+    if (savedCfg) apiStateEl.textContent = "✓ " + savedCfg.label + " · " + savedCfg.model;
     openModal(aiPanelEl);
   }
 
@@ -1669,38 +1698,92 @@
     r.addEventListener("change", () => browser.storage.local.set({ [AI_MODE]: r.value }));
   }
 
-  // Schlüssel speichern: erst jetzt den Zugriff auf api.anthropic.com erbitten
-  // (optionale Berechtigung – wer nur Claude Code nutzt, wird nie gefragt).
-  $("apiKeySave").addEventListener("click", async () => {
-    const key = apiKeyInputEl.value.trim();
-    if (!key) return;
-    const granted = await browser.permissions.request({ origins: [API_ORIGIN] });
-    if (!granted) {
-      apiKeyStateEl.textContent = "✗ Zugriff auf api.anthropic.com abgelehnt";
-      return;
-    }
-    await browser.storage.local.set({ [API_KEY]: key });
-    apiKeyInputEl.value = "";
-    apiKeyStateEl.textContent = keyLabel(key);
-  });
-  apiKeyInputEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") $("apiKeySave").click();
-  });
-  $("apiKeyRemove").addEventListener("click", async () => {
-    await browser.storage.local.remove(API_KEY);
-    apiKeyStateEl.textContent = keyLabel("");
+  // Vorlage gewählt: Adresse (und ggf. Modell) vorfüllen.
+  presetEl.addEventListener("change", () => {
+    const p = PRESETS[presetEl.value];
+    baseUrlEl.value = p.baseUrl;
+    modelEl.value = p.model;
+    apiKeyInputEl.placeholder = keyPlaceholder(savedCfg);
+    (p.baseUrl ? modelEl : baseUrlEl).focus();
   });
 
-  // Verbindungstest. Claude Code: fragt das Hilfsprogramm nach der Version.
-  // API: nur Schlüssel + Berechtigung prüfen – kein (kostenpflichtiger) Aufruf.
+  // Speichern: erst jetzt den Zugriff auf genau diese Adresse erbitten
+  // (optionale Berechtigung – wer nur Claude Code nutzt, wird nie gefragt).
+  $("apiSave").addEventListener("click", async () => {
+    let url;
+    try {
+      url = new URL(baseUrlEl.value.trim());
+    } catch (_) {
+      apiStateEl.textContent = "✗ Adresse ungültig";
+      return;
+    }
+    const model = modelEl.value.trim();
+    if (!model) {
+      apiStateEl.textContent = "✗ Modell fehlt";
+      return;
+    }
+    const granted = await browser.permissions.request({ origins: [originPattern(url)] });
+    if (!granted) {
+      apiStateEl.textContent = "✗ Zugriff auf " + url.host + " abgelehnt";
+      return;
+    }
+    const p = PRESETS[presetEl.value];
+    const keepKey = savedCfg && savedCfg.preset === presetEl.value ? savedCfg.key : "";
+    const cfg = {
+      preset: presetEl.value,
+      label: p.label,
+      protocol: p.protocol,
+      baseUrl: url.href.replace(/\/+$/, ""),
+      model,
+      key: apiKeyInputEl.value.trim() || keepKey || "",
+    };
+    await browser.storage.local.set({ [API_CONFIG]: cfg });
+    savedCfg = cfg;
+    apiKeyInputEl.value = "";
+    apiKeyInputEl.placeholder = keyPlaceholder(cfg);
+    apiStateEl.textContent = "✓ gespeichert: " + cfg.label + " · " + cfg.model;
+  });
+  apiKeyInputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("apiSave").click();
+  });
+  $("apiRemove").addEventListener("click", async () => {
+    await browser.storage.local.remove(API_CONFIG);
+    savedCfg = null;
+    apiKeyInputEl.placeholder = keyPlaceholder(null);
+    apiStateEl.textContent = "eigenes Modell entfernt";
+  });
+
+  // Kostenloser Test eines eigenen Modells: Modellliste abrufen (kein Modellaufruf).
+  async function testApi(cfg) {
+    const url = new URL(cfg.baseUrl);
+    if (!(await browser.permissions.contains({ origins: [originPattern(url)] }))) {
+      return "✗ Zugriff auf " + url.host + " fehlt – erneut speichern";
+    }
+    const headers = cfg.protocol === "anthropic"
+      ? { "x-api-key": cfg.key || "", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }
+      : cfg.key ? { authorization: "Bearer " + cfg.key } : {};
+    let res;
+    try {
+      res = await fetch(cfg.baseUrl.replace(/\/+$/, "") + "/models", { headers });
+    } catch (_) {
+      return "✗ " + cfg.label + " nicht erreichbar" + (PRESETS[cfg.preset] && PRESETS[cfg.preset].local ? " – läuft der lokale Server?" : "");
+    }
+    if (res.status === 401 || res.status === 403) return "✗ Schlüssel ungültig oder ohne Zugriff";
+    if (!res.ok) return "✗ " + cfg.label + " antwortet mit Fehler " + res.status;
+    const data = await res.json().catch(() => ({}));
+    const ids = (data.data || data.models || []).map((m) => m.id || m.name);
+    return ids.includes(cfg.model)
+      ? "✓ " + cfg.label + " erreichbar, Modell „" + cfg.model + "“ vorhanden"
+      : "✓ " + cfg.label + " erreichbar – Modell „" + cfg.model + "“ aber nicht in dessen Liste";
+  }
+
+  // Verbindungstest des gewählten Wegs. Claude Code: Version abfragen.
+  // Eigenes Modell: Modellliste abrufen – kostet nichts.
   $("aiTest").addEventListener("click", async () => {
     aiTestStateEl.textContent = "Prüfe …";
-    const st = await browser.storage.local.get([AI_MODE, API_KEY]);
+    const st = await browser.storage.local.get([AI_MODE, API_CONFIG]);
     if (st[AI_MODE] === "api") {
-      const allowed = await browser.permissions.contains({ origins: [API_ORIGIN] });
-      aiTestStateEl.textContent = !st[API_KEY] ? "✗ kein API-Schlüssel gespeichert"
-        : !allowed ? "✗ Zugriff auf api.anthropic.com fehlt – Schlüssel erneut speichern"
-          : "✓ API bereit (ohne Testaufruf, um keine Kosten zu verursachen)";
+      aiTestStateEl.textContent = apiReady(st[API_CONFIG]) ? await testApi(st[API_CONFIG]) : "✗ eigenes Modell nicht vollständig eingetragen";
       return;
     }
     try {
@@ -1708,7 +1791,7 @@
       aiTestStateEl.textContent = r && r.ok ? "✓ Verbunden: " + r.version : "✗ " + ((r && r.error) || "Fehler");
     } catch (_) {
       aiTestStateEl.textContent = "✗ Claude Code nicht gefunden – native/install.sh ausführen" +
-        (st[API_KEY] ? " (bis dahin wird die API benutzt)" : "");
+        (apiReady(st[API_CONFIG]) ? " (bis dahin wird das eigene Modell benutzt)" : "");
     }
   });
   $("aiStatusClose").addEventListener("click", () => {

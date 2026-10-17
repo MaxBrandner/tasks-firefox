@@ -36,12 +36,20 @@ kein Server, keine Berechtigungen auf Webseiten.
   Hilfsprogramm `native/tasks_claude_host.py` bei Firefox an), dann unter
   ⋯ → „Claude einrichten …" → „Verbindung testen". Gesendet werden markierter
   Text, Seitenadresse/-titel und die Titel der Listen/Aufgaben.
-  **Alternative: Claude-API** mit eigenem (kostenpflichtigem) Schlüssel – im
-  selben Popup wählbar; wird außerdem automatisch benutzt, wenn Claude Code
-  nicht gefunden wird und ein Schlüssel gespeichert ist. Der Zugriff auf
-  `api.anthropic.com` wird erst beim Speichern eines Schlüssels erfragt.
-  > ⚠️ **Der API-Weg ist ungetestet** – ich habe ihn selbst nie ausprobiert.
+  **Alternative: eigenes Modell per API** – im selben Popup (⋯ → „KI
+  einrichten …") wählbar; wird außerdem automatisch benutzt, wenn Claude Code
+  nicht gefunden wird. Vorlagen für Anthropic (Claude), OpenAI, OpenRouter und
+  lokale Modelle über **Ollama** oder **LM Studio**; „Andere" für jeden
+  OpenAI-kompatiblen Server (z. B. llama.cpp, vLLM, Mistral, Groq). Adresse,
+  Modell und Schlüssel (bei lokalen Modellen meist leer) sind frei eintragbar;
+  der Zugriff auf die Adresse wird erst beim Speichern erfragt. „Verbindung
+  testen" ruft nur die Modellliste ab und kostet nichts. Kann ein Server kein
+  festes JSON-Schema, fragt die Erweiterung nach einfachem JSON.
+  > ⚠️ **Der Weg über ein eigenes Modell ist ungetestet** – ich habe ihn selbst
+  > nie ausprobiert (weder Claude-API noch andere Anbieter noch lokale Modelle).
   > Getestet ist nur der Weg über Claude Code.
+  > Tipp, falls Ollama die Erweiterung abweist (Fehler 403): Ollama mit
+  > `OLLAMA_ORIGINS="moz-extension://*"` starten.
 - **Design** – System / Hell / Dunkel (Knopf oben rechts).
 
 Toolbar-Symbol oder **Strg+Alt+A**: blendet die Seitenleiste ein und aus.
