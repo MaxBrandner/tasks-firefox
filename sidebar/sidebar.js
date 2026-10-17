@@ -1418,7 +1418,9 @@
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || e.defaultPrevented) return;
     closeMenu();
-    setExpanded(null);
+    // Innermost first: an expanded task collapses, the next Esc closes the chat.
+    if (expandedId) setExpanded(null);
+    else if (!chatPanelEl.hidden) toggleChat(false);
   });
 
   // --- Backup export / import -------------------------------------------------
@@ -2650,7 +2652,7 @@
       sendChat(chatInputEl.value);
     } else if (e.key === "Escape") {
       e.preventDefault();
-      chatInputEl.blur();
+      toggleChat(false);
     }
   });
   chatInputEl.addEventListener("input", () => autosize(chatInputEl));
