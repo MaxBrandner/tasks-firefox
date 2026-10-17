@@ -3,12 +3,14 @@
 
 Receives a request from the Tasks extension and has Claude Code (`claude -p`)
 answer it. Claude Code uses its own login, i.e. the Claude subscription – no
-API key, no extra cost.
+API key, no extra cost. Also opens links Firefox won't open for an extension
+(file:, obsidian: …) with the system's default program.
 
 Protocol (Firefox native messaging): 4-byte length (little endian) + JSON.
   Request:  {"ping": true}
             {"system": str, "prompt": str, "schema": {...}, "effort": "low"|"medium"|"high"}
-  Reply:    {"ok": true, "version": str}  /  {"ok": true, "data": {...}}
+            {"open": url}
+  Reply:    {"ok": true, "version": str}  /  {"ok": true, "data": {...}}  /  {"ok": true}
             {"ok": false, "error": str}
 
 Registered with install.sh in the same folder.
@@ -20,6 +22,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 
 TIMEOUT = 180  # seconds
 
@@ -84,8 +87,39 @@ def ask(claude, req):
     return data
 
 
+# Never hand these to the system: they run code or point into the browser.
+BLOCKED_SCHEMES = {"javascript", "data", "vbscript", "blob", "about", "chrome", "resource",
+                   "moz-extension", "view-source", "jar"}
+
+
+def open_link(url):
+    """Opens a link with the system's default program (xdg-open / open)."""
+    scheme = url.split(":", 1)[0].lower() if ":" in url else ""
+    if not scheme or not scheme[0].isalpha() or scheme in BLOCKED_SCHEMES:
+        raise ValueError("Diese Art Link wird nicht geöffnet.")
+    if scheme == "file":
+        path = urllib.parse.unquote(urllib.parse.urlparse(url).path)
+        if not os.path.exists(path):
+            raise ValueError("Datei nicht gefunden: " + path)
+        # A link must never start a program.
+        if path.endswith(".desktop") or (os.path.isfile(path) and os.access(path, os.X_OK)):
+            raise ValueError("Ausführbare Dateien werden aus Sicherheitsgründen nicht geöffnet.")
+    opener = shutil.which("xdg-open") or shutil.which("open")
+    if not opener:
+        raise ValueError("Kein Programm zum Öffnen gefunden (xdg-open).")
+    subprocess.Popen([opener, url], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+
+
 def main():
     req = read_message()
+    if req.get("open"):
+        try:
+            open_link(str(req["open"]))
+            send({"ok": True})
+        except Exception as err:  # noqa: BLE001 – report any cause to the extension
+            send({"ok": False, "error": str(err)})
+        return
     claude = find_claude()
     if not claude:
         send({"ok": False, "error": "Claude Code (claude) nicht gefunden – installieren und anmelden."})

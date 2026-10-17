@@ -183,13 +183,13 @@
     "\\*\\*(.+?)\\*\\*", // 4 bold
     "~~(.+?)~~", // 5 strikethrough
     "\\*(?![\\s*])(.+?)(?<![\\s*])\\*", // 6 italic
-    "((?:https?:\\/\\/|mailto:|www\\.)[^\\s<>]*[^\\s<>.,;:!?'\")\\]])", // 7 bare URL
+    "((?:[a-z][a-z0-9+.-]{1,30}:\\/\\/|mailto:|www\\.)[^\\s<>]*[^\\s<>.,;:!?'\")\\]])", // 7 bare URL (also obsidian://, file:///)
     "\\[\\[([TL]):([A-Za-z0-9_-]{1,64})\\]\\]", // 8,9 reference to a task/list (chat)
   ].join("|"), "g");
 
   function safeHref(url) {
     const u = /^www\./i.test(url) ? "https://" + url : url;
-    return /^(https?:\/\/|mailto:)/i.test(u) ? u : null;
+    return isLinkUrl(u) ? u : null;
   }
 
   function link(href) {
@@ -220,8 +220,14 @@
       } else if (m[8] != null) {
         parent.append(refChip(m[8], m[9]));
       } else if (m[7] != null) {
-        const a = link(safeHref(m[7]));
-        a.textContent = m[7].replace(/^(https?:\/\/|mailto:)/i, "");
+        const href = safeHref(m[7]);
+        if (!href) {
+          parent.append(m[0]);
+          continue;
+        }
+        const a = link(href);
+        // Web/mail addresses as written; obsidian:/file: links by their name.
+        a.textContent = /^(https?:\/\/|mailto:|www\.)/i.test(m[7]) ? m[7].replace(/^(https?:\/\/|mailto:)/i, "") : linkName(href);
         parent.append(a);
       }
     }
@@ -1610,8 +1616,25 @@
   // Field u: [{ url, t: name }]. "Alle öffnen" takes the links of the task and
   // all its subtasks (without duplicates) and opens them as a tab group.
 
+  // Any scheme works (https:, obsidian:, file:, mailto:, zotero: …) except those
+  // that run code or reach into the browser itself.
+  const BLOCKED_SCHEMES = /^(javascript|data|vbscript|blob|about|chrome|resource|moz-extension|view-source|jar):/i;
+  const isLinkUrl = (url) => /^[a-z][a-z0-9+.-]*:/i.test(url || "") && !BLOCKED_SCHEMES.test(url);
   const isWebUrl = (url) => /^https?:\/\//i.test(url || "");
-  const linksOf = (t) => ((t && t.u) || []).filter((l) => l && isWebUrl(l.url));
+  const linksOf = (t) => ((t && t.u) || []).filter((l) => l && isLinkUrl(l.url));
+
+  // Chip name: the host for web links, the note for Obsidian, the file name for file:.
+  function linkName(href) {
+    try {
+      const u = new URL(href);
+      if (u.protocol === "obsidian:") return (u.searchParams.get("file") || u.searchParams.get("vault") || "Obsidian").split("/").pop();
+      if (u.protocol === "file:") return decodeURIComponent(u.pathname.replace(/\/$/, "").split("/").pop()) || "Datei";
+      if (u.protocol === "mailto:") return decodeURIComponent(u.pathname);
+      return u.hostname || u.protocol.slice(0, -1);
+    } catch (_) {
+      return href;
+    }
+  }
   const plainTitle = (s) => (s || "").replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[*_~`]/g, "").trim();
 
   function collectLinks(id) {
@@ -1640,7 +1663,11 @@
     if (links.length) openUrls(links.map((l) => l.url), plainTitle((tasks.get(id) || {}).t) || "Tasks");
   }
 
+  // Web links open in tabs (several → a tab group); other links go to the system.
   async function openUrls(urls, title) {
+    for (const url of urls) if (!isWebUrl(url)) await openExternal(url);
+    urls = urls.filter(isWebUrl);
+    if (!urls.length) return;
     try {
       if (urls.length === 1) {
         await browser.tabs.create({ url: urls[0], active: true });
@@ -1658,21 +1685,64 @@
     }
   }
 
+  // Firefox lets extensions neither open file: links nor hand app links
+  // (obsidian:, mailto: …) to their app without leaving a blank tab. The helper
+  // from native/ (installed for Claude Code) passes them to the system instead.
+  // Without it: app links via a tab, file: links to the clipboard.
+  async function openExternal(url) {
+    let r = null;
+    try {
+      r = await browser.runtime.sendNativeMessage("tasks_claude", { open: url });
+    } catch (_) {
+      // helper not installed
+    }
+    if (r && r.ok) return;
+    if (r && r.error) {
+      showBanner("Link konnte nicht geöffnet werden: " + r.error);
+      return;
+    }
+    if (!/^file:/i.test(url)) {
+      try {
+        await browser.tabs.create({ url, active: true });
+      } catch (err) {
+        showBanner("Link konnte nicht geöffnet werden: " + ((err && err.message) || err));
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (_) {
+      // no clipboard (tests) – the hint still names the address
+    }
+    showBanner("Firefox lässt Erweiterungen keine Dateien öffnen – Adresse kopiert, in die Adressleiste einfügen: " + url);
+  }
+
+  // Links in notes and link chips: web links open as usual (new tab), the rest
+  // through openExternal. Capture phase: the task details stop click propagation.
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest("a[href]");
+    if (!a || isWebUrl(a.getAttribute("href"))) return;
+    e.preventDefault();
+    openExternal(a.getAttribute("href"));
+  }, true);
+
   function addLink(id, value) {
     let raw = (value || "").trim();
     if (!raw) return false;
-    if (!/^[a-z][a-z0-9+.-]*:/i.test(raw)) raw = "https://" + raw; // "ilias.hhu.de/…" without https://
+    if (raw.startsWith("/")) raw = "file://" + raw; // a path, e.g. from the file manager
+    // "ilias.hhu.de/…" or "localhost:3000" without https://
+    if (!/^[a-z][a-z0-9+.-]*:(?!\d)/i.test(raw)) raw = "https://" + raw;
     let url;
     try {
       url = new URL(raw);
     } catch (_) {
       return false;
     }
-    if (!isWebUrl(url.href)) return false;
+    if (!isLinkUrl(url.href)) return false;
     const t = tasks.get(id);
     if (linksOf(t).some((l) => l.url === url.href)) return true;
     checkpoint("Link zu " + q(id) + " hinzugefügt");
-    patchTask(id, { u: [...linksOf(t), { url: url.href, t: url.hostname }] });
+    patchTask(id, { u: [...linksOf(t), { url: url.href, t: linkName(url.href) }] });
     render();
     return true;
   }
@@ -1785,7 +1855,8 @@
             }, icon("close")))),
           h("input", {
             class: "link-add",
-            type: "url",
+            type: "text",
+            inputmode: "url",
             placeholder: "+ Link einfügen (Enter)",
             "aria-label": "Link hinzufügen",
             onkeydown: (e) => {
@@ -2357,7 +2428,7 @@
     const timeOk = (t) => /^\d{2}:\d{2}$/.test(t);
     const known = new Set();
     for (const t of tasks.values()) for (const l of linksOf(t)) known.add(l.url);
-    const linkOf = (a) => ({ url: a.url, t: (a.link_title || new URL(a.url).hostname).slice(0, 60) });
+    const linkOf = (a) => ({ url: a.url, t: (a.link_title || linkName(a.url)).slice(0, 60) });
     const need = (cond, text) => {
       if (!cond) throw new Error(text);
     };
@@ -2390,7 +2461,7 @@
             if (a.notes && a.notes !== "none") fields.n = a.notes.slice(0, 2000);
             if (dateOk(a.due_date)) fields.d = a.due_date;
             if (fields.d && timeOk(a.due_time)) fields.h = a.due_time;
-            if (isWebUrl(a.url)) fields.u = [linkOf(a)];
+            if (isLinkUrl(a.url)) fields.u = [linkOf(a)];
             const id = createTask(fields);
             if (a.weekly === "true" && fields.d) tasks.set(id, compact({ ...tasks.get(id), r: "w", s: id }));
             const first = a.position === "first" || (!parent && a.position !== "last");
@@ -2441,7 +2512,7 @@
             break;
           case "add_link": {
             const t = tasks.get(target);
-            need(t && isWebUrl(a.url), "Aufgabe oder Link ungültig");
+            need(t && isLinkUrl(a.url), "Aufgabe oder Link ungültig");
             if (!linksOf(t).some((l) => l.url === a.url)) patchTask(target, { u: [...linksOf(t), linkOf(a)] });
             changed.add(target);
             break;
@@ -2458,7 +2529,7 @@
               for (const l of collectLinks(target)) urls.push(l.url);
               groupTitle = groupTitle || plainTitle(tasks.get(target).t);
             } else {
-              need(isWebUrl(a.url) && known.has(a.url), "nur Links aus den Aufgaben können geöffnet werden");
+              need(isLinkUrl(a.url) && known.has(a.url), "nur Links aus den Aufgaben können geöffnet werden");
               urls.push(a.url);
             }
             if (a.title) groupTitle = a.title;

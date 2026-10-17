@@ -27,6 +27,10 @@ Google, kein eigener Server.
   „+ Link einfügen"). Eingeklappt zeigt 🔗 die Anzahl – inklusive der Links aller
   Unteraufgaben; ein Klick öffnet einen Link direkt bzw. mehrere zusammen als
   **Firefox-Tab-Gruppe** mit dem Namen der Aufgabe (z. B. alles zu „DL").
+  Auch andere Links gehen, z. B. `obsidian://…` oder Dateien (`file:///…` oder
+  einfach den Pfad `/home/…` einfügen). Die öffnet Tasks über das Hilfsprogramm
+  aus `native/` mit dem passenden Programm – Firefox selbst lässt Erweiterungen
+  keine Dateien öffnen. Ausführbare Dateien werden nie gestartet.
 - **Markdown** in Titel und Notiz: `**fett**`, `*kursiv*`, `~~durch~~`,
   `` `code` ``, `[Text](https://…)`; Links werden automatisch erkannt. In
   Notizen zusätzlich `- Liste`, `1. Liste`, `# Überschrift`, `> Zitat`.

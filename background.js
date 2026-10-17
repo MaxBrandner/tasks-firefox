@@ -424,8 +424,8 @@ async function addFromSelection(info, tab) {
   const d = /^\d{4}-\d{2}-\d{2}$/.test(r.due_date) ? r.due_date : "";
   const h = d && /^\d{2}:\d{2}$/.test(r.due_time) ? r.due_time : "";
   const notes = r.notes.trim();
-  // The page is stored as a link in field u (http/https only).
-  const link = /^https?:/i.test(tab.url)
+  // The page is stored as a link in field u (web pages and local files).
+  const link = /^(https?|file):/i.test(tab.url)
     ? { url: tab.url, t: r.link_title.trim().slice(0, 60) || (tab.title || "").slice(0, 60) || new URL(tab.url).hostname }
     : null;
   const withLink = (u) => (link && !(u || []).some((l) => l.url === link.url) ? [...(u || []), link] : u || []);
