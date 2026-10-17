@@ -11,7 +11,6 @@
       <select id="listSelect" class="list-select" aria-label="Liste wählen"></select>
       <input id="listNameInput" class="list-name-input" type="text" maxlength="100" placeholder="Name der Liste" hidden />
       <span id="count" class="count" title="Offene Aufgaben">0</span>
-      <button id="chatBtn" class="icon-btn" type="button" title="KI-Chat (Taste /)" aria-label="KI-Chat" aria-expanded="false"></button>
       <button id="listMenuBtn" class="icon-btn" type="button" title="Listen verwalten" aria-label="Listen verwalten" aria-haspopup="menu" aria-expanded="false"></button>
       <button id="themeToggle" class="icon-btn" type="button"></button>
       <div id="listMenu" class="menu" role="menu" hidden>
@@ -48,7 +47,7 @@
         <kbd>Strg+Z / Strg+Y</kbd><span>rückgängig / wiederholen (alle Schritte: ⋯ → Verlauf …)</span>
         <kbd>Alt+↑ / ↓</kbd><span>Aufgabe verschieben</span>
         <kbd>Esc</kbd><span>Bearbeiten/Details schließen</span>
-        <kbd>/</kbd><span>KI-Chat öffnen (schmale Seitenleiste: Schnell-Chat über den Aufgaben)</span>
+        <kbd>/</kbd><span>in den KI-Chat schreiben (schmale Seitenleiste: Schnell-Chat über den Aufgaben)</span>
         <kbd>Strg+Alt+A</kbd><span>Tasks öffnen/schließen (überall in Firefox)</span>
       </div>
       <p>Markdown: <code>**fett**</code> <code>*kursiv*</code> <code>~~durch~~</code> <code>`code`</code> <code>[Text](https://…)</code>, Links werden automatisch erkannt. In Notizen zusätzlich <code>- Liste</code>, <code>1. Liste</code>, <code># Überschrift</code>, <code>&gt; Zitat</code>.</p>
@@ -137,7 +136,7 @@
       <button id="aiStatusClose" class="icon-btn small" type="button" title="Ausblenden" aria-label="Ausblenden">×</button>
     </div>
 
-    <!-- Narrow sidebar with the chat open: switch between tasks and chat. -->
+    <!-- Narrow sidebar: switch between tasks and chat. -->
     <nav id="viewTabs" class="view-tabs" aria-label="Ansicht">
       <button id="tabTasks" type="button">Aufgaben<span id="tabMarks" class="tab-badge" hidden></span></button>
       <button id="tabChat" type="button">Chat</button>
@@ -173,12 +172,12 @@
 
       <!-- AI chat: column on the right when wide; narrow a full view (tab "Chat")
            or a quick card over the list ("/"). -->
-      <section id="chatPanel" class="chat" aria-label="KI-Chat" hidden>
+      <section id="chatPanel" class="chat" aria-label="KI-Chat">
         <div class="chat-head">
           <span class="chat-title">KI-Chat</span>
           <button id="chatNew" class="link-btn" type="button">Neuer Chat</button>
           <button id="chatExpand" class="link-btn" type="button" title="Ganzen Chat im Reiter „Chat“ anzeigen">Ganzer Chat</button>
-          <button id="chatClose" class="icon-btn small" type="button" title="Chat schließen" aria-label="Chat schließen"></button>
+          <button id="chatClose" class="icon-btn small" type="button" title="Schnell-Chat schließen (Esc)" aria-label="Schnell-Chat schließen"></button>
         </div>
         <div id="chatLog" class="chat-log" aria-live="polite"></div>
         <form id="chatForm" class="chat-form" autocomplete="off">

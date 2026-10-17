@@ -1420,7 +1420,7 @@
     closeMenu();
     // Innermost first: an expanded task collapses, the next Esc steps the chat back.
     if (expandedId) setExpanded(null);
-    else if (chatMode) chatStepBack();
+    else chatStepBack();
   });
 
   // --- Backup export / import -------------------------------------------------
@@ -2242,15 +2242,14 @@
   ];
   const chatMarks = new Set(); // tasks the model talks about
   const chatChanged = new Set(); // tasks the model changed
-  const chatPanelEl = $("chatPanel");
   const chatLogEl = $("chatLog");
   const chatInputEl = $("chatInput");
   let chat = [];
   let chatLoaded = false;
   let chatBusy = false;
-  // null = closed; "full" / "tasks" / "quick" = which view a narrow sidebar
-  // shows (tab "Chat", tab "Aufgaben", quick card). Wide shows both side by side.
-  let chatMode = null;
+  // The chat is always there. "full" / "tasks" / "quick" = which view a narrow
+  // sidebar shows (tab "Chat", tab "Aufgaben", quick card); wide shows both.
+  let chatMode = "tasks";
   const wideQuery = window.matchMedia ? window.matchMedia("(min-width: 690px)") : null; // same as the CSS
   const isWide = () => !!(wideQuery && wideQuery.matches);
 
@@ -2631,43 +2630,36 @@
     renderChat();
   }
 
-  // Open/close the chat or switch its view (see "Tasks / chat layout" in the CSS).
+  // Switch the chat view (see "Tasks / chat layout" in the CSS). "tasks" leaves
+  // the input; "full" and "quick" put the cursor into it.
   async function setChatMode(mode) {
-    const wasOpen = !!chatMode;
     chatMode = mode;
-    chatPanelEl.hidden = !mode;
-    if (mode) document.body.dataset.chat = mode;
-    else delete document.body.dataset.chat;
-    $("chatBtn").setAttribute("aria-expanded", String(!!mode));
-    if (!mode) {
-      chatInputEl.blur(); // a hidden field must not keep the focus
-      chatMarks.clear();
-      chatChanged.clear();
-      render();
-      updateChatTabs();
-      return;
-    }
-    if (!wasOpen) await loadChat();
+    document.body.dataset.chat = mode;
+    await loadChat();
     renderChat();
-    if (mode === "tasks" && !isWide()) chatInputEl.blur();
+    if (mode === "tasks") chatInputEl.blur(); // a hidden field must not keep the focus
     else chatInputEl.focus();
   }
 
-  function toggleChat(open = chatPanelEl.hidden) {
-    return setChatMode(open ? "full" : null);
+  function clearChatMarks() {
+    if (!chatMarks.size && !chatChanged.size) return;
+    chatMarks.clear();
+    chatChanged.clear();
+    render();
+    updateChatTabs();
   }
 
-  // Esc: quick card → tab "Aufgaben" (if something is marked there) → closed.
+  // Esc: quick card / tab "Chat" → tab "Aufgaben" (marks stay); with nothing
+  // left to step back from, the AI's marks go.
   function chatStepBack() {
-    if (chatMode === "quick" && !isWide() && (chatMarks.size || chatChanged.size)) setChatMode("tasks");
-    else setChatMode(null);
+    if (chatMode === "tasks" || isWide()) clearChatMarks();
+    setChatMode("tasks");
   }
 
-  $("chatBtn").addEventListener("click", () => setChatMode(chatMode === "full" || (chatMode && isWide()) ? null : "full"));
   $("tabTasks").addEventListener("click", () => setChatMode("tasks"));
   $("tabChat").addEventListener("click", () => setChatMode("full"));
   $("chatExpand").addEventListener("click", () => setChatMode("full"));
-  $("chatClose").addEventListener("click", () => toggleChat(false));
+  $("chatClose").addEventListener("click", () => setChatMode("tasks"));
   $("chatNew").addEventListener("click", () => {
     chat = [];
     chatMarks.clear();
@@ -2707,7 +2699,6 @@
     listMenuBtnEl.append(icon("more", "ico-dots"));
     $("addIcon").append(icon("plus"));
     $("doneChevron").append(icon("chevron"));
-    $("chatBtn").append(icon("chat"));
     $("chatClose").append(icon("close"));
     $("chatSend").append(icon("send"));
     for (const b of document.querySelectorAll(".modal-close")) b.append(icon("close"));
@@ -2722,6 +2713,7 @@
     rollRecurring();
     render();
     await initHistory();
+    await setChatMode("tasks");
     // Catch up on the AI status in case the sidebar was just opened.
     const { [AI_STATUS]: st } = await browser.storage.local.get(AI_STATUS);
     if (st && Date.now() - st.at < 60000) showAiStatus(st);

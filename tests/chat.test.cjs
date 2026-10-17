@@ -16,43 +16,33 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   const { d } = H; const $ = (id) => d.getElementById(id);
   const say = async (text, data) => { H.chatReply = async () => ({ ok: true, data }); $("chatInput").value = text; $("chatForm").dispatchEvent(new H.w.Event("submit", { cancelable: true })); await H.tick(); await H.tick(); };
   const last = () => [...$("chatLog").querySelectorAll(".chat-msg")].pop();
-  // open
-  $("chatBtn").click(); await H.tick();
-  ok(!$("chatPanel").hidden && $("chatLog").querySelectorAll(".chat-empty .chip").length === 4, "Chat öffnet mit Beispiel-Fragen");
-  $("chatClose").click(); await H.tick();
-  d.body.dispatchEvent(new H.w.KeyboardEvent("keydown", { key: "/", bubbles: true, cancelable: true })); await H.tick();
-  ok(!$("chatPanel").hidden, "Taste / öffnet den Chat");
-  $("chatInput").dispatchEvent(new H.w.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); await H.tick();
-  ok($("chatPanel").hidden, "Esc im Eingabefeld schließt den Chat");
-  $("chatBtn").click(); await H.tick(); H.edit("Folien"); await H.tick(); d.activeElement.blur();
-  d.body.dispatchEvent(new H.w.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); await H.tick();
-  ok(!$("chatPanel").hidden && !H.li("Folien").classList.contains("expanded"), "Esc: erst die aufgeklappte Aufgabe zu …");
-  d.body.dispatchEvent(new H.w.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); await H.tick();
-  ok($("chatPanel").hidden, "… dann der Chat");
-  // narrow layout (jsdom has no matchMedia → narrow): tabs, quick card, Esc steps back
+  // the chat is always there (no button); jsdom has no matchMedia → narrow
   const key = (k, el = d.body) => el.dispatchEvent(new H.w.KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true }));
-  $("chatBtn").click(); await H.tick();
-  ok(d.body.dataset.chat === "full" && $("tabChat").getAttribute("aria-pressed") === "true", "schmal: Chat-Knopf zeigt den Reiter „Chat“");
-  $("tabTasks").click(); await H.tick();
-  ok(d.body.dataset.chat === "tasks" && !$("chatPanel").hidden && $("tabTasks").getAttribute("aria-pressed") === "true", "Reiter „Aufgaben“: Chat bleibt offen");
+  ok(!$("chatBtn") && d.body.dataset.chat === "tasks" && !$("chatPanel").hidden && $("chatLog").querySelectorAll(".chat-empty .chip").length === 4, "Chat immer da, Start im Reiter „Aufgaben“, Beispiel-Fragen geladen");
+  $("tabChat").click(); await H.tick();
+  ok(d.body.dataset.chat === "full" && $("tabChat").getAttribute("aria-pressed") === "true" && d.activeElement === $("chatInput"), "Reiter „Chat“: Chat mit Fokus im Eingabefeld");
+  key("Escape", $("chatInput")); await H.tick();
+  ok(d.body.dataset.chat === "tasks" && d.activeElement !== $("chatInput"), "Esc im Reiter „Chat“ → zurück zu den Aufgaben");
   key("/"); await H.tick();
   ok(d.body.dataset.chat === "quick" && d.activeElement === $("chatInput"), "/ über den Aufgaben öffnet die Schnell-Karte");
   $("chatExpand").click(); await H.tick();
   ok(d.body.dataset.chat === "full", "„Ganzer Chat“ wechselt in den Reiter");
-  $("chatClose").click(); await H.tick();
-  key("/"); await H.tick(); key("Escape", $("chatInput")); await H.tick();
-  ok(!d.body.dataset.chat && $("chatPanel").hidden, "Esc in der Schnell-Karte ohne Markierung schließt ganz");
+  $("tabTasks").click(); await H.tick(); key("/"); await H.tick(); $("chatClose").click(); await H.tick();
+  ok(d.body.dataset.chat === "tasks", "× schließt die Schnell-Karte");
   key("/"); await H.tick();
   await say("Was ist bei DL dran?", { reply: "[[T:b1]].", actions: [], highlight: ["b1"] });
   ok(!$("tabMarks").hidden && $("tabMarks").textContent === "1 markiert", "Reiter „Aufgaben“ zählt Markierungen");
   key("Escape", $("chatInput")); await H.tick();
-  ok(d.body.dataset.chat === "tasks" && H.li("Blatt 1").classList.contains("chat-mark"), "Esc mit Markierung: Karte zu, Markierung bleibt");
+  ok(d.body.dataset.chat === "tasks" && H.li("Blatt 1").classList.contains("chat-mark"), "Esc: Karte zu, Markierung bleibt");
   $("tabChat").click(); await H.tick();
   last().querySelector(".ref-chip").click(); await H.tick();
   ok(d.body.dataset.chat === "tasks", "Chip-Klick im Reiter „Chat“ wechselt zu den Aufgaben");
+  H.edit("Folien"); await H.tick(); d.activeElement.blur();
   key("Escape"); await H.tick();
-  ok(!d.body.dataset.chat && $("tabMarks").hidden && !d.querySelector(".chat-mark"), "nächstes Esc schließt den Chat, Markierung und Zähler weg");
-  $("chatBtn").click(); await H.tick();
+  ok(!H.li("Folien").classList.contains("expanded") && H.li("Blatt 1").classList.contains("chat-mark"), "Esc: erst die aufgeklappte Aufgabe zu …");
+  key("Escape"); await H.tick();
+  ok($("tabMarks").hidden && !d.querySelector(".chat-mark"), "… dann sind die Markierungen weg");
+  $("tabChat").click(); await H.tick();
   // question with references + highlight
   H.edit("Blatt 1"); await H.tick();
   await say("Was ist diese Woche fällig?", { reply: "Fällig ist [[T:b1]] in [[L:uni]].", actions: [], highlight: ["b1", "gibtsnicht"] });
@@ -110,7 +100,7 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   ok(last().classList.contains("error") && /Not logged in/.test(last().textContent), "Fehler als roter Hinweis");
   // restart: chat persisted; chip click switches list
   const H2 = setup(P, H.sync.data, { local: H.local.data }); await H2.tick(); await H2.tick();
-  H2.d.getElementById("chatBtn").click(); await H2.tick(); await H2.tick();
+  await H2.tick(); await H2.tick();
   const msgs = H2.d.querySelectorAll("#chatLog .chat-msg");
   ok(msgs.length === H.d.querySelectorAll("#chatLog .chat-msg").length && msgs.length >= 10, "Chat nach Neustart noch da (" + msgs.length + " Nachrichten)");
   H2.d.getElementById("listSelect").value = "priv"; H2.d.getElementById("listSelect").dispatchEvent(new H2.w.Event("change")); await H2.tick();

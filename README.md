@@ -61,7 +61,7 @@ Google, kein eigener Server.
 | `Alt+↑` / `Alt+↓` | Aufgabe verschieben |
 | `Strg+Z` / `Strg+Y` | rückgängig / wiederholen |
 | `Esc` | Bearbeiten bzw. Popup schließen |
-| `/` | KI-Chat öffnen (schmal: Schnell-Chat über den Aufgaben) |
+| `/` | in den KI-Chat schreiben (schmal: Schnell-Chat über den Aufgaben) |
 
 `Strg+Alt+A` lässt sich ändern unter `about:addons` → Zahnrad →
 „Erweiterungs-Tastenkombinationen verwalten". Alle Kürzel stehen auch in der
@@ -113,17 +113,19 @@ Eingestellt wird das unter `⋯` → **KI einrichten …**:
 
 ## KI-Chat
 
-Sprechblase oben (oder Taste `/`) öffnet einen Chat mit der KI – über dieselbe Verbindung wie „Zu Tasks hinzufügen" (Standard:
+Der Chat mit der KI ist immer da – über dieselbe Verbindung wie „Zu Tasks hinzufügen" (Standard:
 Claude Code über das Abo). Beispiele: „Was ist diese Woche fällig?", „Lege
 unter DS 2 „Klausur anmelden" an, fällig nächsten Freitag", „Sortiere Uni nach
 Fälligkeit", „Öffne alle Links zu DL".
 
 - **Platz:** Ist die Seitenleiste breit (ab 690 px), stehen Liste und Chat
-  nebeneinander. Schmal wechselt man über die Reiter „Aufgaben | Chat"; am
+  nebeneinander; `/` springt ins Eingabefeld. Schmal wechselt man über die
+  Reiter „Aufgaben | Chat"; am
   Reiter „Aufgaben" steht, wie viel die KI markiert hat. `/` öffnet schmal
   stattdessen eine **Schnell-Karte** über den Aufgaben (Eingabe + letzte
   Antwort) – praktisch für kurze Befehle; „Ganzer Chat" wechselt in den Reiter.
-  **Esc** geht eine Stufe zurück: Karte → Aufgaben (mit Markierungen) → zu.
+  **Esc** geht eine Stufe zurück: Karte bzw. Reiter „Chat" → Aufgaben (die
+  Markierungen bleiben) → Markierungen weg.
 
 - **Wie sie arbeitet:** Die KI antwortet mit Text und mit **Aktionen aus einem
   festen Katalog** (Aufgabe anlegen/ändern/abhaken/verschieben/löschen, Links

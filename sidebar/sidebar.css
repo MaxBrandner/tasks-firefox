@@ -1342,7 +1342,7 @@ kbd {
 /* --- Tasks / chat layout ----------------------------------------------------- */
 /* Wide (from 690 px): list and chat side by side. Narrow: tabs switch between
    the list and a full-height chat; "/" opens a quick card over the list.
-   While the chat is open, body[data-chat] is "full", "tasks" or "quick". */
+   The chat is always there; body[data-chat] is "full", "tasks" or "quick". */
 
 .workspace {
   position: relative;
@@ -1399,7 +1399,8 @@ kbd {
   font-size: 11px;
 }
 
-#chatExpand {
+#chatExpand,
+#chatClose {
   display: none;
 }
 
@@ -1436,7 +1437,8 @@ kbd {
     display: none;
   }
 
-  body[data-chat="quick"] #chatExpand {
+  body[data-chat="quick"] #chatExpand,
+  body[data-chat="quick"] #chatClose {
     display: inline-flex;
   }
 
@@ -1457,6 +1459,11 @@ kbd {
   .chat {
     width: clamp(280px, 45%, 560px);
     border-left: 1px solid var(--line);
+  }
+
+  .toast {
+    top: 10px;
+    bottom: auto;
   }
 }
 
@@ -1638,8 +1645,9 @@ kbd {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-/* While the chat is open, the undo toast moves to the top (it would cover the input). */
-body:has(#chatPanel:not([hidden])) .toast {
+/* Where the chat is visible, the undo toast moves to the top (it would cover the input). */
+body[data-chat="full"] .toast,
+body[data-chat="quick"] .toast {
   top: 10px;
   bottom: auto;
 }
