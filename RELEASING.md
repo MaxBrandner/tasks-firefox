@@ -22,17 +22,31 @@ manifest.json (in der .xpi)  --update_url-->  updates.json (GitHub)
 Die verteilte Erweiterung ist **unlisted** (nicht im öffentlichen AMO-Katalog),
 wird aber über das öffentliche GitHub-Repo verteilt.
 
+## Grundsätze
+
+- **Commit, Push und Signieren sind drei getrennte Schritte.** Features werden
+  einzeln committet und gepusht, sobald sie getestet sind; signiert wird nur,
+  wenn eine neue Version wirklich ausgeliefert werden soll.
+- **Erst testen, dann einmal signieren:** zum Testen `about:debugging` →
+  „Temporäres Add-on laden" → `manifest.json`. Jede Versionsnummer gibt es bei
+  AMO nur **einmal** – auch ein abgebrochener Upload verbraucht sie.
+- **Vor jedem Push prüfen**, dass nichts mitgeht, was nicht soll: keine `.env`,
+  keine Schlüssel, keine `*.bak`, keine Build-Ergebnisse (`git diff --name-only
+  origin/main..HEAD`). Nie `git add -A`, sondern Dateien einzeln nennen.
+- `native/` (Hilfsprogramm für Claude Code) gehört ins Repo, aber **nicht** ins
+  Erweiterungspaket – das regelt `web-ext-config.cjs`.
+
 ## Schritt für Schritt
 
-### 1. Versionsnummer erhöhen (an allen drei Stellen gleich!)
+### 1. Versionsnummer erhöhen (überall gleich!)
+
+```bash
+npm version X.Y.Z --no-git-tag-version   # package.json + package-lock.json
+```
 
 - `manifest.json`  → `"version": "X.Y.Z"`
-- `package.json`   → `"version": "X.Y.Z"`
 - `updates.json`   → `"version": "X.Y.Z"` **und** den `update_link` auf
   `.../releases/download/vX.Y.Z/tasks-X.Y.Z.xpi` anpassen
-
-> Jede Versionsnummer darf bei AMO nur **einmal** existieren – immer hochzählen,
-> nie eine bereits hochgeladene Nummer wiederverwenden.
 
 ### 2. Bauen & signieren (per API)
 
@@ -60,7 +74,7 @@ mv web-ext-artifacts/<signierte-datei>.xpi web-ext-artifacts/tasks-X.Y.Z.xpi
 ### 3. Committen & GitHub-Release anlegen
 
 ```bash
-git add manifest.json package.json updates.json
+git add manifest.json package.json package-lock.json updates.json
 git commit -m "Version X.Y.Z"
 git push origin main
 
@@ -89,5 +103,8 @@ Beide müssen `200` liefern. Danach aktualisiert Firefox alle Nutzer automatisch
 - **update_url:** `https://raw.githubusercontent.com/MaxBrandner/tasks-firefox/main/updates.json`
   Steht im Manifest und ist Teil der signierten Datei – bei einem Umzug müsste
   neu signiert werden.
+- **Neue Berechtigungen** (z. B. in 0.1.4 Kontextmenü und Native Messaging)
+  fragt Firefox beim Update einmal ab; optionale Berechtigungen erst, wenn
+  sie gebraucht werden.
 - **Verteil-Link für Nutzer:**
   `https://github.com/MaxBrandner/tasks-firefox/releases/latest`

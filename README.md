@@ -1,77 +1,136 @@
 # Tasks – Firefox-Erweiterung
 
-Aufgabenlisten (ähnlich Google Tasks) in der Firefox-Seitenleiste.
-Gespeichert wird über **Firefox Sync** – auf allen Rechnern, auf denen du mit
-deinem Firefox-Konto angemeldet bist, sind dieselben Aufgaben da. Kein Google,
-kein Server, keine Berechtigungen auf Webseiten.
+Aufgabenlisten (ähnlich Google Tasks) in der Firefox-Seitenleiste, bedienbar wie
+Notion. Gespeichert wird über **Firefox Sync** – auf allen Rechnern, auf denen du
+mit deinem Firefox-Konto angemeldet bist, sind dieselben Aufgaben da. Kein
+Google, kein eigener Server.
+
+**Download:** [neueste Version](https://github.com/MaxBrandner/tasks-firefox/releases/latest)
+(`tasks-X.Y.Z.xpi`) – Updates kommen danach automatisch.
 
 ## Funktionen
 
 - **Mehrere Listen** – oben auswählen; über `⋯` anlegen, umbenennen, löschen.
-- **Aufgaben** – oben eintippen, Enter. Neue Aufgaben landen oben.
-  Titel direkt anklicken zum Bearbeiten.
-- **Details** (Pfeil `▾` rechts): Notiz, Fälligkeitsdatum, Unteraufgaben, Löschen.
-- **Unteraufgaben** – eine Ebene. Hauptaufgabe erledigt → Unteraufgaben auch.
-- **Fälligkeit** – „Heute" / „Morgen" / Wochentag; überfällig in Rot.
-- **Sortieren** – am Griff `⋮⋮` ziehen, oder im Titel **Alt+↑ / Alt+↓**.
-  Unteraufgaben lassen sich innerhalb ihrer Hauptaufgabe sortieren.
-- **Erledigt** – einklappbarer Bereich unten, „Erledigte löschen".
-- **Rückgängig / Wiederholen** – **Strg+Z** / **Strg+Y** (oder Strg+Shift+Z) für
-  alle Änderungen; beim Tippen wirkt Strg+Z zuerst auf den Text im Feld.
-  Nach jedem Löschen zusätzlich ca. 7 s lang ein „Rückgängig"-Knopf.
-- **Abgehakte Unteraufgaben** bleiben an ihrem Platz; Enter darauf legt
-  darunter eine neue an.
-- **↑ / ↓ ohne Auswahl** – springt in die unterste bzw. oberste Aufgabe.
-- **Uhrzeit & Countdown** – Fälligkeit mit Uhrzeit; unter 48 h zeigt der Chip
-  „noch 1 T 18 Std", danach „überfällig".
+- **Aufgaben** – „+ Aufgabe hinzufügen" legt oben eine neue an. Ein Klick auf
+  eine Aufgabe öffnet sie wie bei Google Tasks: Titel, **Details** (Notiz),
+  Fälligkeit und Papierkorb. Klick daneben oder Esc schließt.
+- **Unteraufgaben** – beliebig tief verschachtelt (Tab / Shift+Tab). Hauptaufgabe
+  erledigt → alle darunter auch; Unteraufgabe wieder offen → alle darüber auch.
+  Abgehakte Unteraufgaben bleiben an ihrem Platz.
+- **Fälligkeit** – Schnellknöpfe Heute / Morgen / +1 Woche oder Datum, dazu
+  optional eine **Uhrzeit**. Anzeige „Heute", „Morgen", Wochentag; unter 48 h
+  ein **Countdown** („noch 1 T 18 Std"), danach „überfällig" in Rot.
 - **↻ Wöchentlich** – ist eine Abgabe fällig oder abgehakt, entsteht die nächste
   eine Woche später (Zahl am Titelende zählt mit: „Blatt 3" → „Blatt 4"). Die
   Vorwoche bleibt als eigene Aufgabe stehen und wird nicht überschrieben.
-- **Zu Tasks hinzufügen (Claude)** – Text auf einer Webseite markieren →
-  Rechtsklick → „Zu Tasks hinzufügen". Claude sucht Liste und Elternaufgabe,
-  wählt den Titel im Stil der Geschwister und trägt die Fälligkeit mit Uhrzeit
-  ein; der Link zur Seite kommt in die Notiz. Läuft über **Claude Code** auf
-  diesem Rechner, also über das Claude-Abo – kein API-Schlüssel, keine
-  Extrakosten. Einmal einrichten: `native/install.sh` ausführen (meldet das
-  Hilfsprogramm `native/tasks_claude_host.py` bei Firefox an), dann unter
-  ⋯ → „Claude einrichten …" → „Verbindung testen". Gesendet werden markierter
-  Text, Seitenadresse/-titel und die Titel der Listen/Aufgaben.
-  **Alternative: eigenes Modell per API** – im selben Popup (⋯ → „KI
-  einrichten …") wählbar; wird außerdem automatisch benutzt, wenn Claude Code
-  nicht gefunden wird. Vorlagen für Anthropic (Claude), OpenAI, OpenRouter und
-  lokale Modelle über **Ollama** oder **LM Studio**; „Andere" für jeden
-  OpenAI-kompatiblen Server (z. B. llama.cpp, vLLM, Mistral, Groq). Adresse,
-  Modell und Schlüssel (bei lokalen Modellen meist leer) sind frei eintragbar;
-  der Zugriff auf die Adresse wird erst beim Speichern erfragt. „Verbindung
-  testen" ruft nur die Modellliste ab und kostet nichts. Kann ein Server kein
-  festes JSON-Schema, fragt die Erweiterung nach einfachem JSON.
-  **Keine KI** ist ebenfalls wählbar – dann verschwindet „Zu Tasks
-  hinzufügen" aus dem Rechtsklick-Menü.
+- **Markdown** in Titel und Notiz: `**fett**`, `*kursiv*`, `~~durch~~`,
+  `` `code` ``, `[Text](https://…)`; Links werden automatisch erkannt. In
+  Notizen zusätzlich `- Liste`, `1. Liste`, `# Überschrift`, `> Zitat`.
+- **Sortieren** – am Griff `⋮⋮` ziehen (weiter rechts loslassen = Unteraufgabe)
+  oder im Titel **Alt+↑ / Alt+↓**.
+- **Erledigt** – einklappbarer Bereich, unten verankert; „Erledigte löschen".
+- **Rückgängig / Wiederholen** – **Strg+Z** / **Strg+Y** für alle Änderungen;
+  beim Tippen wirkt Strg+Z zuerst auf den Text im Feld. Nach dem Löschen
+  zusätzlich ein „Rückgängig"-Knopf.
+- **Zu Tasks hinzufügen (KI)** – markierten Text einer Webseite per Rechtsklick
+  als Aufgabe einsortieren lassen, siehe unten.
+- **Design** – System / Hell / Dunkel (Knopf oben rechts). Einstellungen und
+  Hilfe öffnen sich als Popup.
+
+### Tastatur
+
+| Taste | Wirkung |
+|---|---|
+| `Strg+Alt+A` | Tasks öffnen/schließen (überall in Firefox) |
+| `Enter` | neue Aufgabe darunter (Text rechts vom Cursor wandert mit) |
+| `Tab` / `Shift+Tab` | einrücken / ausrücken |
+| `Strg+Enter` | abhaken |
+| `Backspace` in leerer Zeile | Zeile löschen |
+| `↑` / `↓` | Aufgabe darüber/darunter; ohne Auswahl: unterste/oberste |
+| `Alt+↑` / `Alt+↓` | Aufgabe verschieben |
+| `Strg+Z` / `Strg+Y` | rückgängig / wiederholen |
+| `Esc` | Bearbeiten bzw. Popup schließen |
+
+`Strg+Alt+A` lässt sich ändern unter `about:addons` → Zahnrad →
+„Erweiterungs-Tastenkombinationen verwalten". Alle Kürzel stehen auch in der
+Seitenleiste unter `⋯` → „Tastenkürzel & Markdown".
+
+## Zu Tasks hinzufügen (KI)
+
+Text auf einer Webseite markieren → Rechtsklick → **Zu Tasks hinzufügen**. Die
+KI sucht die passende Liste und Elternaufgabe (z. B. „nat Info"), wählt den Titel
+im Stil der Geschwister („Blatt 4"), trägt die Abgabefrist mit Uhrzeit ein und
+hängt den Link zur Seite an. Gibt es die Aufgabe schon, wird sie ergänzt statt
+doppelt angelegt. Strg+Z nimmt das wieder zurück.
+
+Eingestellt wird das unter `⋯` → **KI einrichten …**:
+
+- **Claude Code (Abo) – Standard.** Läuft über [Claude Code](https://claude.com/claude-code)
+  auf diesem Rechner, also über das Claude-Abo – kein API-Schlüssel, keine
+  Extrakosten. Claude Code muss installiert und angemeldet sein; dann einmal
+  im Projektordner ausführen:
+
+  ```bash
+  native/install.sh
+  ```
+
+  Das meldet das kleine Hilfsprogramm `native/tasks_claude_host.py` bei Firefox
+  an (Datei `~/.mozilla/native-messaging-hosts/tasks_claude.json`, nur für diese
+  Erweiterung). Das Hilfsprogramm startet `claude -p` in einem leeren Ordner,
+  ohne Werkzeuge, ohne eigene Einstellungen und ohne gespeicherten Verlauf.
+  „Verbindung testen" im Popup prüft, ob alles bereit ist. Bisher nur unter
+  Linux eingerichtet und getestet.
+- **Eigenes Modell per API.** Vorlagen für Anthropic (Claude), OpenAI,
+  OpenRouter und lokale Modelle über **Ollama** oder **LM Studio**; „Andere" für
+  jeden OpenAI-kompatiblen Server (z. B. llama.cpp, vLLM, Mistral, Groq).
+  Adresse, Modell und Schlüssel (bei lokalen Modellen meist leer) sind frei
+  eintragbar. Wird auch automatisch benutzt, wenn Claude Code fehlt.
+  „Verbindung testen" ruft nur die Modellliste ab und kostet nichts.
+
   > ⚠️ **Der Weg über ein eigenes Modell ist ungetestet** – ich habe ihn selbst
   > nie ausprobiert (weder Claude-API noch andere Anbieter noch lokale Modelle).
   > Getestet ist nur der Weg über Claude Code.
+  >
   > Tipp, falls Ollama die Erweiterung abweist (Fehler 403): Ollama mit
   > `OLLAMA_ORIGINS="moz-extension://*"` starten.
-- **Design** – System / Hell / Dunkel (Knopf oben rechts).
-
-Toolbar-Symbol oder **Strg+Alt+A**: blendet die Seitenleiste ein und aus.
-Die Tastenkombination lässt sich ändern unter `about:addons` → Zahnrad →
-„Erweiterungs-Tastenkombinationen verwalten".
+- **Keine KI.** „Zu Tasks hinzufügen" verschwindet aus dem Rechtsklick-Menü.
 
 ## Speicher & Grenzen
 
-Firefox Sync erlaubt einer Erweiterung **ca. 100 KB und 512 Einträge**.
-Jede Aufgabe und jede Liste ist ein Eintrag – also Platz für grob 500 Aufgaben
+Firefox Sync erlaubt einer Erweiterung **ca. 100 KB und 512 Einträge**. Jede
+Aufgabe und jede Liste ist ein Eintrag – also Platz für grob 500 Aufgaben
 (erledigte mitgezählt). Wird es eng, erscheint ein Hinweis; dann erledigte
 Aufgaben löschen oder lange Notizen kürzen.
 
-Synchronisiert wird nur, wenn in Firefox unter *Einstellungen → Sync* die
-Option **Add-ons** aktiv ist. Ohne Sync funktioniert alles lokal.
+Synchronisiert wird nur, wenn in Firefox unter *Einstellungen → Sync* die Option
+**Add-ons** aktiv ist. Ohne Sync funktioniert alles lokal. KI-Einstellungen und
+API-Schlüssel werden **nicht** synchronisiert, sie bleiben auf dem jeweiligen
+Rechner.
 
 ## Installation
 
-Die signierte Datei `web-ext-artifacts/tasks-X.Y.Z.xpi` in Firefox öffnen
-(oder per Drag & Drop auf ein Firefox-Fenster ziehen) und bestätigen.
+1. [Neueste Version](https://github.com/MaxBrandner/tasks-firefox/releases/latest)
+   herunterladen und die `.xpi` in Firefox öffnen (oder auf ein Firefox-Fenster
+   ziehen), bestätigen.
+2. Optional für „Zu Tasks hinzufügen" mit Claude Code: Repo klonen und
+   `native/install.sh` ausführen (siehe oben).
+
+Updates installiert Firefox automatisch.
+
+## Berechtigungen & Datenschutz
+
+| Berechtigung | Wofür |
+|---|---|
+| `storage` | Aufgaben und Einstellungen speichern (Firefox Sync) |
+| `contextMenus` | Eintrag „Zu Tasks hinzufügen" |
+| `activeTab` | markierten Text nur nach dem Klick auf diesen Eintrag lesen |
+| `nativeMessaging` | mit dem Hilfsprogramm für Claude Code sprechen |
+| optional: Adresse des eigenen Modells | nur wenn ein eigenes Modell gespeichert wird, nur für dessen Adresse |
+
+Die Erweiterung liest keine Webseiten von sich aus. Nur bei „Zu Tasks
+hinzufügen" werden der markierte Text, Adresse und Titel der Seite sowie die
+Titel deiner Listen und Aufgaben an die gewählte KI geschickt (Claude Code bzw.
+das eingetragene Modell).
 
 ## Entwicklung
 
@@ -80,5 +139,8 @@ npm install
 npx web-ext run      # Firefox mit der Erweiterung starten (temporär)
 npm run lint
 ```
+
+Zum Testen ohne Signatur: `about:debugging` → „Dieser Firefox" → „Temporäres
+Add-on laden" → `manifest.json`.
 
 Neue Version veröffentlichen: siehe [RELEASING.md](RELEASING.md).
