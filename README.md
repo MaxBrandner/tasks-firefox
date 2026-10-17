@@ -151,6 +151,7 @@ das eingetragene Modell).
 ```bash
 npm install
 npm run dev          # Test-Kopie „Tasks DEV" nach dev/ bauen
+npm run testdata     # Testdaten nach testdaten/ (Import in Tasks DEV)
 npm run lint
 ```
 
@@ -159,6 +160,11 @@ Firefox" → „Temporäres Add-on laden" → **`dev/manifest.json`**. Die Test-
 hat eine eigene Kennung (`tasks-dev@brandner.name`) und eigene Daten; sie läuft
 neben der installierten Version. Nach Änderungen erneut `npm run dev` und
 „Neu laden".
+
+**Testdaten:** `npm run testdata` schreibt `testdaten/Tasks-Testdaten.json`
+(Fälligkeiten relativ zu jetzt) – in Tasks DEV über `⋯` → „Sicherung
+importieren …" einspielen. Eigene Sicherungen gehören nach `backups/`; beide
+Ordner sind per `.gitignore` vom Repo ausgeschlossen.
 
 > ⚠️ **Nie die echte `manifest.json` temporär laden**, wenn Tasks installiert
 > ist: Sie ersetzt die installierte Version, und beim Entfernen löscht Firefox

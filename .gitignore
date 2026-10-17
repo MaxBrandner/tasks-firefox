@@ -7,6 +7,10 @@ web-ext-artifacts/
 # Test-Kopie (npm run dev)
 dev/
 
+# Persönliche Sicherungen (echte Aufgaben) und erzeugte Testdaten
+backups/
+testdaten/
+
 # web-ext Signier-Zustand / Secrets
 .web-extension-id
 *.env
