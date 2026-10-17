@@ -27,8 +27,15 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   ok(d.body.dataset.chat === "quick" && d.activeElement === $("chatInput"), "/ über den Aufgaben öffnet die Schnell-Karte");
   $("chatExpand").click(); await H.tick();
   ok(d.body.dataset.chat === "full", "„Ganzer Chat“ wechselt in den Reiter");
-  $("tabTasks").click(); await H.tick(); key("/"); await H.tick(); $("chatClose").click(); await H.tick();
+  $("tabTasks").click(); await H.tick();
+  ok(d.body.dataset.chat === "quick", "Schnell-Karte bleibt nach Reiter „Chat“ → „Aufgaben“ offen");
+  $("chatClose").click(); await H.tick();
   ok(d.body.dataset.chat === "tasks", "× schließt die Schnell-Karte");
+  key("/"); await H.tick(); $("tabChat").click(); await H.tick();
+  key("Escape", $("chatInput")); await H.tick();
+  ok(d.body.dataset.chat === "quick", "Esc im Reiter „Chat“ → Aufgaben, Karte noch offen …");
+  key("Escape"); await H.tick();
+  ok(d.body.dataset.chat === "tasks", "… nächstes Esc schließt die Karte");
   key("/"); await H.tick();
   await say("Was ist bei DL dran?", { reply: "[[T:b1]].", actions: [], highlight: ["b1"] });
   ok(!$("tabMarks").hidden && $("tabMarks").textContent === "1 markiert", "Reiter „Aufgaben“ zählt Markierungen");

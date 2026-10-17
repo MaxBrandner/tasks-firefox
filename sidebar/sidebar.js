@@ -2247,8 +2247,12 @@
   let chat = [];
   let chatLoaded = false;
   let chatBusy = false;
-  // The chat is always there. "full" / "tasks" / "quick" = which view a narrow
-  // sidebar shows (tab "Chat", tab "Aufgaben", quick card); wide shows both.
+  // The chat is always there. A narrow sidebar shows tab "Aufgaben" or "Chat";
+  // over the tasks there may be the quick card, which stays open until closed
+  // (× / Esc). chatMode is what the CSS gets: "full" / "tasks" / "quick".
+  // Wide shows list and chat side by side.
+  let chatTab = "tasks";
+  let chatQuick = false;
   let chatMode = "tasks";
   const wideQuery = window.matchMedia ? window.matchMedia("(min-width: 690px)") : null; // same as the CSS
   const isWide = () => !!(wideQuery && wideQuery.matches);
@@ -2633,8 +2637,10 @@
   // Switch the chat view (see "Tasks / chat layout" in the CSS). "tasks" leaves
   // the input; "full" and "quick" put the cursor into it.
   async function setChatMode(mode) {
-    chatMode = mode;
-    document.body.dataset.chat = mode;
+    if (mode === "quick") chatQuick = true;
+    chatTab = mode === "full" ? "full" : "tasks";
+    chatMode = chatTab === "full" ? "full" : chatQuick ? "quick" : "tasks";
+    document.body.dataset.chat = chatMode;
     await loadChat();
     renderChat();
     if (mode === "tasks") chatInputEl.blur(); // a hidden field must not keep the focus
@@ -2649,17 +2655,25 @@
     updateChatTabs();
   }
 
-  // Esc: quick card / tab "Chat" → tab "Aufgaben" (marks stay); with nothing
-  // left to step back from, the AI's marks go.
+  function closeQuick() {
+    chatQuick = false;
+    return setChatMode(chatTab);
+  }
+
+  // Esc: tab "Chat" → tab "Aufgaben" → quick card closes (marks stay); with
+  // nothing left to step back from, the AI's marks go.
   function chatStepBack() {
-    if (chatMode === "tasks" || isWide()) clearChatMarks();
+    if (!isWide() && chatTab === "full") return setChatMode("tasks");
+    if (!isWide() && chatQuick) return closeQuick();
+    clearChatMarks();
+    chatQuick = false;
     setChatMode("tasks");
   }
 
   $("tabTasks").addEventListener("click", () => setChatMode("tasks"));
   $("tabChat").addEventListener("click", () => setChatMode("full"));
   $("chatExpand").addEventListener("click", () => setChatMode("full"));
-  $("chatClose").addEventListener("click", () => setChatMode("tasks"));
+  $("chatClose").addEventListener("click", () => closeQuick());
   $("chatNew").addEventListener("click", () => {
     chat = [];
     chatMarks.clear();
