@@ -18,6 +18,9 @@
         <button type="button" role="menuitem" data-action="rename">Liste umbenennen</button>
         <button type="button" role="menuitem" data-action="delete" class="danger">Liste löschen</button>
         <hr />
+        <button type="button" role="menuitem" data-action="export">Sicherung exportieren</button>
+        <button type="button" role="menuitem" data-action="import">Sicherung importieren …</button>
+        <hr />
         <button type="button" role="menuitem" data-action="ai">KI einrichten …</button>
         <button type="button" role="menuitem" data-action="help">Tastenkürzel &amp; Markdown</button>
       </div>
@@ -87,6 +90,22 @@
       <div id="aiTestRow" class="detail-row">
         <button id="aiTest" class="chip" type="button">Verbindung testen</button>
         <span id="aiTestState" class="muted"></span>
+      </div>
+      </div>
+    </dialog>
+
+    <input id="importFile" type="file" accept=".json,application/json" hidden />
+    <dialog id="importDlg" class="modal" aria-labelledby="importTitle">
+      <div class="modal-body">
+      <header class="modal-head">
+        <h2 id="importTitle">Sicherung importieren</h2>
+        <button class="icon-btn modal-close" type="button" data-close aria-label="Schließen" title="Schließen"></button>
+      </header>
+      <p id="importInfo"></p>
+      <p class="muted"><strong>Zusammenführen:</strong> Listen und Aufgaben aus der Sicherung kommen dazu (gleiche Einträge werden überschrieben), alles andere bleibt. <strong>Alles ersetzen:</strong> die jetzigen Listen und Aufgaben werden durch die Sicherung ersetzt. Beides lässt sich mit Strg+Z rückgängig machen.</p>
+      <div class="detail-row">
+        <button id="importMerge" class="chip" type="button">Zusammenführen</button>
+        <button id="importReplace" class="link-btn danger" type="button">Alles ersetzen</button>
       </div>
       </div>
     </dialog>

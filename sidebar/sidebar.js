@@ -694,6 +694,10 @@
       });
     } else if (action === "delete") {
       deleteList(currentList);
+    } else if (action === "export") {
+      exportBackup();
+    } else if (action === "import") {
+      $("importFile").click();
     } else if (action === "ai") {
       openAiPanel();
     } else if (action === "help") {
@@ -1185,6 +1189,84 @@
     setExpanded(null);
   });
 
+  // --- Sicherung exportieren / importieren ----------------------------------
+  // Datei: { format: "tasks-backup", version: 1, exportedAt, data: { "L:…", "T:…" } }.
+  // Import nimmt auch eine reine Sammlung von "L:…"/"T:…"-Einträgen an.
+
+  const BACKUP_KEY = /^[LT]:[A-Za-z0-9_-]{1,64}$/;
+  const countOf = (data, prefix) => Object.keys(data).filter((k) => k.startsWith(prefix)).length;
+
+  function exportBackup() {
+    flushPending();
+    const data = {};
+    for (const [id, l] of lists) data[LIST + id] = l;
+    for (const [id, t] of tasks) data[TASK + id] = t;
+    const backup = { format: "tasks-backup", version: 1, exportedAt: new Date().toISOString(), data };
+    const blob = new Blob([JSON.stringify(backup, null, 1)], { type: "application/json" });
+    const a = h("a", { href: URL.createObjectURL(blob), download: "Tasks-Sicherung-" + isoDate(0) + ".json" });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+    toast(`Sicherung gespeichert: ${lists.size} Listen, ${tasks.size} Aufgaben`);
+  }
+
+  let pendingImport = null;
+
+  $("importFile").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    let parsed;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch (_) {
+      showBanner("Sicherung nicht lesbar: „" + file.name + "“ ist keine gültige JSON-Datei.");
+      return;
+    }
+    const raw = parsed && parsed.format === "tasks-backup" ? parsed.data : parsed;
+    const clean = {};
+    if (raw && typeof raw === "object") {
+      for (const [k, v] of Object.entries(raw)) {
+        if (BACKUP_KEY.test(k) && v && typeof v === "object" && !Array.isArray(v)) clean[k] = v;
+      }
+    }
+    const nL = countOf(clean, LIST);
+    const nT = countOf(clean, TASK);
+    if (!nL && !nT) {
+      showBanner("In „" + file.name + "“ sind keine Listen oder Aufgaben.");
+      return;
+    }
+    pendingImport = clean;
+    const when = parsed.exportedAt ? " vom " + new Date(parsed.exportedAt).toLocaleString("de-DE") : "";
+    $("importInfo").textContent = `„${file.name}“${when}: ${nL} Listen, ${nT} Aufgaben.`;
+    openModal($("importDlg"));
+  });
+
+  function applyImport(replace) {
+    if (!pendingImport) return;
+    const data = pendingImport;
+    pendingImport = null;
+    checkpoint();
+    const gone = [];
+    if (replace) {
+      for (const id of lists.keys()) if (!(LIST + id in data)) gone.push(LIST + id);
+      for (const id of tasks.keys()) if (!(TASK + id in data)) gone.push(TASK + id);
+    }
+    for (const k of gone) (k.startsWith(TASK) ? tasks : lists).delete(k.slice(2));
+    for (const [k, v] of Object.entries(data)) (k.startsWith(TASK) ? tasks : lists).set(k.slice(2), v);
+    if (gone.length) remove(gone);
+    write(data);
+    $("importDlg").close();
+    expandedId = null;
+    ensureCurrentList();
+    render();
+    toast(`Sicherung ${replace ? "eingespielt (ersetzt)" : "zusammengeführt"}: ${countOf(data, LIST)} Listen, ${countOf(data, TASK)} Aufgaben`, () => undo());
+  }
+
+  $("importMerge").addEventListener("click", () => applyImport(false));
+  $("importReplace").addEventListener("click", () => applyImport(true));
+
   // --- Rückgängig-Hinweis ----------------------------------------------------
 
   let toastTimer = null;
@@ -1193,6 +1275,7 @@
   function toast(text, restore) {
     toastTextEl.textContent = text;
     toastUndo = restore;
+    toastUndoEl.hidden = !restore; // reine Hinweise ohne „Rückgängig"
     toastEl.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(hideToast, 7000);

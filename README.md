@@ -95,6 +95,15 @@ Eingestellt wird das unter `⋯` → **KI einrichten …**:
   > `OLLAMA_ORIGINS="moz-extension://*"` starten.
 - **Keine KI.** „Zu Tasks hinzufügen" verschwindet aus dem Rechtsklick-Menü.
 
+## Sicherung
+
+Unter `⋯` → **Sicherung exportieren** lädt Tasks eine Datei
+`Tasks-Sicherung-JJJJ-MM-TT.json` mit allen Listen und Aufgaben herunter.
+**Sicherung importieren …** spielt so eine Datei wieder ein – wahlweise
+*zusammenführen* (Bestehendes bleibt) oder *alles ersetzen*; beides lässt sich
+mit Strg+Z rückgängig machen. Empfehlung: ab und zu exportieren, vor allem vor
+größeren Änderungen.
+
 ## Speicher & Grenzen
 
 Firefox Sync erlaubt einer Erweiterung **ca. 100 KB und 512 Einträge**. Jede
