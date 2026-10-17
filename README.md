@@ -159,7 +159,9 @@ npm run lint
 Firefox" → „Temporäres Add-on laden" → **`dev/manifest.json`**. Die Test-Kopie
 hat eine eigene Kennung (`tasks-dev@brandner.name`) und eigene Daten; sie läuft
 neben der installierten Version. Nach Änderungen erneut `npm run dev` und
-„Neu laden".
+„Neu laden". Solange sie geladen ist, zeigt die echte Seitenleiste einen
+Warnbalken, die Test-Kopie trägt dauerhaft einen „DEV"-Balken, und ihr
+Kontextmenü-Eintrag heißt „Zu Tasks DEV hinzufügen".
 
 **Testdaten:** `npm run testdata` schreibt `testdata/tasks-testdata.json`
 (Fälligkeiten relativ zu jetzt) – in Tasks DEV über `⋯` → „Sicherung

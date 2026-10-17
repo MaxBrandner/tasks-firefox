@@ -26,6 +26,9 @@
   const DONE_OPEN_KEY = "tk:doneOpen";
   // AI integration (context menu "Zu Tasks hinzufügen", see background.js).
   const AI_STATUS = "tk:aiStatus";
+  // Real version vs. test copy (npm run dev).
+  const DEV_ID = "tasks-dev@brandner.name";
+  const IS_DEV = browser.runtime.id === DEV_ID;
   const AI_MODE = "tk:aiMode"; // "claude-code" (default), "api" or "none"
   // Custom model: { preset, label, protocol, baseUrl, model, key } – storage.local only.
   const API_CONFIG = "tk:api";
@@ -103,6 +106,7 @@
     trash: "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3",
     notes: "M4 6h16M4 12h16M4 18h10",
     link: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
+    alert: "M12 3.5l9 16H3zM12 10v4M12 17h.01",
     repeat: "M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3",
     monitor: "M3 4.5h18v12H3zM8.5 20.5h7M12 16.5v4",
     sun: "M12 8a4 4 0 1 0 0 8 4 4 0 1 0 0-8zM12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4",
@@ -1874,6 +1878,36 @@
     await browser.storage.local.set({ [THEME_KEY]: next });
   });
 
+  // --- Real version vs. test copy ------------------------------------------
+  // The real sidebar pings "Tasks DEV" (every 5 s and on window focus) and
+  // shows a warning while it is loaded, so nobody tests in the real list by
+  // mistake. The test copy always shows a DEV strip. No permission needed.
+  const envBannerEl = $("envBanner");
+
+  async function checkDevCopy() {
+    let active = false;
+    try {
+      const r = await browser.runtime.sendMessage(DEV_ID, { type: "tasks-ping" });
+      active = !!(r && r.ok);
+    } catch (_) {
+      // not installed / not loaded
+    }
+    envBannerEl.hidden = !active;
+  }
+
+  function setupEnvBanner() {
+    if (IS_DEV) {
+      envBannerEl.classList.add("dev");
+      envBannerEl.replaceChildren(icon("alert"), h("span", null, "DEV · Test-Kopie mit eigenen Daten – deine echten Aufgaben sind in „Tasks“."));
+      envBannerEl.hidden = false;
+      return;
+    }
+    envBannerEl.replaceChildren(icon("alert"), h("span", null, "„Tasks DEV“ ist gerade auch geladen. Das hier ist deine echte Liste – zum Testen die Seitenleiste „Tasks DEV“ benutzen."));
+    checkDevCopy();
+    setInterval(checkDevCopy, 5000);
+    window.addEventListener("focus", checkDevCopy);
+  }
+
   // --- Start -----------------------------------------------------------------
 
   async function init() {
@@ -1881,6 +1915,7 @@
     $("addIcon").append(icon("plus"));
     $("doneChevron").append(icon("chevron"));
     for (const b of document.querySelectorAll(".modal-close")) b.append(icon("close"));
+    setupEnvBanner();
     const local = await browser.storage.local.get([THEME_KEY, CURRENT_KEY, DONE_OPEN_KEY]);
     applyTheme(local[THEME_KEY]);
     doneOpen = !!local[DONE_OPEN_KEY];

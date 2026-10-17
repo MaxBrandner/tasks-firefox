@@ -1215,3 +1215,34 @@ kbd {
 #importDlg:has([data-opt="replace"]:is(:hover, :focus-visible)) #importReplace {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
+
+/* --- Real version vs. test copy ------------------------------------------- */
+
+.env-banner {
+  flex: none;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 10px 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--soon);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--soon) 14%, var(--surface));
+  color: var(--soon);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.env-banner .ico {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}
+
+/* Test copy: same colors, dashed – a permanent "you are in DEV" marker. */
+.env-banner.dev {
+  border-style: dashed;
+  font-weight: 500;
+}

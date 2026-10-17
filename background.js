@@ -12,6 +12,11 @@
 const LIST = "L:";
 const TASK = "T:";
 const AI_STATUS = "tk:aiStatus";
+// Real version vs. test copy (npm run dev): they answer each other's ping so
+// the real sidebar can warn while the test copy is loaded.
+const REAL_ID = "tasks@brandner.name";
+const DEV_ID = "tasks-dev@brandner.name";
+const IS_DEV = browser.runtime.id === DEV_ID;
 const AI_MODE = "tk:aiMode"; // "claude-code" (default), "api" or "none"
 const NATIVE_HOST = "tasks_claude";
 // Custom model: { label, protocol: "anthropic" | "openai", baseUrl, model, key }
@@ -30,12 +35,20 @@ async function syncMenu() {
   const { [AI_MODE]: mode } = await browser.storage.local.get(AI_MODE);
   await browser.contextMenus.removeAll();
   if (mode !== "none") {
-    browser.contextMenus.create({ id: MENU_ID, title: "Zu Tasks hinzufügen", contexts: ["selection"] });
+    const title = IS_DEV ? "Zu Tasks DEV hinzufügen" : "Zu Tasks hinzufügen";
+    browser.contextMenus.create({ id: MENU_ID, title, contexts: ["selection"] });
   }
 }
 syncMenu();
 browser.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes[AI_MODE]) syncMenu();
+});
+
+browser.runtime.onMessageExternal.addListener((msg, sender) => {
+  if (msg && msg.type === "tasks-ping" && (sender.id === REAL_ID || sender.id === DEV_ID)) {
+    return Promise.resolve({ ok: true, dev: IS_DEV });
+  }
+  return undefined;
 });
 
 browser.contextMenus.onClicked.addListener((info, tab) => {
