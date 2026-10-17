@@ -3,8 +3,8 @@
     "tasks@brandner.name": {
       "updates": [
         {
-          "version": "0.1.5",
-          "update_link": "https://github.com/MaxBrandner/tasks-firefox/releases/download/v0.1.5/tasks-0.1.5.xpi"
+          "version": "0.1.6",
+          "update_link": "https://github.com/MaxBrandner/tasks-firefox/releases/download/v0.1.6/tasks-0.1.6.xpi"
         }
       ]
     }
