@@ -1,20 +1,20 @@
 /* Tasks – Seitenleiste */
 
 :root {
-  --bg: #f7f5f0;
+  --bg: #f4f6f8;
   --surface: #ffffff;
-  --text: #1f2328;
-  --muted: #6b6f76;
-  --faint: #a3a29d;
-  --line: #e6e1d8;
-  --hover: #efebe3;
+  --text: #1c2026;
+  --muted: #606873;
+  --faint: #9ea5af;
+  --line: #e0e4ea;
+  --hover: #e9edf2;
   --accent: #2f6f5e;
   --accent-text: #ffffff;
-  --accent-soft: #dfece6;
+  --accent-soft: #dcede6;
   --danger: #b4441b;
   --today: #2f6f5e;
   --overdue: #b4441b;
-  --shadow: 0 6px 24px rgba(40, 32, 20, 0.14);
+  --shadow: 0 6px 24px rgba(16, 24, 40, 0.14);
   color-scheme: light;
 }
 
