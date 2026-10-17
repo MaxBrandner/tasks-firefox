@@ -102,10 +102,13 @@
         <button class="icon-btn modal-close" type="button" data-close aria-label="Schließen" title="Schließen"></button>
       </header>
       <p id="importInfo"></p>
-      <p class="muted"><strong>Zusammenführen:</strong> Listen und Aufgaben aus der Sicherung kommen dazu (gleiche Einträge werden überschrieben), alles andere bleibt. <strong>Alles ersetzen:</strong> die jetzigen Listen und Aufgaben werden durch die Sicherung ersetzt. Beides lässt sich mit Strg+Z rückgängig machen.</p>
+      <!-- Hovering an option's paragraph highlights its button and vice versa (CSS :has). -->
+      <p class="import-opt" data-opt="merge"><strong>Zusammenführen:</strong> Listen und Aufgaben aus der Sicherung kommen dazu (gleiche Einträge werden überschrieben), alles andere bleibt.</p>
+      <p class="import-opt" data-opt="replace"><strong>Alles ersetzen:</strong> die jetzigen Listen und Aufgaben werden durch die Sicherung ersetzt.</p>
+      <p class="muted">Beides lässt sich mit Strg+Z rückgängig machen.</p>
       <div class="detail-row">
-        <button id="importMerge" class="chip" type="button">Zusammenführen</button>
-        <button id="importReplace" class="link-btn danger" type="button">Alles ersetzen</button>
+        <button id="importMerge" class="chip" type="button" data-opt="merge">Zusammenführen</button>
+        <button id="importReplace" class="link-btn danger" type="button" data-opt="replace">Alles ersetzen</button>
       </div>
       </div>
     </dialog>

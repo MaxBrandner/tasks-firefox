@@ -1187,3 +1187,31 @@ kbd {
 .link-add.invalid {
   border-bottom-color: var(--danger);
 }
+
+/* --- Import popup ------------------------------------------------------------
+ * Paragraph and button of an option share data-opt; hovering (or keyboard
+ * focus on the button) highlights both, so it's clear which text belongs to
+ * which button. */
+
+.modal .import-opt {
+  margin: 8px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  transition: background 0.12s;
+}
+
+#importDlg:has([data-opt="merge"]:is(:hover, :focus-visible)) .import-opt[data-opt="merge"],
+#importDlg:has([data-opt="merge"]:is(:hover, :focus-visible)) #importMerge {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+#importDlg:has([data-opt="merge"]:is(:hover, :focus-visible)) .import-opt[data-opt="merge"] {
+  color: var(--muted);
+}
+
+#importDlg:has([data-opt="replace"]:is(:hover, :focus-visible)) .import-opt[data-opt="replace"],
+#importDlg:has([data-opt="replace"]:is(:hover, :focus-visible)) #importReplace {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
