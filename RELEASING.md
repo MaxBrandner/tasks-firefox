@@ -36,6 +36,10 @@ wird aber über das öffentliche GitHub-Repo verteilt.
 - **Vor jedem Push prüfen**, dass nichts mitgeht, was nicht soll: keine `.env`,
   keine Schlüssel, keine `*.bak`, keine Build-Ergebnisse (`git diff --name-only
   origin/main..HEAD`). Nie `git add -A`, sondern Dateien einzeln nennen.
+- **Tests:** während der Entwicklung nur die betroffenen (`npm test <bereich>`);
+  **vor jedem Release alle** (`npm test`), dazu `npm run lint` und – wenn sich
+  Prompts oder KI-Verhalten geändert haben – `npm run test:e2e` /
+  `npm run test:e2e:chat` mit einer Sicherung aus `backups/`.
 - `native/` (Hilfsprogramm für Claude Code) gehört ins Repo, aber **nicht** ins
   Erweiterungspaket – das regelt `web-ext-config.cjs`.
 

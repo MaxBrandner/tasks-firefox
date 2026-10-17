@@ -1,0 +1,30 @@
+// Run: npm test (all) or npm test <name>
+const ROOT = require("node:path").resolve(__dirname, "..");
+const H = require("./harness.cjs")(ROOT);
+const { d, ok, T, bodyKey, add, unfocus, tick } = H;
+const menu = async (action) => { d.getElementById("listMenuBtn").click(); d.querySelector(`[data-action="${action}"]`).click(); await tick(); };
+(async () => {
+  await tick();
+  await add("A"); await unfocus();
+  const help = d.getElementById("help"), ai = d.getElementById("aiPanel");
+  ok(help.tagName === "DIALOG" && ai.tagName === "DIALOG", "Tastenkürzel und Claude sind <dialog>-Popups");
+  ok(help.querySelector(".modal-head h2").textContent.includes("Tastenkürzel") && !!help.querySelector(".modal-close svg"), "mit Überschrift und × in der Ecke");
+  await menu("help");
+  ok(help.open && d.getElementById("listMenu").hidden, "⋯ → Tastenkürzel öffnet das Popup (Menü zu)");
+  help.querySelector(".help-grid kbd").click(); await tick();
+  ok(help.open, "Klick in den Inhalt lässt es offen");
+  help.dispatchEvent(new H.w.MouseEvent("click", { bubbles: true })); await tick();
+  ok(!help.open, "Klick auf den Hintergrund schließt");
+  await menu("ai");
+  ok(ai.open, "⋯ → Claude einrichten öffnet das Popup");
+  await bodyKey("ArrowDown");
+  ok(!d.activeElement.classList.contains("md-edit"), "↓ wirkt bei offenem Popup nicht auf die Aufgaben");
+  const before = JSON.stringify(H.sync.data);
+  await bodyKey("z", { ctrlKey: true });
+  ok(JSON.stringify(H.sync.data) === before, "Strg+Z wirkt bei offenem Popup nicht");
+  ai.querySelector(".modal-close").click(); await tick();
+  ok(!ai.open, "× schließt");
+  await bodyKey("z", { ctrlKey: true });
+  ok(!T("A"), "nach dem Schließen wirkt Strg+Z wieder");
+  H.finish();
+})().catch((e) => { console.error(e); process.exit(1); });

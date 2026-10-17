@@ -194,6 +194,8 @@ das eingetragene Modell).
 npm install
 npm run dev          # Test-Kopie „Tasks DEV" nach dev/ bauen
 npm run testdata     # Testdaten nach testdata/ (Import in Tasks DEV)
+npm test             # alle automatischen Tests (tests/*.test.cjs)
+npm test chat        # nur Tests, deren Name „chat" enthält
 npm run lint
 ```
 
@@ -204,6 +206,10 @@ neben der installierten Version. Nach Änderungen erneut `npm run dev` und
 „Neu laden". Solange sie geladen ist, zeigt die echte Seitenleiste einen
 Warnbalken, die Test-Kopie trägt dauerhaft einen „DEV"-Balken, und ihr
 Kontextmenü-Eintrag heißt „Zu Tasks DEV hinzufügen".
+
+**Echte KI-Durchläufe** (kosten etwas Abo-Kontingent, laufen nie automatisch):
+`npm run test:e2e -- backups/<sicherung>.json` („Zu Tasks hinzufügen" zweimal,
+inkl. automatischer Gruppe) und `npm run test:e2e:chat -- backups/<sicherung>.json`.
 
 **Testdaten:** `npm run testdata` schreibt `testdata/tasks-testdata.json`
 (Fälligkeiten relativ zu jetzt) – in Tasks DEV über `⋯` → „Sicherung

@@ -11,6 +11,9 @@ dev/
 backups/
 testdata/
 
+# Design prototypes (local only)
+prototypes/
+
 # web-ext signing state / secrets
 .web-extension-id
 *.env

@@ -1,0 +1,15 @@
+Einführung in Deep Learning Übungsblätter
+Übungsblätter
+Es sind 8 von 11 fristgerecht einzureichen und dabei mind. 50% der Punkte zu erzielen zur Klausurzulassung.
+Blatt 1
+Arbeitsanweisung
+
+Bitte geben Sie eine PDF-Datei ab. Sie dürfen allein sowie in 2er- oder 3er-Teams abgeben. Wenn Sie generative KI einsetzen, ist dies deutlich zu kennzeichnen! Wenn Sie ausführliches Feedback wünschen, welches über die Punktzahl hinaus geht, schreiben Sie das bitte deutlich (am besten oben auf der ersten Seite) auf Ihre Abgabe!
+
+Terminplan
+Startzeit: 14. Okt 2026, 00:00
+Abgabetermin: 21. Okt 2026, 12:00
+Verbleibende Bearbeitungsdauer: 3 Tage, 19 Stunden
+Dateien
+
+blatt01.pdf

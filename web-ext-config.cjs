@@ -15,6 +15,8 @@ module.exports = {
     "native",
     // Test copy (npm run dev).
     "dev",
+    // Tests (npm test).
+    "tests",
     "**/*.bak",
     "**/*.bak2",
     // Secrets/config never go into the package (web-ext ignores dotfiles

@@ -1,0 +1,37 @@
+// Run: npm test (all) or npm test <name>
+const ROOT = require("node:path").resolve(__dirname, "..");
+const H = require("./harness.cjs")(ROOT);
+const { d, ok, T, li, edit, key, bodyKey, type, add, unfocus, idOf, nTasks, rootTitles, kids, tick } = H;
+(async () => {
+  await tick();
+  d.getElementById("addBtn").click(); await tick();
+  let ta = d.activeElement;
+  ok(ta.classList.contains("md-edit") && ta.closest("li.task").classList.contains("expanded"), "Hinzufügen → leere Aufgabe im Bearbeiten-Modus");
+  await unfocus(); ok(nTasks() === 0, "leer verlassen → verschwindet");
+  await add("A"); await add("B"); await add("C"); await unfocus();
+  ok(rootTitles().join() === "C,B,A", "neue Aufgaben oben");
+  ta = await key(edit("C"), "Enter"); await type(ta, "D"); await key(ta, "Tab");
+  ok(T("D").p === idOf("C"), "Tab rückt ein");
+  ta = await key(d.activeElement, "Enter"); await type(ta, "E"); await key(ta, "Tab");
+  ok(T("E").p === idOf("D"), "3. Ebene");
+  await key(d.activeElement, "Tab", { shiftKey: true }); ok(T("E").p === idOf("C"), "Shift+Tab rückt aus");
+  ta = edit("B"); await type(ta, "Bvorne Bhinten"); ta.setSelectionRange(6, 6); await key(ta, "Enter");
+  ok(T("Bvorne") && T("Bhinten"), "Enter teilt den Text");
+  await key(edit("Bhinten"), "Enter"); const n0 = nTasks(); await key(d.activeElement, "Backspace");
+  ok(nTasks() === n0 - 1, "Backspace löscht leere Zeile");
+  await unfocus();
+  ta = edit("A"); await type(ta, "**fett** [Doku](https://example.org) [x](javascript:alert(1))"); await unfocus();
+  const v = d.querySelector(`li.task[data-id="${idOf("**fett** [Doku](https://example.org) [x](javascript:alert(1))")}"] .title .md-view`);
+  ok(v.querySelector("strong") && v.querySelectorAll("a").length === 1 && v.textContent.includes("javascript:"), "Markdown + javascript:-Schutz");
+  li("C").querySelector(":scope>.row .check").click(); await tick();
+  ok(T("C").x && T("D").x, "Abhaken nimmt Unteraufgaben mit");
+  await bodyKey("z", { ctrlKey: true }); ok(!T("C").x && !T("D").x, "Strg+Z");
+  await bodyKey("y", { ctrlKey: true }); ok(T("C").x, "Strg+Y");
+  await bodyKey("z", { ctrlKey: true });
+  li("E").querySelector(":scope>.row .check").click(); await tick();
+  ta = await key(edit("E"), "Enter"); await type(ta, "F"); await unfocus();
+  ok(kids("C").join() === "D,E,F" && !T("F").x, "Enter unter abgehakter Unteraufgabe");
+  await bodyKey("ArrowDown"); ok(d.activeElement.closest("li.task") === d.querySelector("#openList li.task"), "↓ ohne Auswahl → oberste");
+  ok(d.getElementById("main").nextElementSibling.id === "doneSection", "Erledigt unten verankert");
+  H.finish();
+})().catch((e) => { console.error(e); process.exit(1); });
