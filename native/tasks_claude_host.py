@@ -7,7 +7,7 @@ API key, no extra cost.
 
 Protocol (Firefox native messaging): 4-byte length (little endian) + JSON.
   Request:  {"ping": true}
-            {"system": str, "prompt": str, "schema": {...}}
+            {"system": str, "prompt": str, "schema": {...}, "effort": "low"|"medium"|"high"}
   Reply:    {"ok": true, "version": str}  /  {"ok": true, "data": {...}}
             {"ok": false, "error": str}
 
@@ -65,7 +65,7 @@ def ask(claude, req):
         "--setting-sources", "",     # no user settings/hooks/CLAUDE.md
         "--strict-mcp-config",       # no MCP servers
         "--no-session-persistence",  # no saved session
-        "--effort", "low",
+        "--effort", req.get("effort") if req.get("effort") in ("low", "medium", "high") else "low",
     ]
     # Empty working dir: no project CLAUDE.md from the current folder.
     with tempfile.TemporaryDirectory(prefix="tasks-claude-") as cwd:

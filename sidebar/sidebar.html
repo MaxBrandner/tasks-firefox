@@ -11,6 +11,7 @@
       <select id="listSelect" class="list-select" aria-label="Liste wählen"></select>
       <input id="listNameInput" class="list-name-input" type="text" maxlength="100" placeholder="Name der Liste" hidden />
       <span id="count" class="count" title="Offene Aufgaben">0</span>
+      <button id="chatBtn" class="icon-btn" type="button" title="KI-Chat (Taste /)" aria-label="KI-Chat" aria-expanded="false"></button>
       <button id="listMenuBtn" class="icon-btn" type="button" title="Listen verwalten" aria-label="Listen verwalten" aria-haspopup="menu" aria-expanded="false"></button>
       <button id="themeToggle" class="icon-btn" type="button"></button>
       <div id="listMenu" class="menu" role="menu" hidden>
@@ -47,6 +48,7 @@
         <kbd>Strg+Z / Strg+Y</kbd><span>rückgängig / wiederholen (alle Schritte: ⋯ → Verlauf …)</span>
         <kbd>Alt+↑ / ↓</kbd><span>Aufgabe verschieben</span>
         <kbd>Esc</kbd><span>Bearbeiten/Details schließen</span>
+        <kbd>/</kbd><span>KI-Chat öffnen</span>
         <kbd>Strg+Alt+A</kbd><span>Tasks öffnen/schließen (überall in Firefox)</span>
       </div>
       <p>Markdown: <code>**fett**</code> <code>*kursiv*</code> <code>~~durch~~</code> <code>`code`</code> <code>[Text](https://…)</code>, Links werden automatisch erkannt. In Notizen zusätzlich <code>- Liste</code>, <code>1. Liste</code>, <code># Überschrift</code>, <code>&gt; Zitat</code>.</p>
@@ -157,6 +159,20 @@
         <button id="clearDone" class="link-btn" type="button">Erledigte löschen</button>
       </div>
       <ul id="doneList" class="tasks done-list" hidden></ul>
+    </section>
+
+    <!-- AI chat: docked at the bottom so the list (and what the AI marks) stays visible. -->
+    <section id="chatPanel" class="chat" aria-label="KI-Chat" hidden>
+      <div class="chat-head">
+        <span class="chat-title">KI-Chat</span>
+        <button id="chatNew" class="link-btn" type="button">Neuer Chat</button>
+        <button id="chatClose" class="icon-btn small" type="button" title="Chat schließen" aria-label="Chat schließen"></button>
+      </div>
+      <div id="chatLog" class="chat-log" aria-live="polite"></div>
+      <form id="chatForm" class="chat-form" autocomplete="off">
+        <textarea id="chatInput" rows="1" maxlength="2000" placeholder="Frag oder sag, was passieren soll … (Enter = senden)" aria-label="Nachricht an die KI"></textarea>
+        <button id="chatSend" class="icon-btn" type="submit" title="Senden" aria-label="Senden"></button>
+      </form>
     </section>
 
     <div id="toast" class="toast" role="status" hidden>

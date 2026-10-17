@@ -98,6 +98,8 @@
   const SVG_NS = "http://www.w3.org/2000/svg";
   const ICONS = {
     chevron: "M6 9l6 6 6-6",
+    chat: "M4 5h16v11H9l-5 4z",
+    send: "M4 12l16-8-6 16-2-7z",
     check: "M5 12.5l4.5 4.5L19 7.5",
     more: "M5 12h.01M12 12h.01M19 12h.01",
     grip: "M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01",
@@ -182,6 +184,7 @@
     "~~(.+?)~~", // 5 strikethrough
     "\\*(?![\\s*])(.+?)(?<![\\s*])\\*", // 6 italic
     "((?:https?:\\/\\/|mailto:|www\\.)[^\\s<>]*[^\\s<>.,;:!?'\")\\]])", // 7 bare URL
+    "\\[\\[([TL]):([A-Za-z0-9_-]{1,64})\\]\\]", // 8,9 reference to a task/list (chat)
   ].join("|"), "g");
 
   function safeHref(url) {
@@ -214,6 +217,8 @@
         const el = h(m[4] != null ? "strong" : m[5] != null ? "s" : "em");
         renderInline(m[4] ?? m[5] ?? m[6], el);
         parent.append(el);
+      } else if (m[8] != null) {
+        parent.append(refChip(m[8], m[9]));
       } else if (m[7] != null) {
         const a = link(safeHref(m[7]));
         a.textContent = m[7].replace(/^(https?:\/\/|mailto:)/i, "");
@@ -1057,6 +1062,15 @@
     const t = tasks.get(id);
     if (!t) return;
     checkpoint(q(id) + (t.x ? " wieder geöffnet" : " abgehakt"));
+    setDoneState(id, !t.x);
+    rollRecurring();
+    render();
+  }
+
+  // Done → all open subtasks (any depth) as well; reopened → all done tasks above it too.
+  function setDoneState(id, done) {
+    const t = tasks.get(id);
+    if (!t || !!t.x === done) return;
     const now = Date.now();
     const updates = {};
     const set = (tid, fields) => {
@@ -1064,18 +1078,14 @@
       tasks.set(tid, next);
       updates[TASK + tid] = next;
     };
-    if (!t.x) {
-      // Done → all open subtasks (any depth) as well.
+    if (done) {
       set(id, { x: true, xa: now });
       for (const d of descendants(id)) if (!tasks.get(d).x) set(d, { x: true, xa: now });
     } else {
-      // Reopened → all done tasks above it too.
       set(id, { x: false, xa: "" });
       for (const a of ancestors(id)) if (tasks.get(a).x) set(a, { x: false, xa: "" });
     }
     write(updates);
-    rollRecurring();
-    render();
   }
 
   // Removes entries from storage and view ({ "T:id": value, … }).
@@ -1623,21 +1633,22 @@
   }
 
   // One link → one tab; several → a tab group named after the task.
-  async function openLinks(id) {
+  function openLinks(id) {
     const links = collectLinks(id);
-    if (!links.length) return;
+    if (links.length) openUrls(links.map((l) => l.url), plainTitle((tasks.get(id) || {}).t) || "Tasks");
+  }
+
+  async function openUrls(urls, title) {
     try {
-      if (links.length === 1) {
-        await browser.tabs.create({ url: links[0].url, active: true });
+      if (urls.length === 1) {
+        await browser.tabs.create({ url: urls[0], active: true });
         return;
       }
       const tabs = [];
-      for (const l of links) tabs.push(await browser.tabs.create({ url: l.url, active: false }));
+      for (const url of urls) tabs.push(await browser.tabs.create({ url, active: false }));
       if (browser.tabs.group) {
         const groupId = await browser.tabs.group({ tabIds: tabs.map((t) => t.id) });
-        if (browser.tabGroups) {
-          await browser.tabGroups.update(groupId, { title: plainTitle((tasks.get(id) || {}).t) || "Tasks", color: "blue" });
-        }
+        if (browser.tabGroups) await browser.tabGroups.update(groupId, { title, color: "blue" });
       }
       await browser.tabs.update(tabs[0].id, { active: true });
     } catch (err) {
@@ -1882,7 +1893,8 @@
     );
 
     return h("li", {
-      class: "task" + (t.x ? " done" : "") + (isExp ? " expanded" : ""),
+      class: "task" + (t.x ? " done" : "") + (isExp ? " expanded" : "") +
+        (chatMarks.has(t.id) ? " chat-mark" : "") + (chatChanged.has(t.id) ? " chat-changed" : ""),
       dataset: { id: t.id },
     },
       row,
@@ -2206,12 +2218,460 @@
     window.addEventListener("focus", checkDevCopy);
   }
 
+  // --- AI chat ----------------------------------------------------------------
+  // The model answers with text plus actions from a fixed catalog (see
+  // CHAT_JOB in background.js); this code validates and executes them. Each
+  // answer with changes is one history step ("KI-Chat: …"), undoable on its
+  // own; deletions wait for the user's confirmation. [[T:id]]/[[L:id]] in the
+  // text become chips; highlight marks tasks in the list. Kept per device
+  // (storage.local), at most CHAT_MAX messages.
+
+  const CHAT_KEY = "tk:chat";
+  const CHAT_MAX = 40;
+  const CHAT_OPS = new Set(["create_task", "update_task", "move_task", "delete_task", "add_link", "remove_link",
+    "create_list", "rename_list", "open_links"]);
+  const ACTION_FIELDS = ["op", "target", "list", "parent", "ref", "title", "notes", "due_date", "due_time",
+    "done", "weekly", "url", "link_title", "position"];
+  const CHAT_SUGGESTIONS = [
+    "Was ist diese Woche fällig?",
+    "Sortiere die geöffnete Liste nach Fälligkeit",
+    "Fasse meine offenen Aufgaben kurz zusammen",
+    "Was kannst du alles?",
+  ];
+  const chatMarks = new Set(); // tasks the model talks about
+  const chatChanged = new Set(); // tasks the model changed
+  const chatPanelEl = $("chatPanel");
+  const chatLogEl = $("chatLog");
+  const chatInputEl = $("chatInput");
+  let chat = [];
+  let chatLoaded = false;
+  let chatBusy = false;
+
+  function refChip(kind, id) {
+    const item = kind === "T" ? tasks.get(id) : lists.get(id);
+    return h("button", {
+      class: "ref-chip" + (item ? "" : " gone"),
+      type: "button",
+      title: !item ? "nicht mehr vorhanden" : kind === "T" ? "Zur Aufgabe springen" : "Liste öffnen",
+      onclick: (e) => {
+        e.stopPropagation();
+        if (!item) return;
+        if (kind === "T") revealTask(id);
+        else setCurrentList(id);
+      },
+    }, item ? plainTitle(item.t) || "(ohne Titel)" : "(gelöscht)");
+  }
+
+  function revealTask(id) {
+    const t = tasks.get(id);
+    if (!t) return;
+    if (t.l !== currentList) setCurrentList(t.l);
+    let li = findLi(id);
+    if (!li && t.x && !doneOpen) {
+      doneOpen = true;
+      render();
+      li = findLi(id);
+    }
+    if (li) {
+      li.scrollIntoView({ block: "center" });
+      li.classList.add("flash");
+      setTimeout(() => li.classList.remove("flash"), 2500);
+    }
+  }
+
+  // --- Context sent with every message ---
+  function chatContext() {
+    const lines = [
+      "Heute: " + new Date().toLocaleString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+      `Geöffnete Liste: „${(lists.get(currentList) || {}).t || ""}“ (list_id: ${currentList})`,
+    ];
+    const ex = expandedId && tasks.get(expandedId);
+    lines.push(ex ? `Gerade aufgeklappt: „${plainTitle(ex.t)}“ (id: ${expandedId})` : "Gerade aufgeklappt: nichts");
+    lines.push("", "Listen und Aufgaben:");
+    for (const [lid, list] of sortedLists()) {
+      lines.push(`Liste „${list.t || "Ohne Namen"}“ (list_id: ${lid})`);
+      const walk = (pid, depth) => {
+        const kids = [];
+        for (const [id, t] of tasks) if (t.l === lid && parentOf(id) === pid) kids.push({ id, ...t });
+        for (const t of kids.sort(byOrder)) {
+          const bits = ["id: " + t.id];
+          if (t.d) bits.push(`fällig ${t.d}${t.h ? " " + t.h : ""}`);
+          if (t.r === "w") bits.push("wöchentlich");
+          const note = (t.n || "").replace(/\s+/g, " ").trim();
+          if (note) bits.push(`Notiz: „${note.slice(0, 120)}“`);
+          const links = linksOf(t);
+          if (links.length) bits.push("Links: " + links.map((l) => `${l.t} <${l.url.slice(0, 140)}>`).join("; "));
+          lines.push(`${"  ".repeat(depth + 1)}- [${t.x ? "x" : " "}] ${t.t || "(ohne Titel)"} (${bits.join(", ")})`);
+          walk(t.id, depth + 1);
+        }
+      };
+      walk("", 0);
+    }
+    return lines.join("\n");
+  }
+
+  function buildChatPrompt(text) {
+    const past = chat.slice(-16).filter((m) => !m.error).map((m) => {
+      if (m.role === "user") return "Nutzer: " + m.text;
+      const done = m.pending ? " (Änderungen warten auf Bestätigung)" : m.discarded ? " (Änderungen verworfen)"
+        : m.undone ? " (Änderungen zurückgenommen)" : m.changed && m.changed.length ? ` (${m.changed.length} Aufgaben geändert)` : "";
+      return "Assistent: " + m.text + done;
+    });
+    return [chatContext(), "", "Bisheriger Chat:", past.length ? past.join("\n") : "(neu)", "", "Neue Nachricht des Nutzers:", "<<<", text, ">>>"].join("\n");
+  }
+
+  function normalizeChat(raw) {
+    const out = { reply: "", actions: [], highlight: [] };
+    if (!raw || typeof raw !== "object") return out;
+    out.reply = typeof raw.reply === "string" ? raw.reply : "";
+    for (const a of Array.isArray(raw.actions) ? raw.actions : []) {
+      if (!a || typeof a !== "object" || !CHAT_OPS.has(a.op)) continue;
+      out.actions.push(Object.fromEntries(ACTION_FIELDS.map((f) => [f, a[f] == null ? "" : String(a[f]).trim()])));
+    }
+    out.highlight = (Array.isArray(raw.highlight) ? raw.highlight : []).map(String);
+    return out;
+  }
+
+  // --- Executing actions ---
+  // Validates every action against the data; what doesn't work is skipped and
+  // reported. Returns { changed: Set, opened: number, problems: [] }.
+  function applyChatActions(actions) {
+    const refs = new Map();
+    const changed = new Set();
+    const problems = [];
+    const urls = [];
+    let groupTitle = "";
+    const res = (x) => (x.startsWith("ref:") ? refs.get(x.slice(4)) || "" : x);
+    const dateOk = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+    const timeOk = (t) => /^\d{2}:\d{2}$/.test(t);
+    const known = new Set();
+    for (const t of tasks.values()) for (const l of linksOf(t)) known.add(l.url);
+    const linkOf = (a) => ({ url: a.url, t: (a.link_title || new URL(a.url).hostname).slice(0, 60) });
+    const need = (cond, text) => {
+      if (!cond) throw new Error(text);
+    };
+
+    for (const a of actions) {
+      const target = res(a.target);
+      try {
+        switch (a.op) {
+          case "create_list": {
+            const id = newId();
+            const maxO = Math.max(0, ...[...lists.values()].map((l) => l.o || 0));
+            const list = { t: (a.title || "Neue Liste").slice(0, 100), o: maxO + 1 };
+            lists.set(id, list);
+            write({ [LIST + id]: list });
+            if (a.ref) refs.set(a.ref, id);
+            break;
+          }
+          case "rename_list": {
+            need(lists.has(target) && a.title, "Liste nicht gefunden");
+            const list = { ...lists.get(target), t: a.title.slice(0, 100) };
+            lists.set(target, list);
+            write({ [LIST + target]: list });
+            break;
+          }
+          case "create_task": {
+            let parent = res(a.parent);
+            if (parent && !tasks.has(parent)) parent = "";
+            const listId = parent ? tasks.get(parent).l : lists.has(res(a.list)) ? res(a.list) : currentList;
+            const fields = { l: listId, t: (a.title || "Neue Aufgabe").slice(0, 500) };
+            if (a.notes && a.notes !== "none") fields.n = a.notes.slice(0, 2000);
+            if (dateOk(a.due_date)) fields.d = a.due_date;
+            if (fields.d && timeOk(a.due_time)) fields.h = a.due_time;
+            if (isWebUrl(a.url)) fields.u = [linkOf(a)];
+            const id = createTask(fields);
+            if (a.weekly === "true" && fields.d) tasks.set(id, compact({ ...tasks.get(id), r: "w", s: id }));
+            const first = a.position === "first" || (!parent && a.position !== "last");
+            placeTask(id, parent, first ? 0 : visibleChildren(listId, parent).length);
+            if (a.ref) refs.set(a.ref, id);
+            changed.add(id);
+            break;
+          }
+          case "update_task": {
+            const t = tasks.get(target);
+            need(t, "Aufgabe nicht gefunden");
+            const f = {};
+            if (a.title) f.t = a.title.slice(0, 500);
+            if (a.notes) f.n = a.notes === "none" ? "" : a.notes.slice(0, 2000);
+            if (a.due_date === "none") Object.assign(f, { d: "", h: "", r: "" });
+            else if (dateOk(a.due_date)) f.d = a.due_date;
+            if (a.due_time === "none") f.h = "";
+            else if (timeOk(a.due_time) && (f.d || t.d)) f.h = a.due_time;
+            if (a.weekly === "true" && (f.d || t.d)) Object.assign(f, { r: "w", s: t.s || target });
+            else if (a.weekly === "false") f.r = "";
+            if (Object.keys(f).length) patchTask(target, f);
+            if (a.done === "true" || a.done === "false") setDoneState(target, a.done === "true");
+            changed.add(target);
+            break;
+          }
+          case "move_task": {
+            const t = tasks.get(target);
+            need(t, "Aufgabe nicht gefunden");
+            const parent = res(a.parent);
+            need(!parent || tasks.has(parent), "Ziel nicht gefunden");
+            need(parent !== target && !descendants(target).includes(parent), "Aufgabe kann nicht in sich selbst");
+            const listId = parent ? tasks.get(parent).l : lists.has(res(a.list)) ? res(a.list) : t.l;
+            if (listId !== t.l) {
+              for (const id of [target, ...descendants(target)]) {
+                const v = compact({ ...tasks.get(id), l: listId });
+                tasks.set(id, v);
+                write({ [TASK + id]: v });
+              }
+            }
+            const n = visibleChildren(listId, parent).filter((s) => s.id !== target).length;
+            placeTask(target, parent, a.position === "first" ? 0 : n);
+            changed.add(target);
+            break;
+          }
+          case "delete_task":
+            need(tasks.has(target), "Aufgabe nicht gefunden");
+            applyRemoval(withDescendants(target));
+            break;
+          case "add_link": {
+            const t = tasks.get(target);
+            need(t && isWebUrl(a.url), "Aufgabe oder Link ungültig");
+            if (!linksOf(t).some((l) => l.url === a.url)) patchTask(target, { u: [...linksOf(t), linkOf(a)] });
+            changed.add(target);
+            break;
+          }
+          case "remove_link": {
+            const t = tasks.get(target);
+            need(t, "Aufgabe nicht gefunden");
+            patchTask(target, { u: linksOf(t).filter((l) => l.url !== a.url) });
+            changed.add(target);
+            break;
+          }
+          case "open_links":
+            if (target && tasks.has(target)) {
+              for (const l of collectLinks(target)) urls.push(l.url);
+              groupTitle = groupTitle || plainTitle(tasks.get(target).t);
+            } else {
+              need(isWebUrl(a.url) && known.has(a.url), "nur Links aus den Aufgaben können geöffnet werden");
+              urls.push(a.url);
+            }
+            if (a.title) groupTitle = a.title;
+            break;
+          default:
+            throw new Error("unbekannte Aktion");
+        }
+      } catch (err) {
+        problems.push(`${a.op}: ${err.message}`);
+      }
+    }
+    const unique = [...new Set(urls)];
+    if (unique.length) openUrls(unique, groupTitle || "Tasks");
+    for (const id of changed) if (!tasks.has(id)) changed.delete(id);
+    return { changed, opened: unique.length, problems };
+  }
+
+  // Runs a message's actions as one history step.
+  function runChatActions(msg) {
+    checkpoint("KI-Chat: " + msg.request.slice(0, 50));
+    const r = applyChatActions(msg.actions);
+    if (expandedId && !tasks.has(expandedId)) expandedId = null;
+    ensureCurrentList();
+    clearTimeout(commitTimer);
+    commitPending();
+    const node = hist.get(histCurrent);
+    msg.nodeId = node && node.label.startsWith("KI-Chat") && node.at >= msg.at ? node.id : null;
+    msg.changed = [...r.changed];
+    msg.opened = r.opened;
+    msg.problems = r.problems;
+    for (const id of r.changed) chatChanged.add(id);
+  }
+
+  function describeActions(actions) {
+    const del = actions.filter((a) => a.op === "delete_task").map((a) => tasks.get(a.target) ? `„${plainTitle(tasks.get(a.target).t)}“` : null).filter(Boolean);
+    const rest = actions.length - del.length;
+    return (del.length ? "Löscht " + del.join(", ") + " (mit Unteraufgaben)" : "") + (rest ? (del.length ? " und ändert " : "Ändert ") + rest + " weitere" : "") + ".";
+  }
+
+  // --- Chat UI ---
+  async function loadChat() {
+    if (chatLoaded) return;
+    const { [CHAT_KEY]: saved } = await browser.storage.local.get(CHAT_KEY);
+    chat = saved && Array.isArray(saved.messages) ? saved.messages : [];
+    chatLoaded = true;
+  }
+
+  function saveChat() {
+    chat = chat.slice(-CHAT_MAX);
+    browser.storage.local.set({ [CHAT_KEY]: { messages: chat } }).catch(() => {});
+  }
+
+  function chatBubble(m) {
+    const body = h("div", { class: "md-view chat-text" });
+    renderBlock(m.text || "", body);
+    const el = h("div", { class: "chat-msg " + m.role + (m.error ? " error" : "") }, body);
+    if (m.role !== "assistant" || m.error) return el;
+    if (m.pending) {
+      el.append(h("div", { class: "chat-pending" },
+        h("span", null, describeActions(m.actions)),
+        h("div", { class: "detail-row" },
+          h("button", {
+            class: "chip", type: "button",
+            onclick: () => {
+              m.pending = false;
+              runChatActions(m);
+              saveChat();
+              render();
+              showChatFocus([...chatChanged]);
+              renderChat();
+            },
+          }, "Ausführen"),
+          h("button", {
+            class: "link-btn", type: "button",
+            onclick: () => {
+              m.pending = false;
+              m.discarded = true;
+              saveChat();
+              renderChat();
+            },
+          }, "Verwerfen"))));
+    }
+    if (m.discarded) el.append(h("div", { class: "chat-note" }, "Verworfen – nichts geändert."));
+    if (m.changed && m.changed.length) {
+      el.append(h("div", { class: "chat-changes" },
+        h("span", { class: "chat-note" }, m.undone ? "Zurückgenommen:" : "Geändert:"),
+        m.changed.slice(0, 8).map((id) => refChip("T", id)),
+        m.changed.length > 8 && h("span", { class: "chat-note" }, "+" + (m.changed.length - 8)),
+        m.nodeId && !m.undone && h("button", {
+          class: "link-btn", type: "button", title: "Nur diese Chat-Änderungen zurücknehmen (siehe auch ⋯ → Verlauf)",
+          onclick: () => {
+            const err = revertStep(m.nodeId);
+            if (err) m.undoError = err;
+            else m.undone = true;
+            chatChanged.clear();
+            saveChat();
+            render();
+            renderChat();
+          },
+        }, icon("undo"), "Rückgängig")));
+    }
+    if (m.undoError) el.append(h("div", { class: "chat-note warn" }, m.undoError));
+    if (m.opened) el.append(h("div", { class: "chat-note" }, m.opened === 1 ? "1 Link geöffnet." : m.opened + " Links als Tab-Gruppe geöffnet."));
+    if (m.problems && m.problems.length) el.append(h("div", { class: "chat-note warn" }, "Nicht ausgeführt: " + m.problems.join("; ")));
+    return el;
+  }
+
+  function renderChat() {
+    const items = chat.length ? chat.map(chatBubble) : [h("div", { class: "chat-empty" },
+      h("p", null, "Frag etwas zu deinen Aufgaben oder sag, was passieren soll. Änderungen kannst du einzeln zurücknehmen."),
+      CHAT_SUGGESTIONS.map((s) => h("button", { class: "chip", type: "button", onclick: () => sendChat(s) }, s)))];
+    if (chatBusy) items.push(h("div", { class: "chat-msg assistant busy" }, "denkt nach", h("span", { class: "dots" })));
+    chatLogEl.replaceChildren(...items);
+    chatLogEl.scrollTop = chatLogEl.scrollHeight;
+    $("chatSend").disabled = chatBusy;
+  }
+
+  // Make what the AI marked or changed visible: if none of it is in the open
+  // list, switch to the list of the first one; scroll it into view.
+  function showChatFocus(ids) {
+    const present = ids.filter((id) => tasks.has(id));
+    if (!present.length) return;
+    if (!present.some((id) => tasks.get(id).l === currentList)) setCurrentList(tasks.get(present[0]).l);
+    else render();
+    const li = present.map(findLi).find(Boolean);
+    if (li) li.scrollIntoView({ block: "nearest" });
+  }
+
+  async function sendChat(text) {
+    text = text.trim();
+    if (!text || chatBusy) return;
+    chatMarks.clear();
+    chatChanged.clear();
+    const prompt = buildChatPrompt(text);
+    chat.push({ role: "user", text, at: Date.now() });
+    chatBusy = true;
+    chatInputEl.value = "";
+    autosize(chatInputEl);
+    saveChat();
+    render();
+    renderChat();
+    let reply;
+    try {
+      reply = await browser.runtime.sendMessage({ type: "chat", prompt });
+    } catch (err) {
+      reply = { ok: false, error: (err && err.message) || String(err) };
+    }
+    chatBusy = false;
+    if (!reply || !reply.ok) {
+      chat.push({ role: "assistant", error: true, text: (reply && reply.error) || "Keine Antwort.", at: Date.now() });
+    } else {
+      const data = normalizeChat(reply.data);
+      const msg = { role: "assistant", text: data.reply || "(keine Antwort)", actions: data.actions, request: text, at: Date.now() };
+      for (const id of data.highlight) if (tasks.has(id)) chatMarks.add(id);
+      if (data.actions.length) {
+        if (data.actions.some((a) => a.op === "delete_task")) msg.pending = true;
+        else runChatActions(msg);
+      }
+      chat.push(msg);
+    }
+    saveChat();
+    render();
+    showChatFocus([...chatMarks, ...chatChanged]);
+    renderChat();
+  }
+
+  async function toggleChat(open = chatPanelEl.hidden) {
+    chatPanelEl.hidden = !open;
+    $("chatBtn").setAttribute("aria-expanded", String(open));
+    if (open) {
+      await loadChat();
+      renderChat();
+      chatInputEl.focus();
+    } else {
+      chatInputEl.blur(); // a hidden field must not keep the focus
+      chatMarks.clear();
+      chatChanged.clear();
+      render();
+    }
+  }
+
+  $("chatBtn").addEventListener("click", () => toggleChat());
+  $("chatClose").addEventListener("click", () => toggleChat(false));
+  $("chatNew").addEventListener("click", () => {
+    chat = [];
+    chatMarks.clear();
+    chatChanged.clear();
+    saveChat();
+    render();
+    renderChat();
+    chatInputEl.focus();
+  });
+  $("chatForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    sendChat(chatInputEl.value);
+  });
+  chatInputEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendChat(chatInputEl.value);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      chatInputEl.blur();
+    }
+  });
+  chatInputEl.addEventListener("input", () => autosize(chatInputEl));
+  // "/" opens the chat (when not typing somewhere).
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey || modalOpen()) return;
+    const a = document.activeElement;
+    if (a && a.matches("textarea, input, select")) return;
+    e.preventDefault();
+    toggleChat(true);
+  });
+
   // --- Start -----------------------------------------------------------------
 
   async function init() {
     listMenuBtnEl.append(icon("more", "ico-dots"));
     $("addIcon").append(icon("plus"));
     $("doneChevron").append(icon("chevron"));
+    $("chatBtn").append(icon("chat"));
+    $("chatClose").append(icon("close"));
+    $("chatSend").append(icon("send"));
     for (const b of document.querySelectorAll(".modal-close")) b.append(icon("close"));
     setupEnvBanner();
     const local = await browser.storage.local.get([THEME_KEY, CURRENT_KEY, DONE_OPEN_KEY]);

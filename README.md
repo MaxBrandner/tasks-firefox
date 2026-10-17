@@ -61,6 +61,7 @@ Google, kein eigener Server.
 | `Alt+↑` / `Alt+↓` | Aufgabe verschieben |
 | `Strg+Z` / `Strg+Y` | rückgängig / wiederholen |
 | `Esc` | Bearbeiten bzw. Popup schließen |
+| `/` | KI-Chat öffnen |
 
 `Strg+Alt+A` lässt sich ändern unter `about:addons` → Zahnrad →
 „Erweiterungs-Tastenkombinationen verwalten". Alle Kürzel stehen auch in der
@@ -109,6 +110,36 @@ Eingestellt wird das unter `⋯` → **KI einrichten …**:
   > Tipp, falls Ollama die Erweiterung abweist (Fehler 403): Ollama mit
   > `OLLAMA_ORIGINS="moz-extension://*"` starten.
 - **Keine KI.** „Zu Tasks hinzufügen" verschwindet aus dem Rechtsklick-Menü.
+
+## KI-Chat
+
+Sprechblase oben (oder Taste `/`) öffnet unten in der Seitenleiste einen Chat
+mit der KI – über dieselbe Verbindung wie „Zu Tasks hinzufügen" (Standard:
+Claude Code über das Abo). Beispiele: „Was ist diese Woche fällig?", „Lege
+unter DS 2 „Klausur anmelden" an, fällig nächsten Freitag", „Sortiere Uni nach
+Fälligkeit", „Öffne alle Links zu DL".
+
+- **Wie sie arbeitet:** Die KI antwortet mit Text und mit **Aktionen aus einem
+  festen Katalog** (Aufgabe anlegen/ändern/abhaken/verschieben/löschen, Links
+  hinzufügen/entfernen/öffnen, Liste anlegen/umbenennen). Die Erweiterung
+  prüft und führt sie aus; was nicht geht, wird unter der Antwort genannt.
+- **Kommunikation:** Aufgaben und Listen in der Antwort sind **anklickbare
+  Chips** (Klick springt hin). Worüber sie spricht, wird in der Liste
+  **markiert** (bernstein), was sie geändert hat, bekommt einen grünen Rand –
+  nötigenfalls wechselt die Seitenleiste dafür zur passenden Liste.
+- **Kontrolle:** Jede Antwort mit Änderungen ist **ein Schritt im Verlauf**
+  („KI-Chat: …") und lässt sich mit „Rückgängig" unter der Antwort einzeln
+  zurücknehmen. **Löschen** passiert erst nach „Ausführen".
+- **Was sie sieht:** Datum, alle Listen und Aufgaben (Struktur, Fälligkeit,
+  Notiz-Anfang, Links), geöffnete Liste, aufgeklappte Aufgabe („das hier") und
+  die letzten Nachrichten. Kein Internet, keine Webseiten.
+- **Grenzen:** Sie kann nur, was im Katalog steht – es gibt z. B. **keine
+  echten Tags**, Prioritäten, Erinnerungen oder Suche. Fragt man danach, sagt
+  sie das und bietet Bordmittel an (z. B. „#mathe" im Titel, danach „markiere
+  alles mit #mathe"). Listen löschen und KI-Einstellungen ändern kann sie nicht;
+  sie kann sich irren (dafür: Rückgängig). Jede Nachricht ist eine Anfrage
+  (über das Abo, einige Sekunden). Der Chat bleibt pro Rechner gespeichert,
+  „Neuer Chat" leert ihn.
 
 ## Sicherung
 
