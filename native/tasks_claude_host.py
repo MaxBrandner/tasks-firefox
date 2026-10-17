@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Tasks – Hilfsprogramm für Firefox (Native Messaging).
+"""Tasks – native messaging helper for Firefox.
 
-Nimmt von der Tasks-Erweiterung eine Anfrage entgegen und lässt sie von
-Claude Code (`claude -p`) beantworten. Claude Code nutzt seine eigene
-Anmeldung, also das Claude-Abo – kein API-Schlüssel, keine Extrakosten.
+Receives a request from the Tasks extension and has Claude Code (`claude -p`)
+answer it. Claude Code uses its own login, i.e. the Claude subscription – no
+API key, no extra cost.
 
-Protokoll (Firefox Native Messaging): 4 Byte Länge (little endian) + JSON.
-  Anfrage:  {"ping": true}
+Protocol (Firefox native messaging): 4-byte length (little endian) + JSON.
+  Request:  {"ping": true}
             {"system": str, "prompt": str, "schema": {...}}
-  Antwort:  {"ok": true, "version": str}  /  {"ok": true, "data": {...}}
+  Reply:    {"ok": true, "version": str}  /  {"ok": true, "data": {...}}
             {"ok": false, "error": str}
 
-Eingerichtet wird es mit install.sh im selben Ordner.
+Registered with install.sh in the same folder.
 """
 import json
 import os
@@ -21,7 +21,7 @@ import subprocess
 import sys
 import tempfile
 
-TIMEOUT = 180  # Sekunden
+TIMEOUT = 180  # seconds
 
 
 def read_message():
@@ -40,7 +40,7 @@ def send(obj):
 
 
 def find_claude():
-    # Firefox startet das Skript mit knappem PATH – übliche Orte ergänzen.
+    # Firefox starts the script with a minimal PATH – add the usual locations.
     home = os.path.expanduser("~")
     extra = [os.path.join(home, ".local", "bin"), os.path.join(home, ".claude", "local"),
              "/usr/local/bin", "/usr/bin"]
@@ -49,7 +49,7 @@ def find_claude():
 
 def clean_env():
     env = dict(os.environ)
-    # Kein API-Schlüssel: Claude Code soll die Abo-Anmeldung benutzen.
+    # No API key: Claude Code must use the subscription login.
     for key in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"):
         env.pop(key, None)
     return env
@@ -61,13 +61,13 @@ def ask(claude, req):
         "--output-format", "json",
         "--json-schema", json.dumps(req["schema"]),
         "--system-prompt", req["system"],
-        "--tools", "",               # nur antworten, keine Werkzeuge
-        "--setting-sources", "",     # keine eigenen Einstellungen/Hooks/CLAUDE.md
-        "--strict-mcp-config",       # keine MCP-Server
-        "--no-session-persistence",  # kein gespeicherter Verlauf
+        "--tools", "",               # answer only, no tools
+        "--setting-sources", "",     # no user settings/hooks/CLAUDE.md
+        "--strict-mcp-config",       # no MCP servers
+        "--no-session-persistence",  # no saved session
         "--effort", "low",
     ]
-    # Leerer Arbeitsordner: keine Projekt-CLAUDE.md aus dem aktuellen Ordner.
+    # Empty working dir: no project CLAUDE.md from the current folder.
     with tempfile.TemporaryDirectory(prefix="tasks-claude-") as cwd:
         proc = subprocess.run(cmd, input=req["prompt"], capture_output=True, text=True,
                               timeout=TIMEOUT, cwd=cwd, env=clean_env())
@@ -99,7 +99,7 @@ def main():
             send({"ok": True, "data": ask(claude, req)})
     except subprocess.TimeoutExpired:
         send({"ok": False, "error": "Claude Code hat nicht rechtzeitig geantwortet."})
-    except Exception as err:  # noqa: BLE001 – jede Ursache an die Erweiterung melden
+    except Exception as err:  # noqa: BLE001 – report any cause to the extension
         send({"ok": False, "error": str(err)})
 
 

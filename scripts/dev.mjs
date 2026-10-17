@@ -1,11 +1,11 @@
-// Baut eine Test-Kopie der Erweiterung nach dev/ – unter eigener Kennung.
+// Builds a test copy of the extension into dev/ – under its own ID.
 //
-// Warum: Eine in about:debugging temporär geladene Erweiterung mit der
-// echten Kennung ersetzt die installierte Version, und beim Entfernen löscht
-// Firefox deren gespeicherte Daten (so am 17.10.2026 passiert). Die Kopie
-// „Tasks DEV" hat eigene Daten und läuft neben der echten Version.
+// Why: an extension loaded temporarily in about:debugging with the real ID
+// replaces the installed version, and removing it makes Firefox delete its
+// stored data (happened on 2026-10-17). The copy "Tasks DEV" has its own data
+// and runs next to the real version.
 //
-// Nach Code-Änderungen erneut `npm run dev` und in about:debugging „Neu laden".
+// After code changes run `npm run dev` again and click "Neu laden" in about:debugging.
 import fs from "node:fs";
 import path from "node:path";
 
@@ -18,11 +18,11 @@ fs.mkdirSync(out);
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
 const gecko = manifest.browser_specific_settings.gecko;
 gecko.id = "tasks-dev@brandner.name";
-delete gecko.update_url; // Test-Kopie bekommt keine Updates
+delete gecko.update_url; // the test copy gets no updates
 manifest.name = "Tasks DEV";
 manifest.browser_action.default_title = "Tasks DEV – Seitenleiste ein-/ausblenden";
 manifest.sidebar_action.default_title = "Tasks DEV";
-delete manifest.commands; // Strg+Alt+A bleibt der echten Version
+delete manifest.commands; // Ctrl+Alt+A stays with the real version
 fs.writeFileSync(path.join(out, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
 
 for (const item of ["background.js", "icons", "sidebar"]) {

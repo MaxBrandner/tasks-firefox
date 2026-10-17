@@ -28,7 +28,7 @@
 
     <div id="banner" class="banner" role="alert" hidden></div>
 
-    <!-- Popups: abgedunkelter, unscharfer Hintergrund; schließen per ×, Klick daneben oder Esc. -->
+    <!-- Popups: dimmed, blurred backdrop; close via ×, click outside or Esc. -->
     <dialog id="help" class="modal" aria-labelledby="helpTitle">
       <div class="modal-body">
       <header class="modal-head">
@@ -59,7 +59,7 @@
       </header>
       <p>Text auf einer Webseite markieren → Rechtsklick → <strong>Zu Tasks hinzufügen</strong>. Die KI sucht die passende Liste und Stelle und trägt Titel, Fälligkeit (mit Uhrzeit) und den Link zur Seite ein.</p>
       <p class="muted">Gesendet werden der markierte Text, Adresse und Titel der Seite sowie die Titel deiner Listen und Aufgaben.</p>
-      <!-- Der Teil einer Option klappt erst auf, wenn man sie anklickt. -->
+      <!-- The section below the selected option is expanded; the others are collapsed. -->
       <fieldset class="ai-mode">
         <legend>Verbindung</legend>
         <label><input type="radio" name="aiMode" value="claude-code" /> Claude Code (Abo) – Standard</label>

@@ -1,16 +1,16 @@
-// Erzeugt Testdaten zum Import in die Test-Kopie „Tasks DEV":
-//   npm run testdata  →  testdaten/Tasks-Testdaten.json
-// In Tasks DEV: ⋯ → „Sicherung importieren …" → Zusammenführen, dann die
-// Seitenleiste einmal schließen und öffnen (Wiederholung + alte Notiz-Links).
+// Generates test data to import into the test copy "Tasks DEV":
+//   npm run testdata  →  testdata/tasks-testdata.json
+// In Tasks DEV: ⋯ → "Sicherung importieren …" → "Zusammenführen", then close
+// and reopen the sidebar once (weekly repeat + legacy note links run on start).
 //
-// Fälligkeiten sind relativ zu jetzt, damit Countdown (~3 h, ~30 h) und
-// „überfällig" sichtbar sind. Kennungen beginnen mit „test" – keine
-// Überschneidung mit echten Daten. Alle Links zeigen auf öffentliche Seiten.
+// Due dates are relative to now, so the countdown (~3 h, ~30 h) and "overdue"
+// are visible. IDs start with "test" – no overlap with real data. All links
+// point to public pages.
 import fs from "node:fs";
 import path from "node:path";
 
 const root = path.resolve(import.meta.dirname, "..");
-const out = path.join(root, "testdaten", "Tasks-Testdaten.json");
+const out = path.join(root, "testdata", "tasks-testdata.json");
 
 const now = new Date();
 now.setSeconds(0, 0);
@@ -28,7 +28,7 @@ const data = {
   "L:testuni0001": { t: "Test: Uni", o: 10 },
   "L:testpriv001": { t: "Test: Privat", o: 11 },
 
-  // Mathe: Links auf mehreren Ebenen, wöchentlich (gestern fällig), abgehakte Unteraufgabe
+  // Math: links on several levels, weekly (due yesterday), checked subtask
   "T:testmathe01": {
     l: UNI, t: "Mathe", d: day(3), o: 0,
     u: [
@@ -47,7 +47,7 @@ const data = {
     u: [{ url: "https://example.org/mathe/uebersicht", t: "Übersicht (doppelt)" }],
   },
 
-  // DL: Countdown (~30 h), mehrere Links, Verschachtelung bis Ebene 4, Markdown
+  // DL: countdown (~30 h), several links, nesting down to level 4, Markdown
   "T:testdl00001": {
     l: UNI, t: "**DL** – Deep Learning", o: 1,
     n: "Zulassung: 8 von 11 Blättern\n- mind. 50 % der Punkte\n- Abgabe als *PDF*, Teams bis 3",
@@ -67,19 +67,19 @@ const data = {
   },
   "T:testdl00006": { l: UNI, p: "testdl00004", t: "Teil b", o: 1 },
 
-  // Alte „Zur Seite"-Zeile → wandert beim Start ins Link-Feld
+  // Legacy "Zur Seite" note line → moved into the link field on start
   "T:testalt0001": {
     l: UNI, t: "Altlast mit Notiz-Link", o: 2,
     n: "Diese Notiz hatte früher den Link als letzte Zeile.\n[Zur Seite](https://example.org/alte-seite)",
   },
 
-  // Erledigte Hauptaufgabe → unten im Erledigt-Bereich
+  // Completed top-level task → done section at the bottom
   "T:testerl0001": {
     l: UNI, t: "Klausuranmeldung", x: true, xa: at(-26).getTime(), o: 3,
     u: [{ url: "https://example.org/pruefungsamt", t: "Prüfungsamt" }],
   },
 
-  // Privat: Countdown (~3 h), Markdown-Liste, Link in der Notiz, ferne Fälligkeit
+  // Private: countdown (~3 h), Markdown list, link in the note, far due date
   "T:testpri0001": { l: PRIV, t: "Arzttermin", d: iso(soon3), h: hm(soon3), o: 0 },
   "T:testpri0002": { l: PRIV, t: "Einkaufen", o: 1, n: "- Milch\n- Brot\n- **Kaffee**" },
   "T:testpri0003": {

@@ -1,17 +1,17 @@
 # Dependencies
 node_modules/
 
-# Build-Artefakte
+# Build artifacts
 web-ext-artifacts/
 
-# Test-Kopie (npm run dev)
+# Test copy (npm run dev)
 dev/
 
-# Persönliche Sicherungen (echte Aufgaben) und erzeugte Testdaten
+# Personal backups (real tasks) and generated test data
 backups/
-testdaten/
+testdata/
 
-# web-ext Signier-Zustand / Secrets
+# web-ext signing state / secrets
 .web-extension-id
 *.env
 .env
@@ -25,7 +25,7 @@ testdaten/
 *.swp
 .amo-upload-uuid
 
-# Python / Sicherungen
+# Python / backup copies
 __pycache__/
 *.bak
 *.bak2

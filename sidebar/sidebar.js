@@ -1,35 +1,35 @@
-/* Tasks – Seitenleiste
- * Aufgabenlisten mit beliebig tief verschachtelten Unteraufgaben, Notizen,
- * Fälligkeitsdatum, Markdown und Drag & Drop. Bedienung angelehnt an Notion:
- * jede Aufgabe ist eine Zeile, Struktur per Tab / Shift+Tab / Enter.
- * Gespeichert in storage.sync, also über Firefox Sync auf allen angemeldeten
- * Firefox-Installationen verfügbar.
+/* Tasks – sidebar
+ * Task lists with arbitrarily nested subtasks, notes, due dates, Markdown and
+ * drag & drop. Interaction modeled on Notion: every task is a line, structure
+ * via Tab / Shift+Tab / Enter. Stored in storage.sync, i.e. available through
+ * Firefox Sync on every signed-in Firefox installation.
  */
 (() => {
   "use strict";
 
-  // --- Speicher-Layout -------------------------------------------------------
-  // storage.sync (eine Aufgabe = ein Eintrag, damit sich Änderungen auf zwei
-  // Geräten nicht gegenseitig überschreiben):
-  //   "L:<id>" = Liste   { t: Titel, o: Reihenfolge }
-  //   "T:<id>" = Aufgabe { l: Listen-ID, p: Eltern-ID, t: Titel, n: Notiz,
-  //                        d: "JJJJ-MM-TT", x: erledigt, xa: erledigt am (ms),
-  //                        o: Reihenfolge unter den Geschwistern }
-  // Leere Felder werden weggelassen – das Sync-Kontingent ist knapp (~100 KB).
-  // storage.local (pro Gerät): Design, gewählte Liste, Erledigt aufgeklappt.
+  // --- Storage layout -------------------------------------------------------
+  // storage.sync (one task = one entry, so changes on two devices don't
+  // overwrite each other):
+  //   "L:<id>" = list { t: title, o: order }
+  //   "T:<id>" = task { l: list id, p: parent id, t: title, n: note,
+  //                     d: "YYYY-MM-DD", h: "HH:MM", x: done, xa: done at (ms),
+  //                     r: "w" weekly, s: series id, u: [{ url, t }] links,
+  //                     o: order among siblings }
+  // Empty fields are omitted – the sync quota is tight (~100 KB).
+  // storage.local (per device): theme, selected list, done section open, AI settings.
   const LIST = "L:";
   const TASK = "T:";
-  // Feste ID: Starten zwei Geräte zum ersten Mal, legen beide dieselbe Liste an.
+  // Fixed ID: if two devices start for the first time, both create the same list.
   const DEFAULT_LIST_ID = "default";
   const THEME_KEY = "tk:themeMode";
   const CURRENT_KEY = "tk:currentList";
   const DONE_OPEN_KEY = "tk:doneOpen";
-  // Claude-Anbindung (Kontextmenü „Zu Tasks hinzufügen", siehe background.js).
+  // AI integration (context menu "Zu Tasks hinzufügen", see background.js).
   const AI_STATUS = "tk:aiStatus";
-  const AI_MODE = "tk:aiMode"; // "claude-code" (Standard), "api" oder "none"
-  // Eigenes Modell: { preset, label, protocol, baseUrl, model, key } – nur storage.local.
+  const AI_MODE = "tk:aiMode"; // "claude-code" (default), "api" or "none"
+  // Custom model: { preset, label, protocol, baseUrl, model, key } – storage.local only.
   const API_CONFIG = "tk:api";
-  // Vorlagen: füllen Adresse/Protokoll vor; Modellnamen nur, wo sie feststehen.
+  // Presets: prefill address/protocol; model names only where they are fixed.
   const PRESETS = {
     anthropic: { label: "Anthropic (Claude)", protocol: "anthropic", baseUrl: "https://api.anthropic.com/v1", model: "claude-opus-5-5", local: false },
     openai: { label: "OpenAI", protocol: "openai", baseUrl: "https://api.openai.com/v1", model: "", local: false },
@@ -43,8 +43,8 @@
   const tasks = new Map(); // id -> { l, p, t, n, d, x, xa, o }
   let currentList = null;
   let doneOpen = false;
-  // Die Aufgabe, die gerade bearbeitet wird – sie ist aufgeklappt (Details,
-  // Datum). Wie bei Google Tasks: Bearbeiten und Aufklappen sind dasselbe.
+  // The task being edited – it is expanded (details, date). As in Google
+  // Tasks: editing and expanding are the same thing.
   let expandedId = null;
   let focusAfterRender = null; // { id, caret }
   let renderPending = false;
@@ -72,12 +72,12 @@
   const toastTextEl = $("toastText");
   const toastUndoEl = $("toastUndo");
 
-  // --- Hilfsfunktionen -------------------------------------------------------
+  // --- Helpers --------------------------------------------------------------
 
   const newId = () => crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 
-  // Baut ein Element. Eigenschaften, die das Element kennt (value, hidden, …),
-  // werden direkt gesetzt, alles andere als Attribut; "on…" sind Listener.
+  // Builds an element. Properties the element knows (value, hidden, …) are set
+  // directly, everything else as an attribute; "on…" are event listeners.
   function h(tag, props, ...children) {
     const el = document.createElement(tag);
     for (const [k, v] of Object.entries(props || {})) {
@@ -120,7 +120,7 @@
     return svg;
   }
 
-  // Entfernt leere Felder (0 bleibt erhalten – das ist eine gültige Reihenfolge).
+  // Drops empty fields (0 is kept – it's a valid order value).
   function compact(obj) {
     const out = {};
     for (const [k, v] of Object.entries(obj)) {
@@ -157,8 +157,8 @@
     if (pending) clearTimeout(pending.timer);
     timers.delete(key);
   }
-  // Noch wartende Speichervorgänge sofort ausführen (vor dem Neuzeichnen,
-  // damit gerade Getipptes nicht durch den alten Stand ersetzt wird).
+  // Run pending saves immediately (before re-rendering, so text just typed
+  // isn't replaced by the old state).
   function flushPending() {
     for (const [key, { fn }] of [...timers]) {
       cancelDebounce(key);
@@ -166,17 +166,17 @@
     }
   }
 
-  // --- Markdown (bewusst klein) ----------------------------------------------
-  // Erzeugt ausschließlich DOM-Knoten, nie HTML aus Text. Links nur http(s),
-  // mailto und www.; alles andere bleibt sichtbarer Text.
+  // --- Markdown (deliberately small) -----------------------------------------
+  // Only creates DOM nodes, never HTML from text. Links only http(s), mailto
+  // and www.; anything else stays visible text.
 
   const INLINE_RE = new RegExp([
     "`([^`\\n]+)`", // 1 code
     "\\[([^\\]\\n]+)\\]\\(([^)\\s]+)\\)", // 2,3 [Text](url)
-    "\\*\\*(.+?)\\*\\*", // 4 fett
-    "~~(.+?)~~", // 5 durchgestrichen
-    "\\*(?![\\s*])(.+?)(?<![\\s*])\\*", // 6 kursiv
-    "((?:https?:\\/\\/|mailto:|www\\.)[^\\s<>]*[^\\s<>.,;:!?'\")\\]])", // 7 nackte URL
+    "\\*\\*(.+?)\\*\\*", // 4 bold
+    "~~(.+?)~~", // 5 strikethrough
+    "\\*(?![\\s*])(.+?)(?<![\\s*])\\*", // 6 italic
+    "((?:https?:\\/\\/|mailto:|www\\.)[^\\s<>]*[^\\s<>.,;:!?'\")\\]])", // 7 bare URL
   ].join("|"), "g");
 
   function safeHref(url) {
@@ -190,7 +190,7 @@
 
   function renderInline(text, parent) {
     let last = 0;
-    // matchAll arbeitet auf einer Kopie des Regex – Rekursion ist daher sicher.
+    // matchAll works on a copy of the regex – recursion is therefore safe.
     for (const m of text.matchAll(INLINE_RE)) {
       if (m.index > last) parent.append(text.slice(last, m.index));
       last = m.index + m[0].length;
@@ -252,8 +252,8 @@
     }
   }
 
-  // Vorschau einer Notiz im eingeklappten Zustand: nicht-leere Zeilen, ohne
-  // Block-Markup; die CSS kürzt nach zwei Zeilen mit „…".
+  // Note preview in collapsed state: non-empty lines without block markup;
+  // CSS truncates after two lines with "…".
   function renderNotePreview(text, parent) {
     const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
     lines.forEach((line, i) => {
@@ -266,8 +266,8 @@
     });
   }
 
-  // Ermittelt die Cursorposition aus einem Klick in die gerenderte Ansicht –
-  // nur wenn die Ansicht 1:1 dem Rohtext entspricht (kein Markdown darin).
+  // Derives the caret position from a click into the rendered view – only if
+  // the view matches the raw text 1:1 (no Markdown in it).
   function caretFromClick(view, raw, e) {
     try {
       if (!document.caretPositionFromPoint || view.textContent !== raw) return "end";
@@ -280,13 +280,13 @@
         offset += n.length;
       }
     } catch (_) {
-      // Fallback unten
+      // fallback below
     }
     return "end";
   }
 
-  // Feld mit Markdown: zeigt die gerenderte Ansicht, beim Anklicken (nicht auf
-  // einem Link) den Rohtext zum Bearbeiten. Beim Verlassen wieder Ansicht.
+  // Markdown field: shows the rendered view; on click (not on a link) the raw
+  // text for editing. Back to the view on blur.
   function mdField({ value, multiline, cls, placeholder, label, onInput, onCommit, onKeyDown }) {
     const view = h("div", { class: "md-view" });
     const ta = h("textarea", {
@@ -311,7 +311,7 @@
     paint();
 
     wrap.startEdit = (caret = "end") => {
-      ta._startValue = ta.value; // für Strg+Z: Text im Feld zuerst
+      ta._startValue = ta.value; // for Ctrl+Z: text undo in the field first
       ta._checkpointed = false;
       view.hidden = true;
       ta.hidden = false;
@@ -323,11 +323,11 @@
     };
 
     view.addEventListener("click", (e) => {
-      if (e.target.closest("a")) return; // Link öffnen statt bearbeiten
+      if (e.target.closest("a")) return; // open the link instead of editing
       wrap.startEdit(caretFromClick(view, ta.value, e));
     });
     ta.addEventListener("input", () => {
-      // Erster Tastendruck in diesem Feld: Stand davor für Strg+Z merken.
+      // First keystroke in this field: remember the previous state for Ctrl+Z.
       if (!ta._checkpointed) {
         ta._checkpointed = true;
         checkpoint();
@@ -347,7 +347,7 @@
     return wrap;
   }
 
-  // --- Speicher --------------------------------------------------------------
+  // --- Storage --------------------------------------------------------------
 
   function showBanner(text) {
     bannerEl.textContent = text;
@@ -373,8 +373,8 @@
     }
   }
 
-  // Schreibt Einträge. Bei einem Fehler (meist: Kontingent voll) wird der
-  // lokale Stand verworfen und neu aus dem Speicher geladen.
+  // Writes entries. On error (usually: quota exceeded) the local state is
+  // discarded and reloaded from storage.
   async function write(entries) {
     try {
       await browser.storage.sync.set(entries);
@@ -395,7 +395,7 @@
     }
   }
 
-  // Ändert Felder einer Aufgabe und speichert sie (ohne neu zu zeichnen).
+  // Changes fields of a task and saves it (without re-rendering).
   function patchTask(id, fields) {
     const cur = tasks.get(id);
     if (!cur) return;
@@ -405,7 +405,7 @@
     write({ [TASK + id]: next });
   }
 
-  // Änderungen von anderen Geräten (Firefox Sync) oder anderen Fenstern.
+  // Changes from other devices (Firefox Sync) or other windows.
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== "sync") return;
     let dirty = false;
@@ -426,12 +426,12 @@
     }
   });
 
-  // --- Baumstruktur ----------------------------------------------------------
+  // --- Tree structure -------------------------------------------------------
 
   const byOrder = (a, b) => (a.o || 0) - (b.o || 0);
 
-  // Eltern-ID; fehlt die Elternaufgabe (z. B. noch nicht synchronisiert),
-  // gilt die Aufgabe als oberste Ebene.
+  // Parent ID; if the parent is missing (e.g. not synced yet), the task counts
+  // as top level.
   function parentOf(id) {
     const t = tasks.get(id);
     if (!t || !t.p) return "";
@@ -439,9 +439,9 @@
     return p && p.l === t.l ? t.p : "";
   }
 
-  // Geschwister in Anzeige-Reihenfolge. Oberste Ebene: nur offene (erledigte
-  // stehen unten im Erledigt-Bereich). Darunter alle – abgehakte Unteraufgaben
-  // bleiben an ihrem Platz (wie in Notion).
+  // Siblings in display order. Top level: open ones only (done ones live in
+  // the done section). Below that: all – checked subtasks keep their place
+  // (as in Notion).
   function visibleChildren(listId, parentId) {
     const out = [];
     for (const [id, t] of tasks) {
@@ -481,9 +481,9 @@
     return out;
   }
 
-  // Setzt Aufgabe `id` als Kind von `parentId` an Position `index` unter den
-  // offenen Geschwistern. Normalerweise ändert sich nur ihre Reihenfolge-Zahl;
-  // nur wenn die Lücke zu klein wird, werden die Geschwister neu nummeriert.
+  // Places task `id` as a child of `parentId` at position `index` among the
+  // visible siblings. Usually only its order value changes; siblings are
+  // renumbered only when the gap becomes too small.
   function placeTask(id, parentId, index) {
     const t = tasks.get(id);
     if (!t) return;
@@ -507,17 +507,17 @@
     } else {
       set(id, { p: parentId, o });
     }
-    // Eine offene Aufgabe steht nie unter einer erledigten: darüber wieder öffnen.
+    // An open task never sits below a done one: reopen the ones above.
     if (!tasks.get(id).x) {
       for (const a of ancestors(id)) if (tasks.get(a).x) set(a, { x: false, xa: "" });
     }
     write(updates);
   }
 
-  // --- Rückgängig / Wiederholen (Strg+Z / Strg+Y) ----------------------------
-  // Vor jeder Aktion wird der Zustand aller Listen und Aufgaben gemerkt
-  // (als JSON-Text, ~100 KB höchstens). Rückgängig stellt ihn wieder her und
-  // schreibt nur die Einträge, die sich tatsächlich unterscheiden.
+  // --- Undo / redo (Ctrl+Z / Ctrl+Y) ------------------------------------------
+  // Before every action the state of all lists and tasks is recorded (as JSON
+  // text, ~100 KB at most). Undo restores it and writes only the entries that
+  // actually differ.
 
   const HISTORY_MAX = 100;
   const undoStack = [];
@@ -563,7 +563,7 @@
   function stepHistory(from, to) {
     flushPending();
     const cur = serialize();
-    // Einträge überspringen, die dem aktuellen Stand gleichen.
+    // Skip entries equal to the current state.
     while (from.length && from[from.length - 1] === cur) from.pop();
     if (!from.length) return;
     to.push(cur);
@@ -574,9 +574,9 @@
   const undo = () => stepHistory(undoStack, redoStack);
   const redo = () => stepHistory(redoStack, undoStack);
 
-  // Im gerade bearbeiteten Feld gilt zuerst das normale Text-Rückgängig des
-  // Browsers; erst wenn der Text wieder dem Anfangsstand entspricht, wirkt
-  // Strg+Z auf die Aufgaben (wie in Notion).
+  // In the field being edited the browser's normal text undo comes first; only
+  // once the text is back to its initial state does Ctrl+Z act on the tasks
+  // (as in Notion).
   document.addEventListener("keydown", (e) => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     const k = e.key.toLowerCase();
@@ -593,7 +593,7 @@
     else redo();
   });
 
-  // --- Listen ----------------------------------------------------------------
+  // --- Lists ----------------------------------------------------------------
 
   function sortedLists() {
     return [...lists.entries()].sort(
@@ -628,7 +628,7 @@
 
   listSelectEl.addEventListener("change", () => setCurrentList(listSelectEl.value));
 
-  // Inline-Eingabe für "Neue Liste" / "Umbenennen" an Stelle der Auswahl.
+  // Inline input for "Neue Liste" / "Umbenennen" in place of the select.
   let listEditCommit = null;
 
   function editListName(initial, onCommit) {
@@ -706,9 +706,9 @@
     }
   });
 
-  // --- Popups (Tastenkürzel, Claude einrichten, …) ---------------------------
-  // Echte Modals (<dialog>): Hintergrund abgedunkelt und unscharf, dahinter
-  // nichts bedienbar. Schließen über ×, Klick auf den Hintergrund oder Esc.
+  // --- Popups (shortcuts, AI settings, …) ------------------------------------
+  // Real modals (<dialog>): backdrop dimmed and blurred, nothing behind it is
+  // usable. Close via ×, click on the backdrop or Esc.
   function openModal(dlg) {
     closeMenu();
     setExpanded(null);
@@ -717,13 +717,13 @@
 
   const modalOpen = () => !!document.querySelector("dialog.modal[open]");
 
-  // Ein Popup kann sich gegen das Schließen sperren: dlg.beforeClose() gibt
-  // false zurück (und zeigt selbst, was fehlt).
+  // A popup can refuse to close: dlg.beforeClose() returns false (and shows
+  // what's missing itself).
   const mayClose = (dlg) => !dlg.beforeClose || dlg.beforeClose();
 
   for (const dlg of document.querySelectorAll("dialog.modal")) {
     dlg.addEventListener("click", (e) => {
-      // Klick auf den Hintergrund trifft das <dialog> selbst (Inhalt liegt in .modal-body).
+      // A click on the backdrop hits the <dialog> itself (content is inside .modal-body).
       if ((e.target === dlg || e.target.closest("[data-close]")) && mayClose(dlg)) dlg.close();
     });
     dlg.addEventListener("cancel", (e) => {
@@ -745,7 +745,7 @@
     toast(`„${name}" gelöscht`, removed);
   }
 
-  // --- Aufgaben: Aktionen ----------------------------------------------------
+  // --- Task actions ---------------------------------------------------------
 
   function createTask(fields) {
     const id = newId();
@@ -753,8 +753,8 @@
     return id;
   }
 
-  // „Aufgabe hinzufügen": leere Aufgabe ganz oben, gleich im Bearbeiten-Modus –
-  // derselbe Code wie beim Bearbeiten einer bestehenden Aufgabe.
+  // "Aufgabe hinzufügen": empty task at the top, directly in edit mode – the
+  // same code as editing an existing task.
   function addTask() {
     checkpoint();
     const id = createTask({});
@@ -763,7 +763,7 @@
     render();
   }
 
-  // Knopf „+ Unteraufgabe": neue leere Zeile als letztes Kind.
+  // "+ Unteraufgabe" button: new empty line as last child.
   function addChild(parentId) {
     checkpoint();
     const id = createTask({});
@@ -772,9 +772,9 @@
     render();
   }
 
-  // Enter: neue Zeile direkt darunter. Hat eine offene Aufgabe Unteraufgaben,
-  // wird die neue Zeile deren erstes Kind (sie steht ja direkt darunter).
-  // Unter einer abgehakten Unteraufgabe entsteht eine neue offene daneben.
+  // Enter: new line directly below. If an open task has subtasks, the new
+  // line becomes their first child (it is directly below, after all).
+  // Below a checked subtask a new open sibling is created.
   function insertBelow(id, text) {
     const t = tasks.get(id);
     const nid = createTask({ l: t.l, t: text });
@@ -789,7 +789,7 @@
     render();
   }
 
-  // Tab: wird letztes Kind der Aufgabe direkt darüber (gleiche Ebene).
+  // Tab: becomes the last child of the task directly above (same level).
   function indent(id, caret) {
     const t = tasks.get(id);
     if (!t) return;
@@ -803,7 +803,7 @@
     render();
   }
 
-  // Shift+Tab: wird Geschwister direkt hinter der bisherigen Elternaufgabe.
+  // Shift+Tab: becomes a sibling directly after the former parent.
   function outdent(id, caret) {
     const t = tasks.get(id);
     const par = parentOf(id);
@@ -817,7 +817,7 @@
     render();
   }
 
-  // Alt+↑ / Alt+↓: eine Position nach oben/unten innerhalb der Ebene.
+  // Alt+↑ / Alt+↓: one position up/down within the level.
   function moveBy(id, delta, caret) {
     const t = tasks.get(id);
     if (!t) return;
@@ -844,11 +844,11 @@
       updates[TASK + tid] = next;
     };
     if (!t.x) {
-      // Erledigt → alle offenen Unteraufgaben (jeder Tiefe) ebenfalls.
+      // Done → all open subtasks (any depth) as well.
       set(id, { x: true, xa: now });
       for (const d of descendants(id)) if (!tasks.get(d).x) set(d, { x: true, xa: now });
     } else {
-      // Wieder offen → alle erledigten Aufgaben darüber auch.
+      // Reopened → all done tasks above it too.
       set(id, { x: false, xa: "" });
       for (const a of ancestors(id)) if (tasks.get(a).x) set(a, { x: false, xa: "" });
     }
@@ -857,7 +857,7 @@
     render();
   }
 
-  // Entfernt Einträge aus Speicher und Ansicht ({ "T:id": Wert, … }).
+  // Removes entries from storage and view ({ "T:id": value, … }).
   function applyRemoval(entries) {
     for (const key of Object.keys(entries)) {
       const id = key.slice(2);
@@ -877,8 +877,8 @@
     return out;
   }
 
-  // deferRender: erst neu zeichnen, wenn nicht mehr getippt wird (z. B. wenn
-  // eine leere Zeile beim Wechsel in eine andere Zeile verschwindet).
+  // deferRender: re-render only once typing stops (e.g. when an empty line
+  // disappears on switching to another line).
   function deleteTask(id, { silent = false, deferRender = false } = {}) {
     if (!tasks.has(id)) return;
     if (!silent) checkpoint();
@@ -905,7 +905,7 @@
     toast(n === 1 ? "1 Aufgabe gelöscht" : `${n} Aufgaben gelöscht`, removed);
   }
 
-  // Datum entfernen nimmt auch Uhrzeit und Wiederholung weg (beide brauchen ein Datum).
+  // Removing the date also removes time and repeat (both need a date).
   function setDue(id, d) {
     checkpoint();
     patchTask(id, d ? { d } : { d: "", h: "", r: "" });
@@ -913,7 +913,7 @@
     render();
   }
 
-  // Uhrzeit ohne Datum → heute.
+  // Time without a date → today.
   function setTime(id, h) {
     checkpoint();
     const t = tasks.get(id);
@@ -922,7 +922,7 @@
     render();
   }
 
-  // Wöchentlich wiederholen (ohne Datum → ab heute).
+  // Weekly repeat (without a date → starting today).
   function setWeekly(id, on) {
     checkpoint();
     const t = tasks.get(id);
@@ -931,14 +931,14 @@
     render();
   }
 
-  // --- Wöchentliche Wiederholung ---------------------------------------------
-  // Ist die aktuelle Instanz fällig geworden oder abgehakt, entsteht die
-  // nächste: eine Woche später, eine Zahl am Titelende zählt mit („Blatt 3" →
-  // „Blatt 4"). Die alte bleibt als eigene Aufgabe stehen – auch überfällig –
-  // und wird nie überschrieben. Die ID der neuen Instanz ergibt sich aus Serie
-  // + Datum, damit zwei Geräte über Firefox Sync nicht doppelt anlegen.
+  // --- Weekly repeat ----------------------------------------------------------
+  // When the current instance is due or checked, the next one is created: one
+  // week later, a number at the end of the title counts up ("Blatt 3" →
+  // "Blatt 4"). The old one stays as its own task – even when overdue – and is
+  // never overwritten. The new instance's ID is derived from series + date so
+  // two devices syncing via Firefox Sync don't create duplicates.
 
-  // Fälligkeit als Zeitpunkt: mit Uhrzeit genau, ohne Uhrzeit Ende des Tages.
+  // Due date as a timestamp: exact with a time, end of day without one.
   function dueAt(t) {
     const [y, m, day] = t.d.split("-").map(Number);
     const [hh, mm] = t.h ? t.h.split(":").map(Number) : [23, 59];
@@ -980,16 +980,16 @@
     if (changed) scheduleRender();
   }
 
-  // Titel verlassen: speichern. Ob eine leere Aufgabe verschwindet, entscheidet
-  // dropIfEmpty erst, wenn die ganze Aufgabe verlassen wird – so kann man vom
-  // Titel in „Details" wechseln, ohne dass sie gelöscht wird.
+  // Leaving the title: save. Whether an empty task disappears is decided by
+  // dropIfEmpty only once the whole task is left – so you can move from the
+  // title to "Details" without it being deleted.
   function commitTitle(id, value) {
     cancelDebounce("t:" + id);
     if (tasks.has(id)) patchTask(id, { t: value.trim() });
   }
 
-  // Ganz leere Aufgaben (kein Titel, keine Notiz, kein Datum, keine
-  // Unteraufgaben) entfernen – ohne Rückfrage, es geht ja nichts verloren.
+  // Remove completely empty tasks (no title, note, date or subtasks) – without
+  // asking, nothing is lost.
   function dropIfEmpty(id) {
     flushPending();
     const t = tasks.get(id);
@@ -997,7 +997,7 @@
     deleteTask(id, { silent: true, deferRender: true });
   }
 
-  // Backspace in leerer Zeile: löschen und in die Zeile darüber springen.
+  // Backspace in an empty line: delete it and jump to the line above.
   function removeEmpty(id) {
     if (hasChildren(id)) return;
     checkpoint();
@@ -1008,11 +1008,11 @@
     deleteTask(id, { silent });
   }
 
-  // --- Fokus & Tastatur ------------------------------------------------------
+  // --- Focus & keyboard -----------------------------------------------------
 
   const findLi = (id) => document.querySelector(`li.task[data-id="${id}"]`);
 
-  // Nächste sichtbare Aufgabe in Bildschirm-Reihenfolge (über Ebenen hinweg).
+  // Next visible task in screen order (across levels).
   function neighbor(id, dir) {
     const lis = [...document.querySelectorAll("#openList li.task, #doneList li.task")];
     const i = lis.findIndex((li) => li.dataset.id === id);
@@ -1049,12 +1049,12 @@
     } else if (e.key === "Enter" && plain && !e.shiftKey) {
       e.preventDefault();
       if (t.x && !parentOf(id)) {
-        // Erledigte Hauptaufgabe (unten im Erledigt-Bereich): Feld verlassen.
+        // Done top-level task (in the done section): leave the field.
         ta.blur();
         setExpanded(null);
       } else if (!ta.value.trim()) {
-        // Leere Zeile: eingerückt → ausrücken, oberste Ebene → verlassen
-        // (die leere Zeile verschwindet dann von selbst).
+        // Empty line: indented → outdent, top level → leave
+        // (the empty line then disappears by itself).
         if (parentOf(id)) {
           outdent(id, 0);
         } else {
@@ -1062,7 +1062,7 @@
           setExpanded(null);
         }
       } else {
-        // Text rechts vom Cursor wandert in die neue Zeile (wie in Notion).
+        // Text right of the caret moves into the new line (as in Notion).
         checkpoint();
         cancelDebounce("t:" + id);
         patchTask(id, { t: ta.value.slice(0, pos).trimEnd() });
@@ -1086,7 +1086,7 @@
       saveNow();
       moveBy(id, e.key === "ArrowUp" ? -1 : 1, pos);
     } else if (plain && !e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
-      // Einzeilig: sofort springen; mehrzeilig: erst am Anfang bzw. Ende.
+      // Single line: jump right away; multi-line: only at the start/end.
       const up = e.key === "ArrowUp";
       const singleLine = ta.scrollHeight <= 30;
       if (singleLine || (up ? pos === 0 : pos === ta.value.length)) {
@@ -1112,8 +1112,8 @@
     }
   });
 
-  // Nichts ausgewählt (nur in die Seitenleiste geklickt): ↑ springt in die
-  // unterste, ↓ in die oberste sichtbare Aufgabe.
+  // Nothing selected (just clicked into the sidebar): ↑ jumps to the bottom,
+  // ↓ to the top visible task.
   document.addEventListener("keydown", (e) => {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
@@ -1127,7 +1127,7 @@
     focusTitle(li.dataset.id, "end");
   });
 
-  // --- Bearbeiten = Aufklappen (immer nur eine Aufgabe) ----------------------
+  // --- Editing = expanding (only one task at a time) ------------------------
 
   function setExpanded(id) {
     if (expandedId === id) return;
@@ -1140,8 +1140,8 @@
     if (id) refreshRow(id);
   }
 
-  // Fokus in Titel oder Details einer Aufgabe → diese Aufgabe aufklappen.
-  // (Nicht beim Abhaken: der Haken-Knopf klappt nichts auf.)
+  // Focus in a task's title or details → expand that task.
+  // (Not when checking it off: the check button expands nothing.)
   document.addEventListener("focusin", (e) => {
     const el = e.target;
     if (!(el instanceof Element)) return;
@@ -1150,8 +1150,8 @@
     if (el.classList.contains("md-edit") || el.closest(".details")) setExpanded(li.dataset.id);
   });
 
-  // Aktualisiert nur Details/Vorschau einer Zeile – ohne alles neu zu zeichnen,
-  // damit ein gerade angeklicktes Feld woanders seinen Fokus behält.
+  // Updates only details/preview of one row – without a full re-render, so a
+  // field just clicked elsewhere keeps its focus.
   function refreshRow(id) {
     const li = findLi(id);
     const t = tasks.get(id);
@@ -1172,7 +1172,7 @@
     if (isExp) row.after(buildDetails(id));
   }
 
-  // Klick außerhalb der aufgeklappten Aufgabe schließt sie.
+  // A click outside the expanded task collapses it.
   document.addEventListener("click", (e) => {
     if (!listMenuEl.hidden && !listMenuEl.contains(e.target)) closeMenu();
     if (!expandedId || !document.contains(e.target)) return;
@@ -1190,9 +1190,9 @@
     setExpanded(null);
   });
 
-  // --- Sicherung exportieren / importieren ----------------------------------
-  // Datei: { format: "tasks-backup", version: 1, exportedAt, data: { "L:…", "T:…" } }.
-  // Import nimmt auch eine reine Sammlung von "L:…"/"T:…"-Einträgen an.
+  // --- Backup export / import -------------------------------------------------
+  // File: { format: "tasks-backup", version: 1, exportedAt, data: { "L:…", "T:…" } }.
+  // Import also accepts a plain collection of "L:…"/"T:…" entries.
 
   const BACKUP_KEY = /^[LT]:[A-Za-z0-9_-]{1,64}$/;
   const countOf = (data, prefix) => Object.keys(data).filter((k) => k.startsWith(prefix)).length;
@@ -1268,7 +1268,7 @@
   $("importMerge").addEventListener("click", () => applyImport(false));
   $("importReplace").addEventListener("click", () => applyImport(true));
 
-  // --- Rückgängig-Hinweis ----------------------------------------------------
+  // --- Undo toast -------------------------------------------------------------
 
   let toastTimer = null;
   let toastUndo = null;
@@ -1276,7 +1276,7 @@
   function toast(text, restore) {
     toastTextEl.textContent = text;
     toastUndo = restore;
-    toastUndoEl.hidden = !restore; // reine Hinweise ohne „Rückgängig"
+    toastUndoEl.hidden = !restore; // plain notices without an undo button
     toastEl.hidden = false;
     clearTimeout(toastTimer);
     toastTimer = setTimeout(hideToast, 7000);
@@ -1305,7 +1305,7 @@
     else render();
   });
 
-  // --- Darstellung -----------------------------------------------------------
+  // --- Rendering ------------------------------------------------------------
 
   function formatLeft(ms) {
     const min = Math.floor(ms / 60000);
@@ -1317,8 +1317,8 @@
     return `${Math.max(m, 1)} Min`;
   }
 
-  // Beschriftung des Datums-Chips. Mit Uhrzeit und weniger als 48 h übrig:
-  // Countdown („noch 1 T 18 Std"); danach „überfällig".
+  // Label of the due-date chip. With a time and less than 48 h left: countdown
+  // ("noch 1 T 18 Std"); afterwards "überfällig".
   function dueInfo(t) {
     const d = t.d;
     const [y, m, day] = d.split("-").map(Number);
@@ -1361,7 +1361,7 @@
     return "Fällig: " + full + (t.h ? ", " + t.h + " Uhr" : "") + (t.r === "w" ? " · wöchentlich" : "");
   }
 
-  // Countdown live halten und fällig gewordene Wiederholungen anlegen.
+  // Keep the countdown live and create weekly instances that became due.
   setInterval(() => {
     rollRecurring();
     for (const el of document.querySelectorAll(".due[data-id]")) {
@@ -1374,8 +1374,8 @@
   }, 30000);
 
   // --- Links ----------------------------------------------------------------
-  // Feld u: [{ url, t: Name }]. „Alle öffnen" nimmt die Links der Aufgabe und
-  // aller Unteraufgaben (ohne Doppelte) und öffnet sie als Tab-Gruppe.
+  // Field u: [{ url, t: name }]. "Alle öffnen" takes the links of the task and
+  // all its subtasks (without duplicates) and opens them as a tab group.
 
   const isWebUrl = (url) => /^https?:\/\//i.test(url || "");
   const linksOf = (t) => ((t && t.u) || []).filter((l) => l && isWebUrl(l.url));
@@ -1401,7 +1401,7 @@
     return out;
   }
 
-  // Ein Link → ein Tab; mehrere → Tab-Gruppe mit dem Namen der Aufgabe.
+  // One link → one tab; several → a tab group named after the task.
   async function openLinks(id) {
     const links = collectLinks(id);
     if (!links.length) return;
@@ -1427,7 +1427,7 @@
   function addLink(id, value) {
     let raw = (value || "").trim();
     if (!raw) return false;
-    if (!/^[a-z][a-z0-9+.-]*:/i.test(raw)) raw = "https://" + raw; // „ilias.hhu.de/…" ohne https://
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(raw)) raw = "https://" + raw; // "ilias.hhu.de/…" without https://
     let url;
     try {
       url = new URL(raw);
@@ -1449,7 +1449,7 @@
     render();
   }
 
-  // Einmalig: früher hing „[Zur Seite](…)" als Zeile an der Notiz – ins Feld u.
+  // One-off: "[Zur Seite](…)" used to be appended to the note – move it to field u.
   function migrateNoteLinks() {
     const re = /^\[Zur Seite\]\((https?:[^)\s]+)\)\s*$/;
     const updates = {};
@@ -1650,7 +1650,7 @@
         onclick: () => toggleDone(t.id),
       }, icon("check")),
       h("div", { class: "main" }, title, buildMeta(t, isExp)),
-      // Nur im Bearbeiten-Modus sichtbar (CSS).
+      // Only visible in edit mode (CSS).
       h("button", {
         class: "del icon-btn small",
         type: "button",
@@ -1679,8 +1679,8 @@
     return !!typing && !!a.closest(".task");
   }
 
-  // Zeichnet neu, aber nicht während getippt oder gezogen wird – sonst würde
-  // das Eingabefeld unter dem Cursor ersetzt. Dann wird nachgeholt.
+  // Re-renders, but not while typing or dragging – otherwise the input under
+  // the caret would be replaced. In that case it is done later.
   function scheduleRender() {
     renderPending = true;
     setTimeout(() => {
@@ -1701,17 +1701,17 @@
 
       const all = [];
       for (const [id, t] of tasks) if (t.l === currentList) all.push({ id, ...t });
-      const tree = new Map(); // Eltern-ID -> Kinder
+      const tree = new Map(); // parent id -> children
       for (const t of all) {
         const p = parentOf(t.id);
         if (!tree.has(p)) tree.set(p, []);
         tree.get(p).push(t);
       }
-      // Nach Reihenfolge – abgehakte Unteraufgaben bleiben an ihrem Platz.
+      // By order – checked subtasks keep their place.
       for (const kids of tree.values()) kids.sort(byOrder);
 
-      // Schutz gegen Kreise (z. B. widersprüchliche Änderungen zweier Geräte):
-      // Nicht erreichbare Aufgaben werden oben angezeigt.
+      // Guard against cycles (e.g. conflicting changes from two devices):
+      // unreachable tasks are shown at the top level.
       const roots = tree.get("") || [];
       const seen = new Set();
       const mark = (id) => {
@@ -1761,8 +1761,8 @@
   });
 
   addBtnEl.addEventListener("click", (e) => {
-    // Nicht bis zum „Klick daneben"-Handler durchreichen – der würde die
-    // gerade angelegte Aufgabe sofort wieder zuklappen (und leer entfernen).
+    // Don't let this reach the "click outside" handler – it would immediately
+    // collapse (and, being empty, remove) the task just created.
     e.stopPropagation();
     closeMenu();
     addTask();
@@ -1776,10 +1776,10 @@
 
   $("clearDone").addEventListener("click", clearDone);
 
-  // --- Drag & Drop -----------------------------------------------------------
-  // Gezogen wird nur am Griff (sonst ließe sich im Titel kein Text markieren).
-  // Obere Hälfte einer Zeile = davor, untere Hälfte = dahinter; weiter rechts
-  // (über dem Titel) oder bei einer Aufgabe mit Unteraufgaben = als erstes Kind.
+  // --- Drag & drop -----------------------------------------------------------
+  // Dragging only via the grip (otherwise text in the title couldn't be
+  // selected). Upper half of a row = before, lower half = after; further right
+  // (over the title) or on a task with subtasks = as first child.
 
   function clearDropMarks() {
     for (const el of openListEl.querySelectorAll(".drop-before, .drop-after, .drop-inside")) {
@@ -1851,7 +1851,7 @@
     render();
   });
 
-  // --- Theme-Umschalter (System → Hell → Dunkel → …) -------------------------
+  // --- Theme toggle (system → light → dark → …) ------------------------------
   const THEME_ORDER = ["system", "light", "dark"];
   const THEME_META = {
     system: { icon: "monitor", label: "Design: System (klicken für hell)" },
@@ -1890,15 +1890,14 @@
     migrateNoteLinks();
     rollRecurring();
     render();
-    // KI-Status nachholen, falls die Seitenleiste gerade erst geöffnet wurde.
+    // Catch up on the AI status in case the sidebar was just opened.
     const { [AI_STATUS]: st } = await browser.storage.local.get(AI_STATUS);
     if (st && Date.now() - st.at < 60000) showAiStatus(st);
   }
 
-  // --- Claude: „Zu Tasks hinzufügen" -----------------------------------------
-  // Das Hintergrundskript (background.js) ruft Claude auf und schreibt die
-  // Aufgabe; hier wird nur der Fortschritt gezeigt, die neue Aufgabe
-  // angesprungen und Strg+Z dafür vorbereitet.
+  // --- AI: "Zu Tasks hinzufügen" -------------------------------------------------
+  // The background script (background.js) calls the model and writes the task;
+  // here we only show progress, jump to the new task and prepare Ctrl+Z.
 
   const aiPanelEl = $("aiPanel");
   const aiStatusEl = $("aiStatus");
@@ -1932,7 +1931,7 @@
     savedCfg = st[API_CONFIG] || null;
     const mode = st[AI_MODE] === "api" || st[AI_MODE] === "none" ? st[AI_MODE] : "claude-code";
     for (const r of modeInputs) r.checked = r.value === mode;
-    showModeSection(mode); // gewählte Option gleich aufgeklappt
+    showModeSection(mode); // selected option expanded right away
     warnedUnsaved = false;
     presetEl.value = savedCfg && PRESETS[savedCfg.preset] ? savedCfg.preset : "anthropic";
     baseUrlEl.value = savedCfg ? savedCfg.baseUrl : PRESETS[presetEl.value].baseUrl;
@@ -1942,12 +1941,12 @@
     openModal(aiPanelEl);
   }
 
-  // Unter der gewählten Option steht ihr Teil; die anderen sind zugeklappt.
+  // The selected option shows its section; the others are collapsed.
   function showModeSection(mode) {
     $("ccSection").hidden = mode !== "claude-code";
     $("apiSection").hidden = mode !== "api";
     $("noneSection").hidden = mode !== "none";
-    $("aiTestRow").hidden = mode === "none"; // ohne KI nichts zu testen
+    $("aiTestRow").hidden = mode === "none"; // nothing to test without an AI
     aiWarnEl.hidden = true;
   }
 
@@ -1958,9 +1957,9 @@
     });
   }
 
-  // Verlassen nur, wenn die gewählte Option vollständig ist. Fehlt beim eigenen
-  // Modell etwas, bleibt das Popup offen; ungespeicherte Änderungen an einem
-  // schon gespeicherten Modell nur einmal anmahnen (zweites Schließen verwirft).
+  // Closing only once the selected option is complete. If the custom model is
+  // missing something, the popup stays open; unsaved changes to an already
+  // saved model are flagged once (closing again discards them).
   const aiWarnEl = $("aiWarn");
   let warnedUnsaved = false;
 
@@ -1990,7 +1989,7 @@
     return false;
   };
 
-  // Vorlage gewählt: Adresse (und ggf. Modell) vorfüllen.
+  // Preset chosen: prefill the address (and the model, if known).
   presetEl.addEventListener("change", () => {
     const p = PRESETS[presetEl.value];
     baseUrlEl.value = p.baseUrl;
@@ -1999,8 +1998,8 @@
     (p.baseUrl ? modelEl : baseUrlEl).focus();
   });
 
-  // Speichern: erst jetzt den Zugriff auf genau diese Adresse erbitten
-  // (optionale Berechtigung – wer nur Claude Code nutzt, wird nie gefragt).
+  // Save: only now request access to exactly this address
+  // (optional permission – Claude Code users are never asked).
   $("apiSave").addEventListener("click", async () => {
     let url;
     try {
@@ -2046,7 +2045,7 @@
     apiStateEl.textContent = "eigenes Modell entfernt";
   });
 
-  // Kostenloser Test eines eigenen Modells: Modellliste abrufen (kein Modellaufruf).
+  // Free test of a custom model: fetch the model list (no model call).
   async function testApi(cfg) {
     const url = new URL(cfg.baseUrl);
     if (!(await browser.permissions.contains({ origins: [originPattern(url)] }))) {
@@ -2070,8 +2069,8 @@
       : "✓ " + cfg.label + " erreichbar – Modell „" + cfg.model + "“ aber nicht in dessen Liste";
   }
 
-  // Verbindungstest des gewählten Wegs. Claude Code: Version abfragen.
-  // Eigenes Modell: Modellliste abrufen – kostet nichts.
+  // Connection test for the selected route. Claude Code: ask for the version.
+  // Custom model: fetch the model list – costs nothing.
   $("aiTest").addEventListener("click", async () => {
     aiTestStateEl.textContent = "Prüfe …";
     const st = await browser.storage.local.get([AI_MODE, API_CONFIG]);
@@ -2101,11 +2100,11 @@
     $("aiStatusText").textContent = st.text;
   }
 
-  // Fertig: Ergebnis übernehmen, Strg+Z-Stand von vorher merken, hinspringen.
+  // Done: take over the result, record the previous state for Ctrl+Z, jump there.
   function onAiDone(st) {
     const before = st.before || {};
     const after = st.after || {};
-    // Stand vor der Änderung = aktueller Stand mit den alten Werten.
+    // State before the change = current state with the old values.
     const l = new Map(lists);
     const t = new Map(tasks);
     for (const [k, v] of Object.entries(after)) (k.startsWith(TASK) ? tasks : lists).set(k.slice(2), v);

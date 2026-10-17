@@ -1,6 +1,6 @@
-// Konfiguration für das web-ext-Werkzeug (Bauen/Signieren).
+// Configuration for the web-ext tool (build/sign).
 module.exports = {
-  // Diese Dateien gehören NICHT ins Erweiterungs-Paket.
+  // These files do NOT belong in the extension package.
   ignoreFiles: [
     "node_modules",
     "package.json",
@@ -11,20 +11,20 @@ module.exports = {
     "web-ext-artifacts",
     "updates.json",
     "scripts",
-    // Hilfsprogramm für Claude Code läuft außerhalb von Firefox.
+    // The Claude Code helper runs outside Firefox.
     "native",
-    // Test-Kopie (npm run dev).
+    // Test copy (npm run dev).
     "dev",
     "**/*.bak",
     "**/*.bak2",
-    // Secrets/Config gehören niemals ins Paket (Dotfiles werden von web-ext
-    // ohnehin ignoriert, hier zur Sicherheit explizit).
+    // Secrets/config never go into the package (web-ext ignores dotfiles
+    // anyway; listed explicitly to be safe).
     ".env",
     ".env.example",
     ".gitignore",
   ],
   sign: {
-    // Selbstverteilung: signiert, aber nicht öffentlich im AMO-Katalog gelistet.
+    // Self-distribution: signed, but not publicly listed on AMO.
     channel: "unlisted",
   },
 };

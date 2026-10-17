@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Signiert die Erweiterung bei Mozilla. Liest die API-Keys aus der lokalen
-# .env (git-ignoriert) und ruft `web-ext sign` auf. Keine Secrets in der
-# Kommandozeile oder im Repo.
+# Signs the extension with Mozilla. Reads the API keys from the local .env
+# (gitignored) and runs `web-ext sign`. No secrets on the command line or in
+# the repo.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

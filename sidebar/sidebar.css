@@ -1,4 +1,4 @@
-/* Tasks – Seitenleiste */
+/* Tasks – sidebar */
 
 :root {
   --bg: #f4f6f8;
@@ -64,7 +64,7 @@
   display: none !important;
 }
 
-/* Seitenleiste dreigeteilt: oben fest, Mitte scrollt, „Erledigt" unten fest. */
+/* Sidebar in three parts: fixed top, scrolling middle, "Erledigt" pinned at the bottom. */
 html,
 body {
   height: 100%;
@@ -98,8 +98,8 @@ button {
 }
 
 /* --- Icons ----------------------------------------------------------------
- * Alle Symbole sind SVGs in festen, zentrierten Knöpfen – Schriftzeichen wie
- * ▾ oder ⋯ werden je nach Schrift verschieden groß und versetzt dargestellt. */
+ * All icons are SVGs in fixed-size, centered buttons – glyphs like ▾ or ⋯
+ * render at different sizes and offsets depending on the font. */
 
 .ico {
   display: block;
@@ -162,7 +162,7 @@ kbd {
   white-space: nowrap;
 }
 
-/* --- Kopfzeile ------------------------------------------------------------- */
+/* --- Header ---------------------------------------------------------------- */
 
 .topbar {
   position: relative;
@@ -345,7 +345,7 @@ kbd {
   }
 }
 
-/* --- Neue Aufgabe ---------------------------------------------------------- */
+/* --- Add task -------------------------------------------------------------- */
 
 .add-btn {
   flex: none;
@@ -371,7 +371,7 @@ kbd {
   height: 18px;
 }
 
-/* --- Aufgaben ------------------------------------------------------------------ */
+/* --- Tasks ------------------------------------------------------------------- */
 
 .scroll {
   flex: 1 1 auto;
@@ -387,7 +387,7 @@ kbd {
   list-style: none;
 }
 
-/* Jede Ebene rückt ein; die Linie zeigt, was zusammengehört. */
+/* Each level is indented; the line shows what belongs together. */
 .subtasks {
   margin-left: 22px;
   border-left: 1px solid var(--line);
@@ -473,7 +473,7 @@ kbd {
   min-width: 0;
 }
 
-/* Markdown-Feld: gerendert anzeigen, beim Anklicken Rohtext bearbeiten. */
+/* Markdown field: shown rendered, raw text editable on click. */
 .md-view {
   cursor: text;
   overflow-wrap: anywhere;
@@ -573,7 +573,7 @@ kbd {
   display: none;
 }
 
-/* Notiz-Vorschau: bis zu zwei Zeilen, danach „…". */
+/* Note preview: up to two lines, then "…". */
 .note-preview {
   flex: 1 1 100%;
   min-width: 0;
@@ -609,7 +609,7 @@ kbd {
   color: var(--faint);
 }
 
-/* Papierkorb: nur in der Aufgabe sichtbar, die gerade bearbeitet wird. */
+/* Trash button: only visible on the task being edited. */
 .del {
   margin-top: 1px;
   visibility: hidden;
@@ -623,7 +623,7 @@ kbd {
   color: var(--danger);
 }
 
-/* --- Bearbeiten-Modus: Details & Datum (wie Google Tasks) ------------------ */
+/* --- Edit mode: details & date (like Google Tasks) ------------------------- */
 
 .details {
   margin: 0 6px 8px 42px;
@@ -758,12 +758,12 @@ kbd {
   bottom: -1px;
 }
 
-/* Als Unteraufgabe ablegen: Linie eine Ebene weiter eingerückt. */
+/* Drop as subtask: line indented one level further. */
 .row.drop-inside::after {
   left: 44px;
 }
 
-/* --- Leerer Zustand ---------------------------------------------------------- */
+/* --- Empty state ------------------------------------------------------------ */
 
 .empty {
   padding: 28px 16px;
@@ -781,7 +781,7 @@ kbd {
   line-height: 2;
 }
 
-/* --- Erledigt (unten verankert) -------------------------------------------- */
+/* --- Done section (pinned at the bottom) ----------------------------------- */
 
 .done-section {
   flex: none;
@@ -844,7 +844,7 @@ kbd {
   padding: 0 4px 10px;
 }
 
-/* --- Hinweis mit „Rückgängig" -------------------------------------------- */
+/* --- Toast with "Rückgängig" (undo) --------------------------------------- */
 
 .toast {
   position: fixed;
@@ -881,7 +881,7 @@ kbd {
   text-decoration: underline;
 }
 
-/* --- Uhrzeit, Countdown, Wiederholung -------------------------------------- */
+/* --- Time, countdown, weekly repeat ---------------------------------------- */
 
 :root {
   --soon: #b26a00;
@@ -925,7 +925,7 @@ kbd {
   height: 12px;
 }
 
-/* --- Claude: Einstellungen & Status -------------------------------------- */
+/* --- AI: settings & status ------------------------------------------------ */
 
 .muted {
   color: var(--muted);
@@ -969,7 +969,7 @@ kbd {
   color: var(--danger);
 }
 
-/* Frisch von Claude angelegte Aufgabe kurz hervorheben. */
+/* Briefly highlight a task just created by the AI. */
 .task.flash > .row {
   animation: flash 2.4s ease-out;
 }
@@ -984,7 +984,7 @@ kbd {
   }
 }
 
-/* Symbol-Knopf (Wiederholen): nur das Symbol, etwas größer. */
+/* Icon-only button (repeat): just the icon, slightly larger. */
 .chip.icon-only {
   padding: 2px 7px;
 }
@@ -994,7 +994,7 @@ kbd {
   height: 14px;
 }
 
-/* Im dunklen Design den Hintergrund hinter Popups stärker abdunkeln. */
+/* Dark theme: dim the backdrop behind popups more strongly. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .modal::backdrop {
     background: rgba(0, 0, 0, 0.5);
@@ -1005,7 +1005,7 @@ kbd {
   background: rgba(0, 0, 0, 0.5);
 }
 
-/* Auswahl Claude Code / API im Popup „Claude einrichten". */
+/* Choice Claude Code / API / none in the AI settings popup. */
 .ai-mode {
   display: flex;
   flex-direction: column;
@@ -1032,7 +1032,7 @@ kbd {
   accent-color: var(--accent);
 }
 
-/* Felder für das eigene Modell (Popup „KI einrichten"). */
+/* Fields for the custom model (AI settings popup). */
 .api-form {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1065,7 +1065,7 @@ kbd {
   outline: none;
 }
 
-/* Aufklappbarer Teil unter einer Verbindungs-Option. */
+/* Expandable part below a connection option. */
 .mode-section {
   margin: 2px 0 8px 7px;
   padding: 0 0 2px 14px;
@@ -1076,7 +1076,7 @@ kbd {
   margin-top: 4px;
 }
 
-/* Hinweis, wenn das Popup noch nicht verlassen werden kann. */
+/* Warning when the popup can't be closed yet. */
 .form-warn {
   margin: 10px 0 0 !important;
   padding: 7px 10px;

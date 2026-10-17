@@ -1,31 +1,30 @@
-// Tasks – Hintergrund
-// 1. Toolbar-Symbol blendet die Seitenleiste ein/aus.
-// 2. Kontextmenü „Zu Tasks hinzufügen": schickt den markierten Text an Claude,
-//    das die passende Liste/Stelle findet; die Aufgabe wird hier angelegt.
-//    Standard: Claude Code auf diesem Rechner (Hilfsprogramm
-//    native/tasks_claude_host.py, Native Messaging) – also über das
-//    Claude-Abo, ohne API-Schlüssel. Alternative: eigenes Modell per API –
-//    Claude, OpenAI, OpenRouter … oder lokal (Ollama, LM Studio) – wenn
-//    bevorzugt oder wenn Claude Code fehlt (ungetestet).
-//    Fortschritt und Ergebnis meldet "tk:aiStatus" (storage.local) an die
-//    Seitenleiste.
+// Tasks – background script
+// 1. The toolbar button toggles the sidebar.
+// 2. Context menu "Zu Tasks hinzufügen": sends the selected text to an AI,
+//    which picks the matching list/position; the task is created here.
+//    Default: Claude Code on this machine (helper native/tasks_claude_host.py
+//    via native messaging) – i.e. the Claude subscription, no API key.
+//    Alternative: a custom model via API – Claude, OpenAI, OpenRouter … or
+//    local (Ollama, LM Studio) – if preferred or if Claude Code is missing
+//    (untested). Progress and result are reported to the sidebar through
+//    "tk:aiStatus" (storage.local).
 
 const LIST = "L:";
 const TASK = "T:";
 const AI_STATUS = "tk:aiStatus";
-const AI_MODE = "tk:aiMode"; // "claude-code" (Standard), "api" oder "none"
+const AI_MODE = "tk:aiMode"; // "claude-code" (default), "api" or "none"
 const NATIVE_HOST = "tasks_claude";
-// Eigenes Modell: { label, protocol: "anthropic" | "openai", baseUrl, model, key }
-// – nur in storage.local, bleibt auf diesem Gerät.
+// Custom model: { label, protocol: "anthropic" | "openai", baseUrl, model, key }
+// – storage.local only, stays on this device.
 const API_CONFIG = "tk:api";
 const SETUP_HINT = "Claude Code nicht gefunden: im Projektordner einmal native/install.sh ausführen – oder unter ⋯ → „KI einrichten …“ ein eigenes Modell eintragen.";
 
-// sidebarAction.toggle()/open() sind nur direkt aus einer Nutzeraktion heraus erlaubt.
+// sidebarAction.toggle()/open() are only allowed directly inside a user action.
 browser.browserAction.onClicked.addListener(() => {
   browser.sidebarAction.toggle();
 });
 
-// Kontextmenü nur anbieten, wenn eine KI gewählt ist (nicht bei „Keine KI").
+// Only offer the context menu entry when an AI is selected (not for "Keine KI").
 const MENU_ID = "tasks-add-selection";
 async function syncMenu() {
   const { [AI_MODE]: mode } = await browser.storage.local.get(AI_MODE);
@@ -41,7 +40,7 @@ browser.storage.onChanged.addListener((changes, area) => {
 
 browser.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId !== MENU_ID) return;
-  browser.sidebarAction.open(); // vor jedem await – sonst keine Nutzeraktion mehr
+  browser.sidebarAction.open(); // before any await – otherwise it no longer counts as a user action
   addFromSelection(info, tab).catch((err) => {
     setStatus({ state: "error", text: (err && err.message) || String(err) });
   });
@@ -53,7 +52,7 @@ function setStatus(status) {
 
 const newId = () => crypto.randomUUID().replace(/-/g, "").slice(0, 12);
 
-// Wie in der Seitenleiste: leere Felder weglassen (0 bleibt).
+// Same as in the sidebar: drop empty fields (0 is kept).
 function compact(obj) {
   const out = {};
   for (const [k, v] of Object.entries(obj)) {
@@ -62,8 +61,8 @@ function compact(obj) {
   return out;
 }
 
-// Markierung mit Zeilenumbrüchen holen (info.selectionText ist flachgedrückt).
-// activeTab erlaubt das nach dem Klick im Kontextmenü für genau diesen Tab.
+// Get the selection with line breaks (info.selectionText is flattened).
+// activeTab allows this for exactly this tab after the context menu click.
 async function readSelection(info, tab) {
   try {
     const [text] = await browser.tabs.executeScript(tab.id, {
@@ -72,12 +71,12 @@ async function readSelection(info, tab) {
     });
     if (text && text.trim()) return text;
   } catch (_) {
-    // z. B. about:-Seiten – dann reicht der flache Text
+    // e.g. about: pages – the flattened text has to do
   }
   return info.selectionText || "";
 }
 
-// --- Aufgabenbaum für Claude -----------------------------------------------
+// --- Task tree for the model ------------------------------------------------
 
 function loadStore(all) {
   const lists = new Map();
@@ -115,7 +114,7 @@ function describeTree(lists, tasks) {
   return lines.join("\n");
 }
 
-// --- Claude-Aufruf -----------------------------------------------------------
+// --- Model request -----------------------------------------------------------
 
 const SYSTEM_PROMPT = `Du trägst Aufgaben in die persönliche Aufgabenliste des Nutzers ein (ähnlich Google Tasks, mit verschachtelten Unteraufgaben).
 
@@ -147,11 +146,11 @@ const SCHEMA = {
   additionalProperties: false,
 };
 
-// Ist ein eigenes Modell vollständig eingetragen?
+// Is a custom model fully configured?
 const apiReady = (cfg) => !!(cfg && cfg.baseUrl && cfg.model);
 
-// Weg wählen: Claude Code (Standard); eigenes Modell per API, wenn bevorzugt
-// oder wenn Claude Code fehlt und eines eingetragen ist.
+// Choose the route: Claude Code (default); custom model via API if preferred,
+// or if Claude Code is missing and a model is configured.
 async function askModel(userText) {
   const { [AI_MODE]: mode, [API_CONFIG]: cfg } = await browser.storage.local.get([AI_MODE, API_CONFIG]);
   if (mode === "api") {
@@ -167,7 +166,7 @@ async function askModel(userText) {
   }
 }
 
-// Anfrage an Claude Code über das Hilfsprogramm (Native Messaging).
+// Request to Claude Code through the helper (native messaging).
 async function askClaudeCode(userText) {
   let reply;
   try {
@@ -177,7 +176,7 @@ async function askClaudeCode(userText) {
       schema: SCHEMA,
     });
   } catch (_) {
-    const err = new Error(SETUP_HINT); // Hilfsprogramm fehlt oder startet nicht
+    const err = new Error(SETUP_HINT); // helper missing or not starting
     err.hostMissing = true;
     throw err;
   }
@@ -186,19 +185,19 @@ async function askClaudeCode(userText) {
   return reply.data;
 }
 
-// --- Eigenes Modell per API (ungetestet) -------------------------------------
-// Zwei Protokolle decken fast alles ab: die Anthropic-API (Claude) und das
-// OpenAI-kompatible Chat-Format (OpenAI, OpenRouter, Mistral, Groq … und lokal
+// --- Custom model via API (untested) ------------------------------------------
+// Two protocols cover almost everything: the Anthropic API (Claude) and the
+// OpenAI-compatible chat format (OpenAI, OpenRouter, Mistral, Groq … and local
 // Ollama, LM Studio, llama.cpp, vLLM).
 
-// Muster für die Berechtigung – Firefox-Muster enthalten keinen Port.
+// Pattern for the permission – Firefox match patterns contain no port.
 const originPattern = (baseUrl) => {
   const u = new URL(baseUrl);
   return `${u.protocol}//${u.hostname}/*`;
 };
 const endpoint = (cfg, path) => cfg.baseUrl.replace(/\/+$/, "") + path;
 
-// Kleine Modelle halten sich nicht immer an ein Schema: Felder zusätzlich nennen.
+// Small models don't always follow a schema: list the fields in the prompt too.
 const JSON_HINT = "\n\nAntworte ausschließlich mit einem JSON-Objekt mit genau diesen Feldern (alle als Text, leer wenn unbekannt): list_id, parent_id, update_task_id, title, notes, due_date, due_time, link_title, summary.";
 
 function httpError(cfg, status, message) {
@@ -212,13 +211,13 @@ function httpError(cfg, status, message) {
 
 const errorMessage = (data) => (data && (typeof data.error === "string" ? data.error : data.error && data.error.message)) || "";
 
-// Liest das JSON-Objekt auch aus ```-Blöcken oder nach „Denk“-Text lokaler Modelle.
+// Reads the JSON object even from ``` blocks or after "thinking" text of local models.
 function parseJsonLoose(text) {
   const t = String(text || "").replace(/<think>[\s\S]*?<\/think>/g, "");
   try {
     return JSON.parse(t);
   } catch (_) {
-    // weiter: erstes { … letztes }
+    // fall through: first { … last }
   }
   const a = t.indexOf("{");
   const b = t.lastIndexOf("}");
@@ -226,7 +225,7 @@ function parseJsonLoose(text) {
     try {
       return JSON.parse(t.slice(a, b + 1));
     } catch (_) {
-      // unten
+      // below
     }
   }
   throw new Error("Antwort des Modells war kein lesbares JSON – bitte erneut versuchen.");
@@ -251,13 +250,13 @@ const askApi = (cfg, userText) =>
   cfg.protocol === "anthropic" ? askAnthropic(cfg, userText) : askOpenAiCompatible(cfg, userText);
 
 async function askAnthropic(cfg, userText) {
-  // Aufwand und automatischer Ersatz bei Ablehnung nur für Modelle, die das kennen.
+  // Effort and automatic fallback on refusal only for models that support them.
   const current = /^claude-(opus-5|fable-5|sonnet-5-5)/.test(cfg.model);
   const res = await post(cfg, endpoint(cfg, "/messages"), {
     "x-api-key": cfg.key || "",
     "anthropic-version": "2023-06-01",
     ...(current ? { "anthropic-beta": "server-side-fallback-2026-07-01" } : {}),
-    // Aufruf aus dem Browser (Erweiterung) statt von einem Server.
+    // Request from the browser (extension) instead of a server.
     "anthropic-dangerous-direct-browser-access": "true",
   }, {
     model: cfg.model,
@@ -289,9 +288,9 @@ async function askOpenAiCompatible(cfg, userText) {
     messages,
     ...(responseFormat ? { response_format: responseFormat } : {}),
   });
-  // Erst mit festem Schema; kennt der Server das nicht (400), einfaches JSON,
-  // dann ganz ohne Formatvorgabe (der Text wird trotzdem als JSON gelesen).
-  let res = await ask({ type: "json_schema", json_schema: { name: "aufgabe", strict: true, schema: SCHEMA } });
+  // First with a strict schema; if the server doesn't support it (400), plain
+  // JSON, then without any format (the text is still parsed as JSON).
+  let res = await ask({ type: "json_schema", json_schema: { name: "task", strict: true, schema: SCHEMA } });
   if (res.status === 400) res = await ask({ type: "json_object" });
   if (res.status === 400) res = await ask(null);
   const data = await res.json().catch(() => ({}));
@@ -301,7 +300,7 @@ async function askOpenAiCompatible(cfg, userText) {
   return parseJsonLoose(choice && choice.message && choice.message.content);
 }
 
-// --- Ablauf ------------------------------------------------------------------
+// --- Flow --------------------------------------------------------------------
 
 async function addFromSelection(info, tab) {
   await setStatus({ state: "working", text: "KI legt die Aufgabe an … (dauert einige Sekunden)" });
@@ -323,19 +322,19 @@ async function addFromSelection(info, tab) {
     describeTree(lists, tasks),
   ].join("\n");
 
-  // Alle Felder als Text – lokale Modelle liefern manchmal null oder Zahlen.
+  // All fields as text – local models sometimes return null or numbers.
   const raw = await askModel(userText);
   const r = {};
   for (const k of SCHEMA.required) r[k] = raw && raw[k] != null ? String(raw[k]) : "";
 
-  // Antwort prüfen: nur vorhandene IDs, Datum/Uhrzeit im richtigen Format.
+  // Validate the answer: existing IDs only, date/time in the right format.
   const listId = lists.has(r.list_id) ? r.list_id : [...lists.keys()][0];
   const parent = tasks.get(r.parent_id);
   const parentId = parent && parent.l === listId ? r.parent_id : "";
   const d = /^\d{4}-\d{2}-\d{2}$/.test(r.due_date) ? r.due_date : "";
   const h = d && /^\d{2}:\d{2}$/.test(r.due_time) ? r.due_time : "";
   const notes = r.notes.trim();
-  // Die Seite kommt als Link ins Feld u (nur http/https).
+  // The page is stored as a link in field u (http/https only).
   const link = /^https?:/i.test(tab.url)
     ? { url: tab.url, t: r.link_title.trim().slice(0, 60) || (tab.title || "").slice(0, 60) || new URL(tab.url).hostname }
     : null;
@@ -345,7 +344,7 @@ async function addFromSelection(info, tab) {
   const after = {};
   let taskId = tasks.has(r.update_task_id) ? r.update_task_id : "";
   if (taskId) {
-    // Vorhandene Aufgabe ergänzen statt doppelt anlegen.
+    // Extend the existing task instead of creating a duplicate.
     const cur = tasks.get(taskId);
     before[TASK + taskId] = cur;
     after[TASK + taskId] = compact({
@@ -357,7 +356,7 @@ async function addFromSelection(info, tab) {
       u: withLink(cur.u),
     });
   } else {
-    // Neu: als letzte Unteraufgabe der Elternaufgabe bzw. ganz oben in der Liste.
+    // New: last child of the parent, or at the top of the list.
     taskId = newId();
     const sibs = childrenOf(tasks, listId, parentId).filter((s) => parentId || !s.x);
     const o = !sibs.length ? 0
