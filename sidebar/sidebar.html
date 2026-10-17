@@ -55,24 +55,30 @@
         <button class="icon-btn modal-close" type="button" data-close aria-label="Schließen" title="Schließen"></button>
       </header>
       <p>Text auf einer Webseite markieren → Rechtsklick → <strong>Zu Tasks hinzufügen</strong>. Die KI sucht die passende Liste und Stelle und trägt Titel, Fälligkeit (mit Uhrzeit) und den Link zur Seite ein.</p>
-      <p class="muted">Läuft über Claude Code auf diesem Rechner, also über dein Claude-Abo – kein API-Schlüssel, keine Extrakosten (zählt zum normalen Nutzungslimit). Einmal einrichten: im Projektordner <code>native/install.sh</code> ausführen. Gesendet werden der markierte Text, Adresse und Titel der Seite sowie die Titel deiner Listen und Aufgaben.</p>
+      <p class="muted">Gesendet werden der markierte Text, Adresse und Titel der Seite sowie die Titel deiner Listen und Aufgaben.</p>
+      <!-- Der Teil einer Option klappt erst auf, wenn man sie anklickt. -->
       <fieldset class="ai-mode">
         <legend>Verbindung</legend>
         <label><input type="radio" name="aiMode" value="claude-code" /> Claude Code (Abo) – Standard</label>
+        <div id="ccSection" class="mode-section" hidden>
+          <p class="muted">Läuft über Claude Code auf diesem Rechner, also über dein Claude-Abo – kein API-Schlüssel, keine Extrakosten (zählt zum normalen Nutzungslimit). Einmal einrichten: im Projektordner <code>native/install.sh</code> ausführen.</p>
+        </div>
         <label><input type="radio" name="aiMode" value="api" /> Eigenes Modell per API</label>
+        <div id="apiSection" class="mode-section" hidden>
+          <p class="muted">Claude, OpenAI, OpenRouter … oder lokal (Ollama, LM Studio). Wird auch automatisch benutzt, wenn Claude Code fehlt. Dieser Weg ist bisher ungetestet.</p>
+          <div class="api-form">
+            <label>Anbieter <select id="apiPreset"></select></label>
+            <label>Adresse <input id="apiBaseUrl" type="url" placeholder="https://…/v1" spellcheck="false" /></label>
+            <label>Modell <input id="apiModel" type="text" placeholder="Modellname wie beim Anbieter" spellcheck="false" /></label>
+            <label>Schlüssel <input id="apiKeyInput" class="key-input" type="password" autocomplete="off" spellcheck="false" /></label>
+          </div>
+          <div class="detail-row">
+            <button id="apiSave" class="chip" type="button">Speichern</button>
+            <button id="apiRemove" class="link-btn" type="button">Entfernen</button>
+            <span id="apiState" class="muted"></span>
+          </div>
+        </div>
       </fieldset>
-      <p class="muted">Eigenes Modell: Claude, OpenAI, OpenRouter … oder lokal (Ollama, LM Studio). Es wird auch automatisch benutzt, wenn Claude Code fehlt. Dieser Weg ist bisher ungetestet.</p>
-      <div class="api-form">
-        <label>Anbieter <select id="apiPreset"></select></label>
-        <label>Adresse <input id="apiBaseUrl" type="url" placeholder="https://…/v1" spellcheck="false" /></label>
-        <label>Modell <input id="apiModel" type="text" placeholder="Modellname wie beim Anbieter" spellcheck="false" /></label>
-        <label>Schlüssel <input id="apiKeyInput" class="key-input" type="password" autocomplete="off" spellcheck="false" /></label>
-      </div>
-      <div class="detail-row">
-        <button id="apiSave" class="chip" type="button">Speichern</button>
-        <button id="apiRemove" class="link-btn" type="button">Entfernen</button>
-        <span id="apiState" class="muted"></span>
-      </div>
       <div class="detail-row">
         <button id="aiTest" class="chip" type="button">Verbindung testen</button>
         <span id="aiTestState" class="muted"></span>

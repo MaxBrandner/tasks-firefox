@@ -1686,6 +1686,7 @@
     savedCfg = st[API_CONFIG] || null;
     const mode = st[AI_MODE] === "api" ? "api" : "claude-code";
     for (const r of modeInputs) r.checked = r.value === mode;
+    showModeSection(null); // beim Öffnen alles zu – aufklappen erst per Klick
     presetEl.value = savedCfg && PRESETS[savedCfg.preset] ? savedCfg.preset : "anthropic";
     baseUrlEl.value = savedCfg ? savedCfg.baseUrl : PRESETS[presetEl.value].baseUrl;
     modelEl.value = savedCfg ? savedCfg.model : PRESETS[presetEl.value].model;
@@ -1694,8 +1695,18 @@
     openModal(aiPanelEl);
   }
 
+  // Klick auf eine Option (auch die schon gewählte): Wahl speichern und ihren
+  // Teil aufklappen, den anderen zuklappen.
+  function showModeSection(mode) {
+    $("ccSection").hidden = mode !== "claude-code";
+    $("apiSection").hidden = mode !== "api";
+  }
+
   for (const r of modeInputs) {
-    r.addEventListener("change", () => browser.storage.local.set({ [AI_MODE]: r.value }));
+    r.addEventListener("click", () => {
+      browser.storage.local.set({ [AI_MODE]: r.value });
+      showModeSection(r.value);
+    });
   }
 
   // Vorlage gewählt: Adresse (und ggf. Modell) vorfüllen.

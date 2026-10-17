@@ -1064,3 +1064,14 @@ kbd {
   border-color: var(--accent);
   outline: none;
 }
+
+/* Aufklappbarer Teil unter einer Verbindungs-Option. */
+.mode-section {
+  margin: 2px 0 8px 7px;
+  padding: 0 0 2px 14px;
+  border-left: 2px solid var(--line);
+}
+
+.mode-section p {
+  margin-top: 4px;
+}
