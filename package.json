@@ -4,6 +4,7 @@
   "private": true,
   "description": "Firefox-Erweiterung: Aufgabenlisten in der Seitenleiste, synchronisiert über Firefox Sync.",
   "scripts": {
+    "dev": "node scripts/dev.mjs",
     "lint": "web-ext lint --self-hosted",
     "build": "web-ext build --overwrite-dest",
     "sign": "bash scripts/sign.sh"

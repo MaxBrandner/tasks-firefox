@@ -27,9 +27,12 @@ wird aber über das öffentliche GitHub-Repo verteilt.
 - **Commit, Push und Signieren sind drei getrennte Schritte.** Features werden
   einzeln committet und gepusht, sobald sie getestet sind; signiert wird nur,
   wenn eine neue Version wirklich ausgeliefert werden soll.
-- **Erst testen, dann einmal signieren:** zum Testen `about:debugging` →
-  „Temporäres Add-on laden" → `manifest.json`. Jede Versionsnummer gibt es bei
-  AMO nur **einmal** – auch ein abgebrochener Upload verbraucht sie.
+- **Erst testen, dann einmal signieren:** zum Testen `npm run dev` und in
+  `about:debugging` → „Temporäres Add-on laden" → **`dev/manifest.json`** (Test-
+  Kopie mit eigener Kennung). **Nie die echte `manifest.json`** temporär laden:
+  Sie ersetzt die installierte Version, und beim Entfernen löscht Firefox deren
+  Daten. Jede Versionsnummer gibt es bei AMO nur **einmal** – auch ein
+  abgebrochener Upload verbraucht sie.
 - **Vor jedem Push prüfen**, dass nichts mitgeht, was nicht soll: keine `.env`,
   keine Schlüssel, keine `*.bak`, keine Build-Ergebnisse (`git diff --name-only
   origin/main..HEAD`). Nie `git add -A`, sondern Dateien einzeln nennen.

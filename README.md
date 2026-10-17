@@ -136,11 +136,18 @@ das eingetragene Modell).
 
 ```bash
 npm install
-npx web-ext run      # Firefox mit der Erweiterung starten (temporär)
+npm run dev          # Test-Kopie „Tasks DEV" nach dev/ bauen
 npm run lint
 ```
 
-Zum Testen ohne Signatur: `about:debugging` → „Dieser Firefox" → „Temporäres
-Add-on laden" → `manifest.json`.
+**Testen ohne Signatur:** `npm run dev`, dann `about:debugging` → „Dieser
+Firefox" → „Temporäres Add-on laden" → **`dev/manifest.json`**. Die Test-Kopie
+hat eine eigene Kennung (`tasks-dev@brandner.name`) und eigene Daten; sie läuft
+neben der installierten Version. Nach Änderungen erneut `npm run dev` und
+„Neu laden".
+
+> ⚠️ **Nie die echte `manifest.json` temporär laden**, wenn Tasks installiert
+> ist: Sie ersetzt die installierte Version, und beim Entfernen löscht Firefox
+> deren Aufgaben.
 
 Neue Version veröffentlichen: siehe [RELEASING.md](RELEASING.md).

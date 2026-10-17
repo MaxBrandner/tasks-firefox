@@ -4,6 +4,9 @@ node_modules/
 # Build-Artefakte
 web-ext-artifacts/
 
+# Test-Kopie (npm run dev)
+dev/
+
 # web-ext Signier-Zustand / Secrets
 .web-extension-id
 *.env

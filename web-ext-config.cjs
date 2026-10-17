@@ -13,6 +13,8 @@ module.exports = {
     "scripts",
     // Hilfsprogramm für Claude Code läuft außerhalb von Firefox.
     "native",
+    // Test-Kopie (npm run dev).
+    "dev",
     "**/*.bak",
     "**/*.bak2",
     // Secrets/Config gehören niemals ins Paket (Dotfiles werden von web-ext

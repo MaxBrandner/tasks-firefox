@@ -15,7 +15,7 @@ cat > "$DIR/tasks_claude.json" <<EOF
   "description": "Tasks: Claude Code für „Zu Tasks hinzufügen“",
   "path": "$HOST",
   "type": "stdio",
-  "allowed_extensions": ["tasks@brandner.name"]
+  "allowed_extensions": ["tasks@brandner.name", "tasks-dev@brandner.name"]
 }
 EOF
 echo "Eingerichtet: $DIR/tasks_claude.json → $HOST"
