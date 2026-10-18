@@ -180,6 +180,11 @@
           <button id="chatClose" class="icon-btn small" type="button" title="Schnell-Chat schließen (Esc)" aria-label="Schnell-Chat schließen"></button>
         </div>
         <div id="chatLog" class="chat-log" aria-live="polite"></div>
+        <button id="chatReplyBtn" class="chat-reply-btn" type="button" hidden>↩ Antworten</button>
+        <div id="chatQuote" class="chat-quote" hidden>
+          <span id="chatQuoteText"></span>
+          <button id="chatQuoteX" class="icon-btn small" type="button" title="Zitat entfernen" aria-label="Zitat entfernen"></button>
+        </div>
         <form id="chatForm" class="chat-form" autocomplete="off">
           <textarea id="chatInput" rows="1" maxlength="2000" placeholder="Frag oder sag, was passieren soll … (Enter = senden)" aria-label="Nachricht an die KI"></textarea>
           <button id="chatSend" class="icon-btn" type="submit" title="Senden" aria-label="Senden"></button>

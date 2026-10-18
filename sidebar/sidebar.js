@@ -2635,15 +2635,21 @@
     if (m.undoError) el.append(h("div", { class: "chat-note warn" }, m.undoError));
     if (m.opened) el.append(h("div", { class: "chat-note" }, m.opened === 1 ? "1 Link geöffnet." : m.opened + " Links als Tab-Gruppe geöffnet."));
     if (m.problems && m.problems.length) el.append(h("div", { class: "chat-note warn" }, "Nicht ausgeführt: " + m.problems.join("; ")));
-    // A button, not a click on the bubble: the text must stay selectable.
-    if ((m.highlight && m.highlight.length) || (m.changed && m.changed.length && !m.undone)) {
-      el.append(h("div", { class: "chat-reshow" }, h("button", {
+    // Buttons, not a click on the bubble: the text must stay selectable.
+    const marked = (m.highlight && m.highlight.length) || (m.changed && m.changed.length && !m.undone);
+    el.append(h("div", { class: "chat-tools" },
+      h("button", {
+        class: "link-btn",
+        type: "button",
+        title: "Antwort als Text kopieren",
+        onclick: (e) => copyChatText(m, e.currentTarget),
+      }, "Kopieren"),
+      marked && h("button", {
         class: "link-btn",
         type: "button",
         title: "Die Aufgaben dieser Antwort in der Liste wieder hervorheben",
         onclick: () => showMsgMarks(m),
       }, "Markierungen zeigen")));
-    }
     return el;
   }
 
@@ -2677,9 +2683,80 @@
     if (li) li.scrollIntoView({ block: "nearest" });
   }
 
+  // Plain text of a chat message: references become names.
+  function chatPlainText(text) {
+    return (text || "").replace(/\[\[([TL]):([A-Za-z0-9_-]{1,64})\]\]/g, (_, kind, id) => {
+      const item = kind === "T" ? tasks.get(id) : lists.get(id);
+      return item ? plainTitle(item.t) || "(ohne Titel)" : "(gelöscht)";
+    });
+  }
+
+  async function copyChatText(m, btn) {
+    try {
+      await navigator.clipboard.writeText(chatPlainText(m.text));
+      btn.textContent = "Kopiert ✓";
+    } catch (_) {
+      btn.textContent = "Kopieren nicht möglich";
+    }
+    setTimeout(() => (btn.textContent = "Kopieren"), 1500);
+  }
+
+  // Text selected in the chat → "↩ Antworten" quotes it in the next message.
+  const replyBtnEl = $("chatReplyBtn");
+  let chatQuote = "";
+
+  function chatSelection() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+    const range = sel.getRangeAt(0);
+    if (!chatLogEl.contains(range.commonAncestorContainer)) return null;
+    const text = String(sel).trim();
+    return text ? { text, range } : null;
+  }
+
+  function updateReplyBtn() {
+    const s = chatSelection();
+    replyBtnEl.hidden = !s;
+    if (!s) return;
+    const r = s.range.getBoundingClientRect();
+    const p = $("chatPanel").getBoundingClientRect();
+    replyBtnEl.style.top = Math.max(0, r.bottom - p.top + 6) + "px";
+    replyBtnEl.style.left = Math.max(8, Math.min(r.left - p.left, p.width - 130)) + "px";
+  }
+
+  function setChatQuote(text) {
+    chatQuote = text.slice(0, 1000);
+    $("chatQuoteText").textContent = chatQuote;
+    $("chatQuote").hidden = !chatQuote;
+  }
+
+  chatLogEl.addEventListener("mouseup", () => setTimeout(updateReplyBtn, 0));
+  chatLogEl.addEventListener("keyup", updateReplyBtn);
+  chatLogEl.addEventListener("scroll", () => (replyBtnEl.hidden = true));
+  document.addEventListener("selectionchange", () => {
+    if (!chatSelection()) replyBtnEl.hidden = true;
+  });
+  replyBtnEl.addEventListener("mousedown", (e) => e.preventDefault()); // keep the selection
+  replyBtnEl.addEventListener("click", () => {
+    const s = chatSelection();
+    if (!s) return;
+    setChatQuote(s.text);
+    window.getSelection().removeAllRanges();
+    replyBtnEl.hidden = true;
+    chatInputEl.focus();
+  });
+  $("chatQuoteX").addEventListener("click", () => {
+    setChatQuote("");
+    chatInputEl.focus();
+  });
+
   async function sendChat(text) {
     text = text.trim();
     if (!text || chatBusy) return;
+    if (chatQuote) {
+      text = chatQuote.split("\n").map((l) => "> " + l).join("\n") + "\n\n" + text;
+      setChatQuote("");
+    }
     chatMarks.clear();
     chatChanged.clear();
     const prompt = buildChatPrompt(text);
@@ -2856,6 +2933,7 @@
     $("addIcon").append(icon("plus"));
     $("doneChevron").append(icon("chevron"));
     $("chatClose").append(icon("close"));
+    $("chatQuoteX").append(icon("close"));
     $("chatSend").append(icon("send"));
     for (const b of document.querySelectorAll(".modal-close")) b.append(icon("close"));
     setupEnvBanner();

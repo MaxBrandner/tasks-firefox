@@ -22,6 +22,7 @@ module.exports = function setup(P, pre = {}, opts = {}) {
       async sendNativeMessage(app, msg) { (H0.nativeSent = H0.nativeSent || []).push(msg); return H0.nativeReply ? H0.nativeReply(msg) : { ok: true, version: "2.1.302 (Claude Code)" }; } } };
   if (!w.crypto.randomUUID) w.crypto.randomUUID = () => require("crypto").randomUUID();
   w.Element.prototype.scrollIntoView = () => {};
+  if (!w.Range.prototype.getBoundingClientRect) w.Range.prototype.getBoundingClientRect = () => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 });
   w.URL.createObjectURL = (blob) => { H0.lastBlob = blob; return "blob:test"; };
   w.URL.revokeObjectURL = () => {};
   w.HTMLAnchorElement.prototype.click = function () { H0.lastDownload = this.download; };

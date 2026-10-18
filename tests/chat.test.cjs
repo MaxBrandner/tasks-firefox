@@ -61,10 +61,24 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   ok(!H.li("Blatt 1").classList.contains("chat-mark") && $("tabMarks").hidden, "Aufgabe angefasst → gilt als gesehen, Markierung weg");
   last().click(); await H.tick();
   ok(!H.li("Blatt 1").classList.contains("chat-mark") && d.body.dataset.chat === "full", "Klick in den Antworttext ändert nichts (Text bleibt markierbar)");
-  last().querySelector(".chat-reshow .link-btn").click(); await H.tick();
+  [...last().querySelectorAll(".chat-tools .link-btn")].find((b) => /Markierungen/.test(b.textContent)).click(); await H.tick();
   ok(H.li("Blatt 1").classList.contains("chat-mark") && d.body.dataset.chat === "tasks", "„Markierungen zeigen“ holt die Markierung zurück (schmal: Reiter „Aufgaben“)");
   const prompt = H.chatPrompts[H.chatPrompts.length - 1];
   ok(/Blatt 1 \(id: b1, fällig 2026-10-21 12:00, Links: Abgabe <https:\/\/ilias\.hhu\.de\/b1>\)/.test(prompt) && /Gerade aufgeklappt: „Blatt 1“ \(id: b1\)/.test(prompt) && /<<<\nWas ist diese Woche fällig\?\n>>>/.test(prompt), "an die KI: Baum mit IDs/Links, aufgeklappte Aufgabe, Nachricht");
+  // copy and reply
+  let copied = null;
+  Object.defineProperty(H.w.navigator, "clipboard", { configurable: true, value: { writeText: async (t) => { copied = t; } } });
+  [...last().querySelectorAll(".chat-tools .link-btn")].find((b) => b.textContent === "Kopieren").click(); await H.tick();
+  ok(copied === "Fällig ist Blatt 1 in Uni.", "„Kopieren“: Antwort als Text, Verweise als Namen: " + copied);
+  const tn = last().querySelector(".chat-text .md-p").firstChild;
+  const range = d.createRange(); range.setStart(tn, 0); range.setEnd(tn, 6);
+  H.w.getSelection().removeAllRanges(); H.w.getSelection().addRange(range);
+  $("chatLog").dispatchEvent(new H.w.MouseEvent("mouseup", { bubbles: true })); await H.tick(); await H.tick();
+  ok(!$("chatReplyBtn").hidden, "Text im Chat markiert → „Antworten“ erscheint");
+  $("chatReplyBtn").click(); await H.tick();
+  ok(!$("chatQuote").hidden && $("chatQuoteText").textContent === "Fällig" && $("chatReplyBtn").hidden, "„Antworten“ setzt die Markierung als Zitat über das Eingabefeld");
+  await say("Wann genau?", { reply: "Am 21.10.", actions: [], highlight: [] });
+  ok(/<<<\n> Fällig\n\nWann genau\?\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]) && $("chatQuote").hidden, "Nachricht geht mit Zitat an die KI, danach ist das Zitat weg");
   // highlight in another list → sidebar switches there
   d.getElementById("listSelect").value = "priv"; d.getElementById("listSelect").dispatchEvent(new H.w.Event("change")); await H.tick();
   await say("Was ist bei DL offen?", { reply: "[[T:b1]] und [[T:fo]].", actions: [], highlight: ["b1", "fo"] });

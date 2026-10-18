@@ -142,6 +142,10 @@ Fälligkeit", „Öffne alle Links zu DL".
   sofort. Eine neue Antwort ersetzt alle Markierungen; „Markierungen zeigen"
   unter einer früheren Antwort holt deren Markierungen zurück. Der Text der
   Antworten lässt sich normal markieren und kopieren.
+- **Kopieren und Antworten:** Unter jeder Antwort steht „Kopieren“ (Verweise
+  werden zu Namen). Markierst du Text im Chat, erscheint „↩ Antworten“: Der Text
+  steht dann als Zitat über dem Eingabefeld und geht mit deiner nächsten
+  Nachricht mit.
 - **Fragen zu Tasks selbst** beantwortet der Chat auch – z. B. was bei
   „Zu Tasks hinzufügen" bei der KI ankommt (siehe oben; kein Quelltext, keine
   Bilder selbst).
