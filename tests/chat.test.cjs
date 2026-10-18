@@ -78,12 +78,12 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   ok(!$("chatReplyBtn").hidden, "Text im Chat markiert → „Antworten“ erscheint");
   $("chatReplyBtn").click(); await H.tick();
   const quoted = last();
-  ok(!$("chatQuote").hidden && /^↩ KI-Antwort · \d\d:\d\d$/.test($("chatQuote").querySelector(".quote-src").textContent) && $("chatQuote").querySelector(".quote-text").textContent === "Fällig" && $("chatReplyBtn").hidden, "„Antworten“: Zitat mit Herkunft (KI-Antwort, Uhrzeit) über dem Eingabefeld");
+  ok(!$("chatQuote").hidden && $("chatQuote").querySelectorAll(".qb").length === 1 && $("chatQuote").querySelector(".qb.assistant").textContent === "Fällig" && $("chatReplyBtn").hidden, "„Antworten“: Zitat als Mini-Chat (KI-Teil links) über dem Eingabefeld");
   await say("Wann genau?", { reply: "Am 21.10.", actions: [], highlight: [] });
-  ok(/\(Antwort auf deine Antwort von \d\d:\d\d: »Fällig«\)\n<<<\nWann genau\?\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]) && $("chatQuote").hidden, "an die KI: Zitat mit Herkunft, eigener Text getrennt; danach ist das Zitat weg");
+  ok(/\(Antwort auf diese Stelle im Chat: du \(\d\d:\d\d\): »Fällig«\)\n<<<\nWann genau\?\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]) && $("chatQuote").hidden, "an die KI: Zitat mit Herkunft, eigener Text getrennt; danach ist das Zitat weg");
   const sent = [...$("chatLog").querySelectorAll(".chat-msg.user")].pop();
-  ok(sent.querySelector(".chat-quote-ref .quote-text").textContent === "Fällig" && sent.querySelector(".chat-text").textContent === "Wann genau?", "gesendete Nachricht zeigt das Zitat als eigenen Block");
-  sent.querySelector(".chat-quote-ref").click(); await H.tick();
+  ok(sent.querySelector(".chat-quote-ref .qb.assistant").textContent === "Fällig" && sent.querySelector(".chat-text").textContent === "Wann genau?", "gesendete Nachricht zeigt das Zitat als Mini-Chat");
+  sent.querySelector(".chat-quote-ref .qb").click(); await H.tick();
   ok(quoted.isConnected ? quoted.classList.contains("flash-msg") : $("chatLog").querySelector(`.chat-msg[data-at="${quoted.dataset.at}"]`).classList.contains("flash-msg"), "Klick aufs Zitat springt zur Original-Nachricht (leuchtet auf)");
   // selection dragged past the edge of the chat (released over the input)
   const lastText = last().querySelector(".chat-text .md-p").firstChild;
@@ -92,7 +92,16 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   d.body.dispatchEvent(new H.w.Event("pointerup", { bubbles: true })); await H.tick(); await H.tick();
   ok(!$("chatReplyBtn").hidden, "über den Chat-Rand hinaus gezogen und dort losgelassen → „Antworten“ erscheint trotzdem");
   $("chatReplyBtn").click(); await H.tick();
-  ok($("chatQuote").querySelector(".quote-text").textContent === "Am 21.10.", "Zitat = nur der Teil innerhalb des Chats");
+  ok($("chatQuote").querySelector(".qb").textContent === "Am 21.10.", "Zitat = nur der Teil innerhalb des Chats");
+  $("chatQuoteX").click(); await H.tick();
+  // selection across two messages → one part per message, with its author
+  const userText = sent.querySelector(".chat-text .md-p").firstChild;
+  const across = d.createRange(); across.setStart(userText, 0); across.setEnd(lastText, lastText.data.length);
+  H.w.getSelection().removeAllRanges(); H.w.getSelection().addRange(across);
+  d.body.dispatchEvent(new H.w.Event("pointerup", { bubbles: true })); await H.tick(); await H.tick();
+  $("chatReplyBtn").click(); await H.tick();
+  const qbs = [...$("chatQuote").querySelectorAll(".qb")].map((b) => b.classList[1] + ":" + b.textContent);
+  ok(qbs.join("|") === "user:Wann genau?|assistant:Am 21.10.", "über zwei Nachrichten markiert → zwei Mini-Blasen mit Absender: " + qbs.join(" | "));
   $("chatQuoteX").click(); await H.tick();
   // highlight in another list → sidebar switches there
   d.getElementById("listSelect").value = "priv"; d.getElementById("listSelect").dispatchEvent(new H.w.Event("change")); await H.tick();

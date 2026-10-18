@@ -1734,10 +1734,11 @@ kbd {
   align-items: flex-start;
   gap: 6px;
   margin: 0 10px 4px;
-  padding: 5px 4px 5px 9px;
+  padding: 5px 4px 6px 9px;
+  border: 1px solid var(--line);
   border-left: 3px solid var(--accent);
   border-radius: 6px;
-  background: var(--accent-soft);
+  background: var(--bg);
   color: var(--muted);
   font-size: 12px;
 }
@@ -1750,14 +1751,45 @@ kbd {
   gap: 1px;
 }
 
-/* Source line + text of a quote (above the input and in the sent message). */
 .quote-src {
   color: var(--accent);
   font-size: 11px;
   font-weight: 600;
 }
 
-.quote-text {
+/* A quote as a small chat: own parts right/green, AI parts left/white. */
+.quote-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.qb {
+  display: block;
+  max-width: 88%;
+  margin: 0;
+  padding: 2px 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.qb.user {
+  align-self: flex-end;
+  border-color: transparent;
+  background: var(--accent-soft);
+}
+
+.qb.assistant {
+  align-self: flex-start;
+}
+
+.qb-text {
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -1765,24 +1797,22 @@ kbd {
   white-space: pre-wrap;
 }
 
-.chat-quote-ref {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  width: 100%;
-  margin: 0 0 4px;
-  padding: 3px 8px;
-  border: 0;
-  border-left: 3px solid var(--accent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--surface) 60%, transparent);
-  color: var(--muted);
-  font-size: 11.5px;
-  text-align: left;
+button.qb:hover {
+  border-color: var(--accent);
 }
 
-.chat-quote-ref:hover {
-  background: var(--surface);
+.qb-more {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+/* The quote inside a sent message. */
+.chat-quote-ref {
+  margin: 0 0 5px;
+  padding: 4px 6px;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: var(--bg);
 }
 
 /* Jump to a quote: the message lights up, the quoted words are marked. */

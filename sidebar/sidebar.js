@@ -2395,11 +2395,11 @@
   }
 
   const hhmm = (at) => new Date(at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
-  // Where a quote comes from – for the model ("deiner Antwort von 18:44") and
-  // for the user ("KI-Antwort").
-  const quoteSource = (q) => (q.role === "assistant" ? "deine Antwort" : "seine eigene Nachricht") + " von " + hhmm(q.at);
-  const quoteWho = (q) => (q.role === "assistant" ? "KI-Antwort" : "deine Nachricht");
-  const quoteLine = (q) => `(Antwort auf ${quoteSource(q)}: »${q.text}«)`;
+  // A quote is a piece of the chat: parts [{ role, at, text }], one per message
+  // the selection touched. Older quotes were a single { role, at, text }.
+  const quoteParts = (q) => (q.parts || [q]).filter((p) => p && p.text);
+  const quoteLine = (q) => "(Antwort auf diese Stelle im Chat: " +
+    quoteParts(q).map((p) => `${p.role === "assistant" ? "du" : "Nutzer"} (${hhmm(p.at)}): »${p.text}«`).join(" / ") + ")";
 
   function buildChatPrompt(text, quote) {
     const past = chat.slice(-16).filter((m) => !m.error).map((m) => {
@@ -2748,21 +2748,46 @@
     replyBtnEl.style.left = Math.max(8, Math.min(r.left - p.left, p.width - 130)) + "px";
   }
 
-  // chatQuote: { text, role, at } of the quoted message, or null.
+  // The selection split at message borders: per message only its text (not
+  // the quote block or the icons in it).
+  function selectionParts(range) {
+    const parts = [];
+    for (const msgEl of chatLogEl.querySelectorAll(".chat-msg")) {
+      const textEl = msgEl.querySelector(".chat-text");
+      if (!textEl || !range.intersectsNode(textEl)) continue;
+      const r = document.createRange();
+      r.selectNodeContents(textEl);
+      if (range.compareBoundaryPoints(Range.START_TO_START, r) > 0) r.setStart(range.startContainer, range.startOffset);
+      if (range.compareBoundaryPoints(Range.END_TO_END, r) < 0) r.setEnd(range.endContainer, range.endOffset);
+      const text = r.toString().trim();
+      if (text) parts.push({ role: msgEl.classList.contains("user") ? "user" : "assistant", at: Number(msgEl.dataset.at), text: text.slice(0, 1000) });
+    }
+    return parts;
+  }
+
+  // The quote as a small chat: own parts right/green, AI parts left/white.
+  // In a sent message each part jumps to its place.
+  function quoteChat(q, clickable) {
+    const parts = quoteParts(q);
+    return h("div", { class: "quote-chat" },
+      parts.slice(0, 4).map((p) => h(clickable ? "button" : "div", {
+        class: "qb " + p.role,
+        type: clickable ? "button" : null,
+        title: (p.role === "assistant" ? "KI" : "Du") + " · " + hhmm(p.at) + (clickable ? " – zur Stelle springen" : ""),
+        onclick: clickable ? () => jumpToQuote(p) : null,
+      }, h("span", { class: "qb-text" }, p.text))),
+      parts.length > 4 && h("div", { class: "qb-more" }, "+ " + (parts.length - 4) + " weitere"));
+  }
+
+  // chatQuote: { parts } or null.
   function setChatQuote(q) {
-    chatQuote = q ? { ...q, text: q.text.slice(0, 1000) } : null;
-    $("chatQuoteText").replaceChildren(...(chatQuote ? [
-      h("span", { class: "quote-src" }, "↩ " + quoteWho(chatQuote) + " · " + hhmm(chatQuote.at)),
-      h("span", { class: "quote-text" }, chatQuote.text),
-    ] : []));
+    chatQuote = q && quoteParts(q).length ? { parts: quoteParts(q) } : null;
+    $("chatQuoteText").replaceChildren(...(chatQuote ? [h("span", { class: "quote-src" }, "↩ Antwort auf"), quoteChat(chatQuote, false)] : []));
     $("chatQuote").hidden = !chatQuote;
   }
 
-  // The quote in a sent message: a click jumps to the quoted place.
   function quoteRef(q) {
-    return h("button", { class: "chat-quote-ref", type: "button", title: "Zur zitierten Stelle springen", onclick: () => jumpToQuote(q) },
-      h("span", { class: "quote-src" }, "↩ " + quoteWho(q) + " · " + hhmm(q.at)),
-      h("span", { class: "quote-text" }, q.text));
+    return h("div", { class: "chat-quote-ref" }, quoteChat(q, true));
   }
 
   function jumpToQuote(q) {
@@ -2826,9 +2851,8 @@
   replyBtnEl.addEventListener("click", () => {
     const s = chatSelection();
     if (!s) return;
-    const node = s.range.startContainer;
-    const msgEl = (node.nodeType === 1 ? node : node.parentElement).closest(".chat-msg");
-    setChatQuote({ text: s.text, role: msgEl && msgEl.classList.contains("user") ? "user" : "assistant", at: msgEl ? Number(msgEl.dataset.at) : Date.now() });
+    const parts = selectionParts(s.range);
+    setChatQuote({ parts: parts.length ? parts : [{ role: "assistant", at: Date.now(), text: s.text }] });
     window.getSelection().removeAllRanges();
     replyBtnEl.hidden = true;
     chatInputEl.focus();
