@@ -85,6 +85,15 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   ok(sent.querySelector(".chat-quote-ref .quote-text").textContent === "Fällig" && sent.querySelector(".chat-text").textContent === "Wann genau?", "gesendete Nachricht zeigt das Zitat als eigenen Block");
   sent.querySelector(".chat-quote-ref").click(); await H.tick();
   ok(quoted.isConnected ? quoted.classList.contains("flash-msg") : $("chatLog").querySelector(`.chat-msg[data-at="${quoted.dataset.at}"]`).classList.contains("flash-msg"), "Klick aufs Zitat springt zur Original-Nachricht (leuchtet auf)");
+  // selection dragged past the edge of the chat (released over the input)
+  const lastText = last().querySelector(".chat-text .md-p").firstChild;
+  const edge = d.createRange(); edge.setStart(lastText, 0); edge.setEnd($("chatForm"), 0);
+  H.w.getSelection().removeAllRanges(); H.w.getSelection().addRange(edge);
+  d.body.dispatchEvent(new H.w.Event("pointerup", { bubbles: true })); await H.tick(); await H.tick();
+  ok(!$("chatReplyBtn").hidden, "über den Chat-Rand hinaus gezogen und dort losgelassen → „Antworten“ erscheint trotzdem");
+  $("chatReplyBtn").click(); await H.tick();
+  ok($("chatQuote").querySelector(".quote-text").textContent === "Am 21.10.", "Zitat = nur der Teil innerhalb des Chats");
+  $("chatQuoteX").click(); await H.tick();
   // highlight in another list → sidebar switches there
   d.getElementById("listSelect").value = "priv"; d.getElementById("listSelect").dispatchEvent(new H.w.Event("change")); await H.tick();
   await say("Was ist bei DL offen?", { reply: "[[T:b1]] und [[T:fo]].", actions: [], highlight: ["b1", "fo"] });

@@ -2720,8 +2720,16 @@
   function chatSelection() {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
-    const range = sel.getRangeAt(0);
-    if (!chatLogEl.contains(range.commonAncestorContainer)) return null;
+    let range = sel.getRangeAt(0);
+    const inLog = (n) => chatLogEl.contains(n);
+    if (!inLog(range.startContainer) && !inLog(range.endContainer)) return null;
+    if (!inLog(range.commonAncestorContainer)) {
+      // Dragged past the edge of the chat (released e.g. over the input):
+      // only the part inside the chat counts.
+      range = range.cloneRange();
+      if (!inLog(range.startContainer)) range.setStart(chatLogEl, 0);
+      if (!inLog(range.endContainer)) range.setEnd(chatLogEl, chatLogEl.childNodes.length);
+    }
     // range, not sel: in the sidebar the page root is user-select: none and
     // Firefox then leaves the text out of Selection.toString().
     const text = range.toString().trim();
