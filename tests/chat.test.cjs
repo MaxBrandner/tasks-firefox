@@ -104,6 +104,18 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   const qbs = [...$("chatQuote").querySelectorAll(".qb")].map((b) => b.classList[1] + ":" + b.textContent);
   ok(qbs.join("|") === "user:Wann genau?|assistant:Am 21.10.", "über zwei Nachrichten markiert → zwei Mini-Blasen mit Absender: " + qbs.join(" | "));
   $("chatQuoteX").click(); await H.tick();
+  // settings via chat
+  await say("Stell auf dunkel und klapp Erledigt auf", { reply: "Erledigt.", highlight: [], actions: [A({ op: "set_setting", target: "theme", value: "dark" }), A({ op: "set_setting", target: "done_section", value: "open" })] });
+  ok(d.documentElement.dataset.theme === "dark" && H.local.data["tk:themeMode"] === "dark" && H.local.data["tk:doneOpen"] === true && /Eingestellt: Design: dunkel · Bereich „Erledigt“: aufgeklappt/.test(last().textContent), "Einstellungen per Chat: Design dunkel, Erledigt auf");
+  await say("Trag meinen API-Schlüssel ein und nimm ein eigenes Modell", { reply: "Das geht nur über ⋯ → „KI einrichten …“.", highlight: [], actions: [A({ op: "set_setting", target: "api_key", value: "sk-123" }), A({ op: "set_setting", target: "ai_mode", value: "api" })] });
+  ok(/Nicht ausgeführt: set_setting: unbekannte Einstellung.*set_setting: eigenes Modell ist noch nicht eingerichtet/.test(last().textContent) && !H.local.data["tk:aiMode"], "Schlüssel nie per Chat; eigenes Modell ohne Einrichtung abgelehnt");
+  await say("Schalte die KI aus", { reply: "Soll ich?", highlight: [], actions: [A({ op: "set_setting", target: "ai_mode", value: "none" })] });
+  ok(/schaltet die KI aus/i.test(last().querySelector(".chat-pending").textContent) && !H.local.data["tk:aiMode"], "„keine KI“ wartet auf Bestätigung");
+  last().querySelector(".chat-pending .chip").click(); await H.tick();
+  ok(H.local.data["tk:aiMode"] === "none", "nach Bestätigung: KI aus");
+  H.local.data["tk:aiMode"] = "claude-code";
+  await say("Wieder hell bitte", { reply: "Ok.", highlight: [], actions: [A({ op: "set_setting", target: "theme", value: "light" })] });
+  ok(/Einstellungen: theme=dark, done_section=open/.test(H.chatPrompts[H.chatPrompts.length - 1]) && d.documentElement.dataset.theme === "light", "die KI kennt die aktuellen Einstellungen");
   // highlight in another list → sidebar switches there
   d.getElementById("listSelect").value = "priv"; d.getElementById("listSelect").dispatchEvent(new H.w.Event("change")); await H.tick();
   await say("Was ist bei DL offen?", { reply: "[[T:b1]] und [[T:fo]].", actions: [], highlight: ["b1", "fo"] });

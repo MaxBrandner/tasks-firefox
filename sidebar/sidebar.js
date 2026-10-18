@@ -2304,9 +2304,42 @@
   const CHAT_KEY = "tk:chat";
   const CHAT_MAX = 40;
   const CHAT_OPS = new Set(["create_task", "update_task", "move_task", "delete_task", "add_link", "remove_link",
-    "create_list", "rename_list", "open_links"]);
+    "create_list", "rename_list", "open_links", "set_setting"]);
+  // Settings the chat may change – never keys, models or addresses.
+  const CHAT_SETTINGS = {
+    theme: { label: "Design", names: { system: "System", light: "hell", dark: "dunkel" } },
+    done_section: { label: "Bereich „Erledigt“", names: { open: "aufgeklappt", closed: "zugeklappt" } },
+    ai_mode: { label: "KI-Verbindung", names: { "claude-code": "Claude Code", api: "eigenes Modell", none: "keine KI" } },
+  };
+  const isAiOff = (a) => a.op === "set_setting" && a.target === "ai_mode" && a.value === "none";
+  // AI connection as far as the chat needs it (kept current via storage.onChanged).
+  const aiSettings = { mode: "claude-code", apiOk: false };
+  async function refreshAiSettings() {
+    const st = await browser.storage.local.get([AI_MODE, API_CONFIG]);
+    aiSettings.mode = st[AI_MODE] === "api" || st[AI_MODE] === "none" ? st[AI_MODE] : "claude-code";
+    const cfg = st[API_CONFIG];
+    aiSettings.apiOk = !!(cfg && cfg.baseUrl && cfg.model);
+  }
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && (changes[AI_MODE] || changes[API_CONFIG])) refreshAiSettings();
+  });
+
+  function applySetting(key, value) {
+    if (key === "theme") {
+      applyTheme(value);
+      browser.storage.local.set({ [THEME_KEY]: value });
+    } else if (key === "done_section") {
+      doneOpen = value === "open";
+      browser.storage.local.set({ [DONE_OPEN_KEY]: doneOpen });
+      render();
+    } else if (key === "ai_mode") {
+      aiSettings.mode = value;
+      browser.storage.local.set({ [AI_MODE]: value });
+    }
+  }
+
   const ACTION_FIELDS = ["op", "target", "list", "parent", "ref", "title", "notes", "due_date", "due_time",
-    "done", "weekly", "url", "link_title", "position"];
+    "done", "weekly", "url", "link_title", "position", "value"];
   const CHAT_SUGGESTIONS = [
     "Was ist diese Woche fällig?",
     "Sortiere die geöffnete Liste nach Fälligkeit",
@@ -2371,6 +2404,8 @@
     ];
     const ex = expandedId && tasks.get(expandedId);
     lines.push(ex ? `Gerade aufgeklappt: „${plainTitle(ex.t)}“ (id: ${expandedId})` : "Gerade aufgeklappt: nichts");
+    lines.push(`Einstellungen: theme=${document.documentElement.dataset.theme || "system"}, done_section=${doneOpen ? "open" : "closed"}, ai_mode=${aiSettings.mode}` +
+      (aiSettings.apiOk ? "" : " (eigenes Modell nicht eingerichtet)"));
     lines.push("", "Listen und Aufgaben:");
     for (const [lid, list] of sortedLists()) {
       lines.push(`Liste „${list.t || "Ohne Namen"}“ (list_id: ${lid})`);
@@ -2431,6 +2466,7 @@
     const refs = new Map();
     const changed = new Set();
     const problems = [];
+    const settings = [];
     const urls = [];
     let groupTitle = "";
     const res = (x) => (x.startsWith("ref:") ? refs.get(x.slice(4)) || "" : x);
@@ -2544,6 +2580,15 @@
             }
             if (a.title) groupTitle = a.title;
             break;
+          case "set_setting": {
+            const def = CHAT_SETTINGS[a.target];
+            need(def, "unbekannte Einstellung (per Chat: " + Object.keys(CHAT_SETTINGS).join(", ") + ")");
+            need(a.value in def.names, `„${a.value}“ geht für ${def.label} nicht`);
+            need(a.target !== "ai_mode" || a.value !== "api" || aiSettings.apiOk, "eigenes Modell ist noch nicht eingerichtet (⋯ → „KI einrichten …“)");
+            applySetting(a.target, a.value);
+            settings.push(`${def.label}: ${def.names[a.value]}`);
+            break;
+          }
           default:
             throw new Error("unbekannte Aktion");
         }
@@ -2554,7 +2599,7 @@
     const unique = [...new Set(urls)];
     if (unique.length) openUrls(unique, groupTitle || "Tasks");
     for (const id of changed) if (!tasks.has(id)) changed.delete(id);
-    return { changed, opened: unique.length, problems };
+    return { changed, opened: unique.length, problems, settings };
   }
 
   // Runs a message's actions as one history step.
@@ -2570,13 +2615,20 @@
     msg.changed = [...r.changed];
     msg.opened = r.opened;
     msg.problems = r.problems;
+    msg.settings = r.settings;
     for (const id of r.changed) chatChanged.add(id);
   }
 
   function describeActions(actions) {
     const del = actions.filter((a) => a.op === "delete_task").map((a) => tasks.get(a.target) ? `„${plainTitle(tasks.get(a.target).t)}“` : null).filter(Boolean);
-    const rest = actions.length - del.length;
-    return (del.length ? "Löscht " + del.join(", ") + " (mit Unteraufgaben)" : "") + (rest ? (del.length ? " und ändert " : "Ändert ") + rest + " weitere" : "") + ".";
+    const off = actions.some(isAiOff);
+    const rest = actions.length - del.length - (off ? 1 : 0);
+    const parts = [];
+    if (del.length) parts.push("löscht " + del.join(", ") + " (mit Unteraufgaben)");
+    if (off) parts.push("schaltet die KI aus – danach antwortet der Chat nicht mehr (wieder an über ⋯ → „KI einrichten …“)");
+    if (rest) parts.push("ändert " + rest + " weitere");
+    const s = parts.join(" und ");
+    return s.charAt(0).toUpperCase() + s.slice(1) + ".";
   }
 
   // --- Chat UI ---
@@ -2656,6 +2708,7 @@
     }
     if (m.undoError) el.append(h("div", { class: "chat-note warn" }, m.undoError));
     if (m.opened) el.append(h("div", { class: "chat-note" }, m.opened === 1 ? "1 Link geöffnet." : m.opened + " Links als Tab-Gruppe geöffnet."));
+    if (m.settings && m.settings.length) el.append(h("div", { class: "chat-note" }, "Eingestellt: " + m.settings.join(" · ")));
     if (m.problems && m.problems.length) el.append(h("div", { class: "chat-note warn" }, "Nicht ausgeführt: " + m.problems.join("; ")));
     return el;
   }
@@ -2925,7 +2978,7 @@
       msg.highlight = data.highlight.filter((id) => tasks.has(id));
       for (const id of msg.highlight) chatMarks.add(id);
       if (data.actions.length) {
-        if (data.actions.some((a) => a.op === "delete_task")) msg.pending = true;
+        if (data.actions.some((a) => a.op === "delete_task" || isAiOff(a))) msg.pending = true;
         else runChatActions(msg);
       }
       chat.push(msg);
@@ -3082,6 +3135,7 @@
     setupEnvBanner();
     const local = await browser.storage.local.get([THEME_KEY, CURRENT_KEY, DONE_OPEN_KEY]);
     applyTheme(local[THEME_KEY]);
+    refreshAiSettings();
     doneOpen = !!local[DONE_OPEN_KEY];
     currentList = local[CURRENT_KEY] || null;
     await reloadAll();

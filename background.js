@@ -420,9 +420,9 @@ const ADD_JOB = { system: SYSTEM_PROMPT, schema: SCHEMA, hint: JSON_HINT, name: 
 // Chat: the model answers with text plus actions from a fixed catalog. The
 // sidebar validates and executes them (the model never touches data itself).
 const CHAT_OPS = ["create_task", "update_task", "move_task", "delete_task", "add_link", "remove_link",
-  "create_list", "rename_list", "open_links"];
+  "create_list", "rename_list", "open_links", "set_setting"];
 const ACTION_FIELDS = ["op", "target", "list", "parent", "ref", "title", "notes", "due_date", "due_time",
-  "done", "weekly", "url", "link_title", "position"];
+  "done", "weekly", "url", "link_title", "position", "value"];
 
 const CHAT_SCHEMA = {
   type: "object",
@@ -459,6 +459,7 @@ Aktionen (jedes Feld ist Text; nicht benutzte Felder leer lassen; target/list/pa
 - add_link: target, url, link_title. remove_link: target, url.
 - create_list: title, ref. rename_list: target (list_id), title.
 - open_links: target (öffnet alle Links der Aufgabe inkl. Unteraufgaben als Tab-Gruppe) oder url (nur Links, die schon in den Aufgaben stehen); title = Name der Tab-Gruppe. Mehrere open_links in einer Antwort werden zu einer Gruppe zusammengefasst.
+- set_setting: target = Einstellung, value = neuer Wert. Einstellungen: theme (system | light | dark – Design), done_section (open | closed – Bereich „Erledigt" auf/zu), ai_mode (claude-code | api | none – KI-Verbindung; api nur, wenn ein eigenes Modell eingerichtet ist; none schaltet dich selbst ab, der Nutzer bestätigt das noch). Die aktuellen Werte stehen oben unter „Einstellungen". API-Schlüssel, Modelle und Adressen änderst du nie – dafür ⋯ → „KI einrichten …"; solche Daten gehören nicht in den Chat.
 
 So funktioniert Tasks – für Fragen zur Erweiterung selbst; antworte danach, nicht nach Vermutungen:
 - Speicher: Aufgaben und Listen über Firefox Sync (auf allen Rechnern mit demselben Firefox-Konto). Verlauf, dieser Chat und die KI-Einstellungen bleiben auf diesem Rechner.
@@ -472,13 +473,14 @@ So funktioniert Tasks – für Fragen zur Erweiterung selbst; antworte danach, n
 - Sicherung: ⋯ → „Sicherung exportieren" / „Sicherung importieren …" (zusammenführen oder alles ersetzen).
 - Markdown in Titel und Notiz (fett, kursiv, durchgestrichen, Code, Links; in Notizen auch Listen, Überschriften, Zitate).
 - Tastatur: Strg+Alt+A Seitenleiste auf/zu, / Chat, Enter neue Aufgabe, Tab / Shift+Tab ein-/ausrücken, Strg+Enter abhaken, Alt+↑/↓ verschieben, Esc schließt. Alles unter ⋯ → „Tastenkürzel & Markdown".
+- Einstellungen: Design (System/hell/dunkel), Bereich „Erledigt" auf/zu und die KI-Verbindung lassen sich auch hier im Chat ändern (set_setting); alles andere über ⋯ und den Knopf oben rechts.
 - Layout: Ist die Seitenleiste breit, stehen Liste und Chat nebeneinander; schmal gibt es die Reiter „Aufgaben | Chat" und mit / eine Schnell-Karte.
 
 Was es NICHT gibt: Tags, Prioritäten, Farben, Erinnerungen/Benachrichtigungen, Suche/Filter, Anhänge, Teilen, Zugriff auf Webseiten oder das Internet. Listen löschen kannst du nicht – das macht der Nutzer selbst über ⋯ → „Liste löschen". Wird danach gefragt, sag ehrlich, dass es das (noch) nicht gibt, und biete – wenn sinnvoll – eine Lösung mit vorhandenen Mitteln an (z. B. „#klausur" als Konvention im Titel; markieren oder öffnen kannst du dann alles mit #klausur). Täusche nie vor, etwas getan zu haben, das keine Aktion ist.
 
 Ändere nur, was der Nutzer will, und schreib in reply kurz, was du geändert hast. Bei reinen Fragen: actions leer. Ist ein Wunsch unklar, frag kurz nach statt zu raten.`;
 
-const CHAT_HINT = "\n\nAntworte ausschließlich mit einem JSON-Objekt: {\"reply\": Text, \"actions\": [ {\"op\", \"target\", \"list\", \"parent\", \"ref\", \"title\", \"notes\", \"due_date\", \"due_time\", \"done\", \"weekly\", \"url\", \"link_title\", \"position\"} … ], \"highlight\": [IDs]} – alle Aktionsfelder als Text, leer wenn unbenutzt.";
+const CHAT_HINT = "\n\nAntworte ausschließlich mit einem JSON-Objekt: {\"reply\": Text, \"actions\": [ {\"op\", \"target\", \"list\", \"parent\", \"ref\", \"title\", \"notes\", \"due_date\", \"due_time\", \"done\", \"weekly\", \"url\", \"link_title\", \"position\", \"value\"} … ], \"highlight\": [IDs]} – alle Aktionsfelder als Text, leer wenn unbenutzt.";
 
 const CHAT_JOB = { system: CHAT_SYSTEM_PROMPT, schema: CHAT_SCHEMA, hint: CHAT_HINT, name: "chat", effort: "medium", maxTokens: 8000 };
 
