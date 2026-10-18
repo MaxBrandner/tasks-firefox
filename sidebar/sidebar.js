@@ -2713,7 +2713,9 @@
     if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
     const range = sel.getRangeAt(0);
     if (!chatLogEl.contains(range.commonAncestorContainer)) return null;
-    const text = String(sel).trim();
+    // range, not sel: in the sidebar the page root is user-select: none and
+    // Firefox then leaves the text out of Selection.toString().
+    const text = range.toString().trim();
     return text ? { text, range } : null;
   }
 
@@ -2734,6 +2736,17 @@
     $("chatQuoteText").textContent = chatQuote;
     $("chatQuote").hidden = !chatQuote;
   }
+
+  // Same cause for Ctrl+C: when the normal copy text comes out empty although
+  // something is selected, put the selected text on the clipboard ourselves.
+  document.addEventListener("copy", (e) => {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || String(sel) || !e.clipboardData) return;
+    const text = sel.getRangeAt(0).toString();
+    if (!text) return;
+    e.clipboardData.setData("text/plain", text);
+    e.preventDefault();
+  });
 
   // selectionchange covers mouse and keyboard (debounced, so the button doesn't
   // jump along while dragging); pointerup shows it right on release.

@@ -1667,10 +1667,18 @@ kbd {
   position: sticky;
   top: 3px;
   z-index: 1;
-  height: 0;
-  display: flex;
-  justify-content: flex-end;
+  /* Real height (no layout shift thanks to the negative margin), so sticky
+     stops at the bottom edge of the message instead of hanging out of it. */
+  height: 22px;
+  margin-bottom: -22px;
+  /* Only as wide as its buttons: the rest of the first line stays free text
+     where a selection can start. */
+  width: max-content;
+  margin-left: auto;
   margin-right: -6px;
+  display: flex;
+  -moz-user-select: none;
+  user-select: none;
   opacity: 0;
   transition: opacity 0.12s;
   pointer-events: none;
@@ -1679,6 +1687,12 @@ kbd {
 .chat-msg:hover .msg-tools,
 .msg-tools:focus-within {
   opacity: 1;
+}
+
+/* Only the buttons take the mouse – the bar spans the first text line, which
+   must stay selectable. */
+.chat-msg:hover .msg-tools .icon-btn,
+.msg-tools:focus-within .icon-btn {
   pointer-events: auto;
 }
 
