@@ -55,6 +55,7 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   await say("Was ist diese Woche fällig?", { reply: "Fällig ist [[T:b1]] in [[L:uni]].", actions: [], highlight: ["b1", "gibtsnicht"] });
   const chips = [...last().querySelectorAll(".ref-chip")].map((c) => c.textContent);
   ok(chips.join() === "Blatt 1,Uni", "Antwort zeigt Verweise als Chips: " + chips);
+  ok(/^\d\d:\d\d$/.test((last().querySelector(".msg-time") || {}).textContent) && $("chatLog").querySelector(".chat-day").textContent === "Heute" && $("chatLog").querySelectorAll(".chat-day").length === 1, "dezente Uhrzeit an der Nachricht, ein Tagestrenner „Heute“");
   ok(H.li("Blatt 1").classList.contains("chat-mark") && !d.querySelector(".chat-mark:not([data-id='b1'])"), "besprochene Aufgabe in der Liste markiert");
   ok(d.body.style.getPropertyValue("--mark-o") === "1.000", "Markierung frisch: voll sichtbar (verblasst erst nach 1 min)");
   H.li("Blatt 1").querySelector(".row").click(); await H.tick();
@@ -82,7 +83,7 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   await say("Wann genau?", { reply: "Am 21.10.", actions: [], highlight: [] });
   ok(/\(Antwort auf diese Stelle im Chat: du \(\d\d:\d\d\): »Fällig«\)\n<<<\nWann genau\?\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]) && $("chatQuote").hidden, "an die KI: Zitat mit Herkunft, eigener Text getrennt; danach ist das Zitat weg");
   const sent = [...$("chatLog").querySelectorAll(".chat-msg.user")].pop();
-  ok(sent.querySelector(".chat-quote-ref .qb.assistant").textContent === "Fällig" && sent.querySelector(".chat-text").textContent === "Wann genau?", "gesendete Nachricht zeigt das Zitat als Mini-Chat");
+  ok(sent.querySelector(".chat-quote-ref .qb.assistant").textContent === "Fällig" && sent.querySelector(".chat-text").textContent.replace(/\d\d:\d\d$/, "") === "Wann genau?", "gesendete Nachricht zeigt das Zitat als Mini-Chat");
   sent.querySelector(".chat-quote-ref .qb").click(); await H.tick();
   ok(quoted.isConnected ? quoted.classList.contains("flash-msg") : $("chatLog").querySelector(`.chat-msg[data-at="${quoted.dataset.at}"]`).classList.contains("flash-msg"), "Klick aufs Zitat springt zur Original-Nachricht (leuchtet auf)");
   // selection dragged past the edge of the chat (released over the input)

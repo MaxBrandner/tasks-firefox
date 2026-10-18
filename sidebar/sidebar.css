@@ -1713,6 +1713,26 @@ kbd {
   color: var(--accent);
 }
 
+/* Discreet time at the end of a message; date line when the day changes. */
+.msg-time {
+  float: right;
+  margin: 3px -3px -3px 10px;
+  color: var(--faint);
+  font-size: 10.5px;
+  line-height: 1.5;
+  -moz-user-select: none;
+  user-select: none;
+}
+
+.chat-day {
+  margin: 10px 0 2px;
+  color: var(--faint);
+  font-size: 11px;
+  text-align: center;
+  -moz-user-select: none;
+  user-select: none;
+}
+
 /* "↩ Antworten" next to text selected in the chat. */
 .chat-reply-btn {
   position: absolute;

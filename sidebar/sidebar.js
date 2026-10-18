@@ -2595,6 +2595,16 @@
   function chatBubble(m) {
     const body = h("div", { class: "md-view chat-text" });
     renderBlock(m.text || "", body);
+    if (m.at) {
+      // Discreet time at the end of the last paragraph (messenger style).
+      let tail = body;
+      while (tail.lastElementChild && /^(DIV|P|UL|OL|LI|BLOCKQUOTE|H[1-6])$/.test(tail.lastElementChild.tagName)) tail = tail.lastElementChild;
+      tail.append(h("time", {
+        class: "msg-time",
+        datetime: new Date(m.at).toISOString(),
+        title: new Date(m.at).toLocaleString("de-DE", { weekday: "short", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }),
+      }, hhmm(m.at)));
+    }
     const el = h("div", { class: "chat-msg " + m.role + (m.error ? " error" : ""), "data-at": m.at }, body);
     if (m.quote) body.before(quoteRef(m.quote));
     if (!m.error) el.prepend(msgTools(m));
@@ -2650,8 +2660,27 @@
     return el;
   }
 
+  // "Heute" / "Gestern" / "Mo., 12. Okt." above the first message of a day.
+  function dayLabel(at) {
+    const d = new Date(at);
+    const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(at).setHours(0, 0, 0, 0)) / 86400000);
+    return days === 0 ? "Heute" : days === 1 ? "Gestern" : d.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short" });
+  }
+
+  function chatItems() {
+    const out = [];
+    let lastDay = "";
+    for (const m of chat) {
+      const day = m.at ? new Date(m.at).toDateString() : lastDay;
+      if (day !== lastDay) out.push(h("div", { class: "chat-day" }, dayLabel(m.at)));
+      lastDay = day;
+      out.push(chatBubble(m));
+    }
+    return out;
+  }
+
   function renderChat() {
-    const items = chat.length ? chat.map(chatBubble) : [h("div", { class: "chat-empty" },
+    const items = chat.length ? chatItems() : [h("div", { class: "chat-empty" },
       h("p", null, "Frag etwas zu deinen Aufgaben oder sag, was passieren soll. Änderungen kannst du einzeln zurücknehmen."),
       CHAT_SUGGESTIONS.map((s) => h("button", { class: "chip", type: "button", onclick: () => sendChat(s) }, s)))];
     if (chatBusy) items.push(h("div", { class: "chat-msg assistant busy" }, "denkt nach", h("span", { class: "dots" })));
@@ -2759,7 +2788,9 @@
       r.selectNodeContents(textEl);
       if (range.compareBoundaryPoints(Range.START_TO_START, r) > 0) r.setStart(range.startContainer, range.startOffset);
       if (range.compareBoundaryPoints(Range.END_TO_END, r) < 0) r.setEnd(range.endContainer, range.endOffset);
-      const text = r.toString().trim();
+      const frag = r.cloneContents();
+      for (const t of frag.querySelectorAll(".msg-time")) t.remove();
+      const text = frag.textContent.trim();
       if (text) parts.push({ role: msgEl.classList.contains("user") ? "user" : "assistant", at: Number(msgEl.dataset.at), text: text.slice(0, 1000) });
     }
     return parts;
@@ -2807,7 +2838,9 @@
     if (!window.Highlight || !window.CSS || !CSS.highlights) return;
     const nodes = [];
     let all = "";
-    const walker = document.createTreeWalker(el.querySelector(".chat-text"), NodeFilter.SHOW_TEXT);
+    const walker = document.createTreeWalker(el.querySelector(".chat-text"), NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.parentElement.closest(".msg-time") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+    });
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       nodes.push([n, all.length]);
       all += n.data;
