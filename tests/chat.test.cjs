@@ -77,9 +77,14 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   $("chatLog").dispatchEvent(new H.w.Event("pointerup", { bubbles: true })); await H.tick(); await H.tick();
   ok(!$("chatReplyBtn").hidden, "Text im Chat markiert → „Antworten“ erscheint");
   $("chatReplyBtn").click(); await H.tick();
-  ok(!$("chatQuote").hidden && $("chatQuoteText").textContent === "Fällig" && $("chatReplyBtn").hidden, "„Antworten“ setzt die Markierung als Zitat über das Eingabefeld");
+  const quoted = last();
+  ok(!$("chatQuote").hidden && /^↩ KI-Antwort · \d\d:\d\d$/.test($("chatQuote").querySelector(".quote-src").textContent) && $("chatQuote").querySelector(".quote-text").textContent === "Fällig" && $("chatReplyBtn").hidden, "„Antworten“: Zitat mit Herkunft (KI-Antwort, Uhrzeit) über dem Eingabefeld");
   await say("Wann genau?", { reply: "Am 21.10.", actions: [], highlight: [] });
-  ok(/<<<\n> Fällig\n\nWann genau\?\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]) && $("chatQuote").hidden, "Nachricht geht mit Zitat an die KI, danach ist das Zitat weg");
+  ok(/\(Antwort auf deine Antwort von \d\d:\d\d: »Fällig«\)\n<<<\nWann genau\?\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]) && $("chatQuote").hidden, "an die KI: Zitat mit Herkunft, eigener Text getrennt; danach ist das Zitat weg");
+  const sent = [...$("chatLog").querySelectorAll(".chat-msg.user")].pop();
+  ok(sent.querySelector(".chat-quote-ref .quote-text").textContent === "Fällig" && sent.querySelector(".chat-text").textContent === "Wann genau?", "gesendete Nachricht zeigt das Zitat als eigenen Block");
+  sent.querySelector(".chat-quote-ref").click(); await H.tick();
+  ok(quoted.isConnected ? quoted.classList.contains("flash-msg") : $("chatLog").querySelector(`.chat-msg[data-at="${quoted.dataset.at}"]`).classList.contains("flash-msg"), "Klick aufs Zitat springt zur Original-Nachricht (leuchtet auf)");
   // highlight in another list → sidebar switches there
   d.getElementById("listSelect").value = "priv"; d.getElementById("listSelect").dispatchEvent(new H.w.Event("change")); await H.tick();
   await say("Was ist bei DL offen?", { reply: "[[T:b1]] und [[T:fo]].", actions: [], highlight: ["b1", "fo"] });

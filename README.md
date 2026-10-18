@@ -144,8 +144,9 @@ Fälligkeit", „Öffne alle Links zu DL".
   Antworten lässt sich normal markieren und kopieren.
 - **Kopieren und Antworten:** Unter jeder Antwort steht „Kopieren“ (Verweise
   werden zu Namen). Markierst du Text im Chat, erscheint „↩ Antworten“: Der Text
-  steht dann als Zitat über dem Eingabefeld und geht mit deiner nächsten
-  Nachricht mit.
+  steht dann als Zitat über dem Eingabefeld (mit Herkunft, z. B. „KI-Antwort ·
+  18:44“) und geht mit deiner nächsten Nachricht mit – die KI erfährt, worauf
+  du antwortest. Ein Klick auf das Zitat springt zur Stelle und hebt sie hervor.
 - **Fragen zu Tasks selbst** beantwortet der Chat auch – z. B. was bei
   „Zu Tasks hinzufügen" bei der KI ankommt (siehe oben; kein Quelltext, keine
   Bilder selbst).

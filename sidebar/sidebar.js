@@ -2394,14 +2394,22 @@
     return lines.join("\n");
   }
 
-  function buildChatPrompt(text) {
+  const hhmm = (at) => new Date(at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  // Where a quote comes from – for the model ("deiner Antwort von 18:44") and
+  // for the user ("KI-Antwort").
+  const quoteSource = (q) => (q.role === "assistant" ? "deine Antwort" : "seine eigene Nachricht") + " von " + hhmm(q.at);
+  const quoteWho = (q) => (q.role === "assistant" ? "KI-Antwort" : "deine Nachricht");
+  const quoteLine = (q) => `(Antwort auf ${quoteSource(q)}: »${q.text}«)`;
+
+  function buildChatPrompt(text, quote) {
     const past = chat.slice(-16).filter((m) => !m.error).map((m) => {
-      if (m.role === "user") return "Nutzer: " + m.text;
+      if (m.role === "user") return "Nutzer: " + (m.quote ? quoteLine(m.quote) + " " : "") + m.text;
       const done = m.pending ? " (Änderungen warten auf Bestätigung)" : m.discarded ? " (Änderungen verworfen)"
         : m.undone ? " (Änderungen zurückgenommen)" : m.changed && m.changed.length ? ` (${m.changed.length} Aufgaben geändert)` : "";
       return "Assistent: " + m.text + done;
     });
-    return [chatContext(), "", "Bisheriger Chat:", past.length ? past.join("\n") : "(neu)", "", "Neue Nachricht des Nutzers:", "<<<", text, ">>>"].join("\n");
+    return [chatContext(), "", "Bisheriger Chat:", past.length ? past.join("\n") : "(neu)", "", "Neue Nachricht des Nutzers:",
+      ...(quote ? [quoteLine(quote)] : []), "<<<", text, ">>>"].join("\n");
   }
 
   function normalizeChat(raw) {
@@ -2587,7 +2595,8 @@
   function chatBubble(m) {
     const body = h("div", { class: "md-view chat-text" });
     renderBlock(m.text || "", body);
-    const el = h("div", { class: "chat-msg " + m.role + (m.error ? " error" : "") }, body);
+    const el = h("div", { class: "chat-msg " + m.role + (m.error ? " error" : ""), "data-at": m.at }, body);
+    if (m.quote) body.before(quoteRef(m.quote));
     if (!m.error) el.prepend(msgTools(m));
     if (m.role !== "assistant" || m.error) return el;
     if (m.pending) {
@@ -2731,10 +2740,57 @@
     replyBtnEl.style.left = Math.max(8, Math.min(r.left - p.left, p.width - 130)) + "px";
   }
 
-  function setChatQuote(text) {
-    chatQuote = text.slice(0, 1000);
-    $("chatQuoteText").textContent = chatQuote;
+  // chatQuote: { text, role, at } of the quoted message, or null.
+  function setChatQuote(q) {
+    chatQuote = q ? { ...q, text: q.text.slice(0, 1000) } : null;
+    $("chatQuoteText").replaceChildren(...(chatQuote ? [
+      h("span", { class: "quote-src" }, "↩ " + quoteWho(chatQuote) + " · " + hhmm(chatQuote.at)),
+      h("span", { class: "quote-text" }, chatQuote.text),
+    ] : []));
     $("chatQuote").hidden = !chatQuote;
+  }
+
+  // The quote in a sent message: a click jumps to the quoted place.
+  function quoteRef(q) {
+    return h("button", { class: "chat-quote-ref", type: "button", title: "Zur zitierten Stelle springen", onclick: () => jumpToQuote(q) },
+      h("span", { class: "quote-src" }, "↩ " + quoteWho(q) + " · " + hhmm(q.at)),
+      h("span", { class: "quote-text" }, q.text));
+  }
+
+  function jumpToQuote(q) {
+    const el = chatLogEl.querySelector(`.chat-msg[data-at="${q.at}"]`);
+    if (!el) return; // e.g. after "Neuer Chat"
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.classList.remove("flash-msg");
+    void el.offsetWidth; // restart the animation
+    el.classList.add("flash-msg");
+    highlightQuote(el, q.text);
+  }
+
+  // Marks the quoted words for a moment (CSS Custom Highlight API) without
+  // touching the selection – which would bring up "Antworten" again.
+  let quoteHlTimer = null;
+  function highlightQuote(el, text) {
+    if (!window.Highlight || !window.CSS || !CSS.highlights) return;
+    const nodes = [];
+    let all = "";
+    const walker = document.createTreeWalker(el.querySelector(".chat-text"), NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      nodes.push([n, all.length]);
+      all += n.data;
+    }
+    const i = all.indexOf(text);
+    if (i < 0) return;
+    const at = (k) => {
+      const [node, start] = nodes.filter(([, s]) => s <= k).pop();
+      return [node, Math.min(k - start, node.data.length)];
+    };
+    const range = document.createRange();
+    range.setStart(...at(i));
+    range.setEnd(...at(i + text.length));
+    CSS.highlights.set("chat-quote", new Highlight(range));
+    clearTimeout(quoteHlTimer);
+    quoteHlTimer = setTimeout(() => CSS.highlights.delete("chat-quote"), 3000);
   }
 
   // Same cause for Ctrl+C: when the normal copy text comes out empty although
@@ -2762,27 +2818,27 @@
   replyBtnEl.addEventListener("click", () => {
     const s = chatSelection();
     if (!s) return;
-    setChatQuote(s.text);
+    const node = s.range.startContainer;
+    const msgEl = (node.nodeType === 1 ? node : node.parentElement).closest(".chat-msg");
+    setChatQuote({ text: s.text, role: msgEl && msgEl.classList.contains("user") ? "user" : "assistant", at: msgEl ? Number(msgEl.dataset.at) : Date.now() });
     window.getSelection().removeAllRanges();
     replyBtnEl.hidden = true;
     chatInputEl.focus();
   });
   $("chatQuoteX").addEventListener("click", () => {
-    setChatQuote("");
+    setChatQuote(null);
     chatInputEl.focus();
   });
 
   async function sendChat(text) {
     text = text.trim();
     if (!text || chatBusy) return;
-    if (chatQuote) {
-      text = chatQuote.split("\n").map((l) => "> " + l).join("\n") + "\n\n" + text;
-      setChatQuote("");
-    }
+    const quote = chatQuote;
+    setChatQuote(null);
     chatMarks.clear();
     chatChanged.clear();
-    const prompt = buildChatPrompt(text);
-    chat.push({ role: "user", text, at: Date.now() });
+    const prompt = buildChatPrompt(text, quote);
+    chat.push(compact({ role: "user", text, at: Date.now(), quote }));
     chatBusy = true;
     chatInputEl.value = "";
     autosize(chatInputEl);
