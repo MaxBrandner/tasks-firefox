@@ -81,7 +81,20 @@ const CAPTURE_LIMITS = { selection: 20000, section: 4000, clicked: 600, links: 5
 // (Firefox: menus.getTargetElement) and details of a clicked image.
 function captureInPage(args) {
   const clip = (s, n) => String(s || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, n);
-  const out = { selection: "", links: [], clicked: "", section: "", heading: "", description: "", image: null };
+  const out = { selection: "", links: [], clicked: "", section: "", heading: "", description: "", image: null, locator: "" };
+  // A CSS path that finds the element again (for highlighting it on the page).
+  const cssPath = (node) => {
+    const parts = [];
+    for (let e = node; e && e.nodeType === 1 && e !== document.body && e !== document.documentElement; e = e.parentElement) {
+      if (e.id && document.querySelectorAll("#" + CSS.escape(e.id)).length === 1) {
+        parts.unshift("#" + CSS.escape(e.id));
+        return parts.join(" > ");
+      }
+      const same = [...e.parentElement.children].filter((c) => c.tagName === e.tagName);
+      parts.unshift(e.tagName.toLowerCase() + (same.length > 1 ? `:nth-of-type(${same.indexOf(e) + 1})` : ""));
+    }
+    return ["body", ...parts].join(" > ");
+  };
   const sel = window.getSelection();
   out.selection = String(sel).slice(0, args.limits.selection);
   const seen = new Set();
@@ -104,6 +117,11 @@ function captureInPage(args) {
     const inLink = (node.nodeType === 1 ? node : node.parentElement)?.closest("a[href]");
     if (inLink) addLink(inLink.href, inLink.textContent);
   }
+  // With a selection, the block around it is what gets highlighted.
+  if (sel.rangeCount && String(sel).trim()) {
+    const node = sel.getRangeAt(0).commonAncestorContainer;
+    out.locator = cssPath(node.nodeType === 1 ? node : node.parentElement);
+  }
   const meta = document.querySelector('meta[name="description"], meta[property="og:description"]');
   out.description = clip(meta && meta.content, 300);
 
@@ -122,21 +140,72 @@ function captureInPage(args) {
   }
   // The clicked element itself (e.g. one line of a list of dates) – what is meant.
   out.clicked = clip(el.innerText || el.textContent, args.limits.clicked);
+  if (!out.locator) out.locator = cssPath(el);
   // From the clicked element up to a block with some text; long blocks are cut
   // around the clicked element.
   let block = el;
   while (block.parentElement && block.parentElement !== document.body && (block.innerText || "").trim().length < 200) block = block.parentElement;
-  const full = block.innerText || "";
+  const full = block.innerText || block.textContent || "";
   const own = (el.innerText || el.textContent || "").trim().slice(0, 80);
   const at = own ? full.indexOf(own) : -1;
   const start = full.length > args.limits.section && at > 0 ? Math.max(0, at - args.limits.section / 2) : 0;
   out.section = clip(full.slice(start, start + args.limits.section), args.limits.section);
   for (const hd of document.querySelectorAll("h1, h2, h3, h4, h5, h6")) {
-    if (hd.contains(el) || hd.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) out.heading = clip(hd.innerText, 200);
+    if (hd.contains(el) || hd.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) out.heading = clip(hd.innerText || hd.textContent, 200);
     else break;
   }
   return out;
 }
+
+// Highlights an element on the page as an overlay (the page itself is not
+// changed), fading out after `ms`; with `scroll` it is brought into view
+// first. One look for all highlights – switch here.
+const HIGHLIGHT_STYLE = {
+  box: "border-radius:5px;box-shadow:0 0 0 2px #2f6f5e,0 0 0 6px rgba(47,111,94,.2);background:rgba(47,111,94,.06)",
+  badge: "background:#2f6f5e;color:#fff;font:600 11px/18px system-ui,sans-serif;padding:0 8px;border-radius:999px",
+  label: "→ Tasks",
+};
+
+function highlightInPage(args) {
+  const el = args.locator && document.querySelector(args.locator);
+  if (!el) return false;
+  const old = document.getElementById("tasks-ext-highlight");
+  if (old) old.remove();
+  if (args.scroll) el.scrollIntoView({ block: "center" });
+  const r = el.getBoundingClientRect();
+  const box = document.createElement("div");
+  box.id = "tasks-ext-highlight";
+  box.setAttribute("style", `all:initial;position:absolute;z-index:2147483647;pointer-events:none;transition:opacity .4s;` +
+    `left:${r.left + scrollX - 3}px;top:${r.top + scrollY - 3}px;width:${r.width + 6}px;height:${r.height + 6}px;` + args.style.box);
+  const badge = document.createElement("span");
+  badge.textContent = args.style.label;
+  badge.setAttribute("style", "all:initial;position:absolute;right:-6px;top:-11px;" + args.style.badge);
+  box.append(badge);
+  document.body.append(box);
+  setTimeout(() => {
+    box.style.opacity = "0";
+    setTimeout(() => box.remove(), 450);
+  }, args.ms);
+  return true;
+}
+
+// Runs highlightInPage in the tab (activeTab: as long as it shows the same page).
+async function highlightOnPage(tabId, frameId, locator, opts = {}) {
+  if (!locator) return false;
+  const args = { locator, style: HIGHLIGHT_STYLE, ms: opts.ms || 1600, scroll: !!opts.scroll };
+  try {
+    const [found] = await browser.tabs.executeScript(tabId, { frameId: frameId || 0, code: `(${highlightInPage})(${JSON.stringify(args)})` });
+    return !!found;
+  } catch (_) {
+    return false; // tab closed, navigated away, or no access
+  }
+}
+
+// "◎ Auf der Seite zeigen" from the sidebar: scroll there, light up longer.
+browser.runtime.onMessage.addListener((msg) => {
+  if (!msg || msg.type !== "show-on-page") return undefined;
+  return highlightOnPage(msg.tabId, msg.frameId, msg.locator, { scroll: true, ms: 2600 }).then((ok) => ({ ok }));
+});
 
 // What the right-click points at. activeTab allows the page script for
 // exactly this tab after the context menu click.
@@ -148,7 +217,7 @@ async function capturePage(info, tab) {
   } catch (_) {
     // e.g. about: pages – the menu data has to do
   }
-  cap = { selection: "", links: [], clicked: "", section: "", heading: "", description: "", image: null, ...(cap || {}) };
+  cap = { selection: "", links: [], clicked: "", section: "", heading: "", description: "", image: null, locator: "", ...(cap || {}) };
   if (!cap.selection.trim()) cap.selection = info.selectionText || "";
   cap.link = info.linkUrl ? { href: info.linkUrl, text: info.linkText || "" } : null;
   cap.image = info.srcUrl ? { src: info.srcUrl, ...(cap.image || {}) } : null;
@@ -556,6 +625,7 @@ async function addFromSelection(info, tab) {
   await setStatus({ state: "working", text: "KI legt die Aufgabe an … (dauert einige Sekunden)" });
 
   const cap = await capturePage(info, tab);
+  highlightOnPage(tab.id, info.frameId, cap.locator); // show right away what was taken
   const { lists, tasks } = loadStore(await browser.storage.sync.get(null));
   const now = new Date();
   const userText = [
@@ -674,5 +744,6 @@ async function addFromSelection(info, tab) {
   const groupTitle = insertOnly ? newParentTitle : "";
 
   await browser.storage.sync.set(after);
-  await setStatus({ state: "done", text: r.summary || "Aufgabe angelegt", taskId, before, after, insertOnly, taskTitle, groupTitle, updated: !isNew });
+  const page = cap.locator ? { tabId: tab.id, frameId: info.frameId || 0, locator: cap.locator, url: tab.url } : null;
+  await setStatus({ state: "done", text: r.summary || "Aufgabe angelegt", taskId, before, after, insertOnly, taskTitle, groupTitle, updated: !isNew, page });
 }

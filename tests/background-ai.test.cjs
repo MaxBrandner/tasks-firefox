@@ -8,19 +8,20 @@ function area() { const data = {}; return { data,
   async set(o) { Object.assign(data, structuredClone(o)); }, async remove(k) { for (const x of [].concat(k)) delete data[x]; } }; }
 const sync = area(), local = area();
 const storageListeners = [];
-let capReply = () => ({ selection: SEL }), lastScript;
+let capReply = () => ({ selection: SEL }), lastScript, scripts = [];
+const msgListeners = [];
 let clickHandler, opened = 0, lastMsg, reply, nativeCalls = 0, permGranted = true, lastReq, apiReply;
 const SEL = "Übung 1\nArbeitsanweisung\n\nIn der ersten Übungseinheit geht es darum, sich mit der im Modul verwendeten Programmiersprache Python und Jupyter Notebooks vertraut zu machen.\n\nTerminplan\nStartzeit: 12. Okt 2026, 10:00\nAbgabetermin: 19. Okt 2026, 08:30\nVerbleibende Bearbeitungsdauer: 1 Tag, 18 Stunden";
 const URL = "https://ilias.hhu.de/ilias.php?baseClass=ilexercisehandlergui&cmdNode=dk:os:5b&cmdClass=ilAssignmentPresentationGUI&ref_id=2209395&from_overview=1&ass_id=74843";
 const ctx = { console, crypto: globalThis.crypto, structuredClone, URL: globalThis.URL,
   fetch: async (url, init) => { lastReq = { url, init, body: JSON.parse(init.body) }; return apiReply(); },
   browser: { storage: { sync, local, onChanged: { addListener(f) { storageListeners.push(f); } } },
-    runtime: { id: "tasks@brandner.name", onMessageExternal: { addListener() {} }, onMessage: { addListener() {} }, sendNativeMessage: async (name, msg) => { lastMsg = { name, msg }; nativeCalls++; return reply(); } },
+    runtime: { id: "tasks@brandner.name", onMessageExternal: { addListener() {} }, onMessage: { addListener(f) { msgListeners.push(f); } }, sendNativeMessage: async (name, msg) => { lastMsg = { name, msg }; nativeCalls++; return reply(); } },
     permissions: { async contains() { return permGranted; } },
     browserAction: { onClicked: { addListener() {} } },
     sidebarAction: { open() { opened++; }, toggle() {} },
     contextMenus: { create(o) { ctx.menu = o; }, async removeAll() { ctx.menu = null; }, onClicked: { addListener(f) { clickHandler = f; } } },
-    tabs: { async executeScript(id, o) { lastScript = o; return [capReply()]; } } } };
+    tabs: { async executeScript(id, o) { scripts.push(o); if (/highlightInPage/.test(o.code)) return [true]; lastScript = o; return [capReply()]; } } } };
 vm.createContext(ctx); vm.runInContext(fs.readFileSync(P + "/background.js", "utf8"), ctx);
 const tick = () => new Promise((r) => setTimeout(r, 20));
 const okReply = (obj) => () => ({ ok: true, data: obj });
@@ -124,6 +125,15 @@ const click = async () => { clickHandler({ menuItemId: "tasks-add-selection", fr
   const ELI = "21.04.2026 - 100. Geburtstag Elisabeth II.";
   ct = await add({ targetElementId: 9 }, { section: "Termine April 2026\n" + ELI + "\n29.04.2026 - 75. Todestag Ludwig Wittgenstein", heading: "Termine April 2026", clicked: ELI }, { title: "Cap Elisabeth", link_title: "Termine" });
   ok(/Angeklickte Stelle: »21\.04\.2026 - 100\. Geburtstag Elisabeth II\.«\n\nAbschnitt um die angeklickte Stelle/.test(lastMsg.msg.prompt), "Rechtsklick auf eine Zeile: die Zeile selbst geht getrennt vor dem Abschnitt mit");
+  // highlight on the page: right after the right-click, and again on request
+  scripts = [];
+  ct = await add({ targetElementId: 9 }, { clicked: ELI, section: "Termine", locator: "body > ul > li:nth-of-type(1)" }, { title: "Cap Highlight", link_title: "Termine" });
+  const hl = scripts.find((o) => /highlightInPage/.test(o.code));
+  ok(hl && /"locator":"body > ul > li:nth-of-type\(1\)"/.test(hl.code) && /"scroll":false/.test(hl.code), "nach dem Rechtsklick leuchtet die übernommene Stelle auf der Seite kurz auf");
+  ok(local.data["tk:aiStatus"].page && local.data["tk:aiStatus"].page.locator === "body > ul > li:nth-of-type(1)" && local.data["tk:aiStatus"].page.tabId === 1, "Abschluss-Meldung enthält Tab und Pfad (für „Auf der Seite zeigen“)");
+  scripts = [];
+  const shown = await msgListeners.map((f) => f({ type: "show-on-page", tabId: 1, frameId: 0, locator: "body > ul > li:nth-of-type(1)" })).find(Boolean);
+  ok(shown && shown.ok && /"scroll":true/.test(scripts[0].code), "„Auf der Seite zeigen“: scrollt hin und hebt hervor");
   capReply = () => ({ selection: SEL });
   console.log(fails ? `\n${fails} FEHLER` : "\nAlle Prüfungen bestanden");
   process.exit(fails ? 1 : 0);
