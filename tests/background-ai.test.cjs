@@ -8,6 +8,7 @@ function area() { const data = {}; return { data,
   async set(o) { Object.assign(data, structuredClone(o)); }, async remove(k) { for (const x of [].concat(k)) delete data[x]; } }; }
 const sync = area(), local = area();
 const storageListeners = [];
+let capReply = () => ({ selection: SEL }), lastScript;
 let clickHandler, opened = 0, lastMsg, reply, nativeCalls = 0, permGranted = true, lastReq, apiReply;
 const SEL = "Übung 1\nArbeitsanweisung\n\nIn der ersten Übungseinheit geht es darum, sich mit der im Modul verwendeten Programmiersprache Python und Jupyter Notebooks vertraut zu machen.\n\nTerminplan\nStartzeit: 12. Okt 2026, 10:00\nAbgabetermin: 19. Okt 2026, 08:30\nVerbleibende Bearbeitungsdauer: 1 Tag, 18 Stunden";
 const URL = "https://ilias.hhu.de/ilias.php?baseClass=ilexercisehandlergui&cmdNode=dk:os:5b&cmdClass=ilAssignmentPresentationGUI&ref_id=2209395&from_overview=1&ass_id=74843";
@@ -19,7 +20,7 @@ const ctx = { console, crypto: globalThis.crypto, structuredClone, URL: globalTh
     browserAction: { onClicked: { addListener() {} } },
     sidebarAction: { open() { opened++; }, toggle() {} },
     contextMenus: { create(o) { ctx.menu = o; }, async removeAll() { ctx.menu = null; }, onClicked: { addListener(f) { clickHandler = f; } } },
-    tabs: { async executeScript() { return [SEL]; } } } };
+    tabs: { async executeScript(id, o) { lastScript = o; return [capReply()]; } } } };
 vm.createContext(ctx); vm.runInContext(fs.readFileSync(P + "/background.js", "utf8"), ctx);
 const tick = () => new Promise((r) => setTimeout(r, 20));
 const okReply = (obj) => () => ({ ok: true, data: obj });
@@ -98,6 +99,29 @@ const click = async () => { clickHandler({ menuItemId: "tasks-add-selection", fr
   local.data["tk:api"] = { preset: "ollama", label: "Ollama (lokal)", protocol: "openai", baseUrl: "http://localhost:11434/v1", model: "m", key: "" };
   permGranted = false; reqs = []; await click();
   ok(reqs.length === 0 && /nicht erlaubt/.test(local.data["tk:aiStatus"].text), "Zugriff fehlt → kein Aufruf, klare Meldung");
+  // --- more than the selection: links in it, clicked link/image, section
+  local.data["tk:aiMode"] = "claude-code";
+  ok(["link", "image", "page"].every((c) => ctx.menu.contexts.includes(c)), "Kontextmenü auch bei Link, Bild und irgendwo auf der Seite");
+  const PDF = "https://ilias.hhu.de/blatt2.pdf";
+  const add = async (info, cap, answer) => {
+    capReply = () => cap;
+    reply = okReply({ list_id: "uni", parent_id: "ni", update_task_id: "", notes: "", due_date: "", due_time: "", new_parent_title: "", move_task_ids: "", summary: "ok", link_url: "", ...answer });
+    clickHandler({ menuItemId: "tasks-add-selection", frameId: 0, ...info }, { id: 1, url: URL, title: "Übung 2" }); await tick(); await tick();
+    return Object.values(sync.data).find((t) => t.t === answer.title);
+  };
+  let ct = await add({ selectionText: "Blatt 2 ist online" }, { selection: "Blatt 2 ist online", links: [{ text: "Blatt 2", href: PDF }] }, { title: "Cap Blatt 2", link_title: "Blatt 2", link_url: PDF });
+  ok(/Links in der Markierung:\n- Blatt 2 → https:\/\/ilias\.hhu\.de\/blatt2\.pdf/.test(lastMsg.msg.prompt), "an die KI: Link-Ziele aus der Markierung");
+  ok(ct && ct.u && ct.u[0].url === PDF, "KI wählt den Link aus der Markierung → als Link gespeichert");
+  ct = await add({ selectionText: "x" }, { selection: "x" }, { title: "Cap Fremd", link_title: "x", link_url: "https://evil.example/x" });
+  ok(ct && ct.u && ct.u[0].url === URL, "nicht angebotene Adresse → stattdessen die Seitenadresse");
+  ct = await add({ linkUrl: PDF, linkText: "Blatt 3", targetElementId: 42 }, { selection: "", section: "Übungen\nBlatt 3 – Abgabe 26. Okt", heading: "Übungen" }, { title: "Cap Blatt 3", link_title: "Blatt 3", link_url: PDF });
+  ok(/Angeklickt: Link „Blatt 3" → https:\/\/ilias\.hhu\.de\/blatt2\.pdf/.test(lastMsg.msg.prompt) && /Abschnitt um die angeklickte Stelle \(Überschrift: „Übungen"\)/.test(lastMsg.msg.prompt) && !/Markierter Text/.test(lastMsg.msg.prompt), "Rechtsklick auf Link: Linktext, Ziel und Abschnitt (ohne leere Markierung)");
+  ok(/"targetId":42/.test(lastScript.code) && lastScript.frameId === 0, "angeklicktes Element geht an das Seiten-Skript");
+  ct = await add({ srcUrl: "https://x.de/flyer.jpg", mediaType: "image", targetElementId: 7 }, { image: { alt: "Flyer Sommerfest", caption: "Sommerfest 12.7." } }, { title: "Cap Sommerfest", link_title: "Flyer" });
+  ok(/Angeklickt: Bild https:\/\/x\.de\/flyer\.jpg – Alternativtext: „Flyer Sommerfest" – Bildunterschrift: „Sommerfest 12\.7\."/.test(lastMsg.msg.prompt), "Rechtsklick auf Bild: Adresse, Alternativtext, Bildunterschrift");
+  ct = await add({}, {}, { title: "Cap Später lesen", link_title: "Artikel" });
+  ok(/gemeint ist die Seite selbst/.test(lastMsg.msg.prompt) && ct && ct.u && ct.u[0].url === URL, "Rechtsklick irgendwo: die Seite ist gemeint, Seitenadresse als Link");
+  capReply = () => ({ selection: SEL });
   console.log(fails ? `\n${fails} FEHLER` : "\nAlle Prüfungen bestanden");
   process.exit(fails ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

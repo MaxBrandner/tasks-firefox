@@ -6,6 +6,7 @@
   "permissions": [
     "storage",
     "contextMenus",
+    "menus",
     "activeTab",
     "nativeMessaging",
     "tabGroups"

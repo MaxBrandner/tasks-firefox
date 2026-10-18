@@ -47,8 +47,8 @@ Google, kein eigener Server.
   geändert haben). Der Verlauf bleibt dauerhaft gespeichert (pro Rechner,
   höchstens 200 Schritte, platzsparend als Änderungen); „Verlauf leeren" macht
   den aktuellen Stand zum neuen Start.
-- **Zu Tasks hinzufügen (KI)** – markierten Text einer Webseite per Rechtsklick
-  als Aufgabe einsortieren lassen, siehe unten.
+- **Zu Tasks hinzufügen (KI)** – per Rechtsklick auf markierten Text, einen Link,
+  ein Bild oder irgendwo auf der Seite als Aufgabe einsortieren lassen, siehe unten.
 - **Design** – System / Hell / Dunkel (Knopf oben rechts). Einstellungen und
   Hilfe öffnen sich als Popup.
 
@@ -73,10 +73,15 @@ Seitenleiste unter `⋯` → „Tastenkürzel & Markdown".
 
 ## Zu Tasks hinzufügen (KI)
 
-Text auf einer Webseite markieren → Rechtsklick → **Zu Tasks hinzufügen**. Die
-KI sucht die passende Liste und Elternaufgabe (z. B. „nat Info"), wählt den Titel
+Rechtsklick → **Zu Tasks hinzufügen** – auf markierten Text, einen Link, ein
+Bild oder einfach irgendwo auf der Seite. Die KI bekommt die Markierung samt den
+Link-Zielen darin, den angeklickten Link bzw. die Bildangaben (Adresse,
+Alternativtext, Bildunterschrift – nicht das Bild selbst) und den Abschnitt um
+die angeklickte Stelle; nie den ganzen Seitentext oder den Quelltext. Sie
+sucht die passende Liste und Elternaufgabe (z. B. „nat Info"), wählt den Titel
 im Stil der Geschwister („Blatt 4"), trägt die Abgabefrist mit Uhrzeit ein und
-speichert die Seite als **Link** mit kurzem Namen (z. B. „Abgabe Blatt 1"). Gibt es die Aufgabe schon, wird sie ergänzt statt
+speichert den passendsten **Link** (die Seite, den angeklickten Link oder einen
+Link aus der Markierung) mit kurzem Namen (z. B. „Abgabe Blatt 1"). Gibt es die Aufgabe schon, wird sie ergänzt statt
 doppelt angelegt. Gibt es zu einem Thema noch keine Oberkategorie, landet der erste Eintrag oben
 in der Liste; beim zweiten Eintrag zum selben Thema legt die KI die
 Oberkategorie an (z. B. „DL") und schiebt beide hinein. Einfügen und
@@ -138,8 +143,8 @@ Fälligkeit", „Öffne alle Links zu DL".
   unter einer früheren Antwort holt deren Markierungen zurück. Der Text der
   Antworten lässt sich normal markieren und kopieren.
 - **Fragen zu Tasks selbst** beantwortet der Chat auch – z. B. was bei
-  „Zu Tasks hinzufügen" bei der KI ankommt (der markierte Text als reiner Text,
-  Seitentitel und -adresse; keine Link-Ziele aus der Markierung, kein Quelltext).
+  „Zu Tasks hinzufügen" bei der KI ankommt (siehe oben; kein Quelltext, keine
+  Bilder selbst).
 
 - **Wie sie arbeitet:** Die KI antwortet mit Text und mit **Aktionen aus einem
   festen Katalog** (Aufgabe anlegen/ändern/abhaken/verschieben/löschen, Links
