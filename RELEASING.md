@@ -63,7 +63,7 @@ npm run sign           # liest die AMO-Keys aus .env, signiert per API
 ```
 
 **Vor dem Signieren den Paketinhalt prüfen** – drin sein dürfen nur
-`manifest.json`, `background.js`, `icons/` und `sidebar/`:
+`manifest.json`, `background.js`, `icons/`, `shared/` und `sidebar/`:
 
 ```bash
 unzip -l web-ext-artifacts/tasks-X.Y.Z.zip

@@ -1,5 +1,5 @@
 // Run: npm test (all) or npm test <name>
-// Local privacy check (background.js: scanSensitive / redactSensitive).
+// Local privacy check (shared/privacy.js: scanSensitive / redactSensitive).
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
@@ -8,7 +8,7 @@ let fails = 0;
 const ok = (c, m) => { console.log((c ? "✔ " : "✘ ") + m); if (!c) fails++; };
 const stub = new Proxy(function () {}, { get: (t, k) => (k === "then" ? undefined : stub), apply: () => stub });
 const ctx = vm.createContext({ browser: stub, console, URL, setTimeout, clearTimeout, crypto: globalThis.crypto });
-vm.runInContext(fs.readFileSync(path.join(ROOT, "background.js"), "utf8"), ctx);
+vm.runInContext(fs.readFileSync(path.join(ROOT, "shared", "privacy.js"), "utf8"), ctx);
 const scan = (t) => ctx.scanSensitive(t).map((f) => f.kind);
 
 // finds (test numbers with valid check digits; key-like samples are put

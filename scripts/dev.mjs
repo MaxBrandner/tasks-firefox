@@ -25,7 +25,7 @@ manifest.sidebar_action.default_title = "Tasks DEV";
 delete manifest.commands; // Ctrl+Alt+A stays with the real version
 fs.writeFileSync(path.join(out, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
 
-for (const item of ["background.js", "icons", "sidebar"]) {
+for (const item of ["background.js", "icons", "shared", "sidebar"]) {
   fs.cpSync(path.join(root, item), path.join(out, item), { recursive: true });
 }
 

@@ -13,20 +13,21 @@ function native(name, msg) {
     const body = Buffer.from(JSON.stringify(msg)); const len = Buffer.alloc(4); len.writeUInt32LE(body.length); p.stdin.end(Buffer.concat([len, body]));
   });
 }
-let chatHandler;
+const listeners = [];
 const area = () => ({ async get() { return {}; }, async set() {} });
 const ctx = { console, crypto: globalThis.crypto, structuredClone, URL, browser: {
   storage: { sync: area(), local: area(), onChanged: { addListener() {} } },
-  runtime: { id: "tasks@brandner.name", onMessageExternal: { addListener() {} }, onMessage: { addListener(f) { chatHandler = f; } }, sendNativeMessage: native },
+  runtime: { id: "tasks@brandner.name", onMessageExternal: { addListener() {} }, onMessage: { addListener(f) { listeners.push(f); } }, sendNativeMessage: native },
   browserAction: { onClicked: { addListener() {} } }, sidebarAction: {},
   contextMenus: { create() {}, async removeAll() {}, onClicked: { addListener() {} } } } };
-vm.createContext(ctx); vm.runInContext(fs.readFileSync(P + "/background.js", "utf8"), ctx);
+vm.createContext(ctx);
+for (const f of ["shared/privacy.js", "background.js"]) vm.runInContext(fs.readFileSync(P + "/" + f, "utf8"), ctx);
 const H = require("../harness.cjs")(P, JSON.parse(fs.readFileSync(BACKUP, "utf8")));
-H.chatReply = (msg) => chatHandler(msg);
+H.chatReply = (msg) => listeners.map((f) => f(msg)).find(Boolean);
 const title = (id) => (H.sync.data["T:" + id] || H.sync.data["L:" + id] || {}).t;
 (async () => {
   await H.tick(); await H.tick();
-  const d = H.d; d.getElementById("chatBtn").click(); await H.tick();
+  const d = H.d; d.getElementById("tabChat").click(); await H.tick();
   for (const text of [
     "Was ist diese Woche fällig?",
     "Lege unter DS 2 eine Unteraufgabe „Klausur anmelden“ an, fällig nächsten Freitag",

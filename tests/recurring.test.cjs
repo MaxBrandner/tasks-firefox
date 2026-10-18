@@ -36,15 +36,5 @@ const chipText = (t) => li(t).querySelector(":scope>.row .due .due-label")?.text
   edit("Bald"); await tick();
   li("Bald").querySelector('.details .icon-btn.small[title="Datum entfernen"]').click(); await tick();
   ok(!T("Bald").d && !T("Bald").h && !T("Bald").r, "Datum entfernen → Uhrzeit + Wiederholung weg");
-  // AI status from the background script
-  await H.local.set({ "tk:aiStatus": { state: "working", text: "Claude legt die Aufgabe an …", at: Date.now() } });
-  ok(!d.getElementById("aiStatus").hidden && d.getElementById("aiStatusText").textContent.startsWith("Claude"), "Statuszeile „Claude legt … an“");
-  const newT = { l: "default", p: "a1", t: "Blatt 9", d: "2026-10-19", h: "08:30", o: 5 };
-  await sync.set({ "T:k9": newT });
-  await H.local.set({ "tk:aiStatus": { state: "done", text: "„Blatt 9“ angelegt", taskId: "k9", before: { "T:k9": null }, after: { "T:k9": newT }, at: Date.now() } });
-  await tick();
-  ok(d.getElementById("aiStatus").hidden && !d.getElementById("toast").hidden && li("Blatt 9").classList.contains("flash"), "fertig: Hinweis + neue Aufgabe hervorgehoben");
-  await bodyKey("z", { ctrlKey: true });
-  ok(!sync.data["T:k9"], "Strg+Z entfernt die von Claude angelegte Aufgabe");
   H.finish();
 })().catch((e) => { console.error(e); process.exit(1); });

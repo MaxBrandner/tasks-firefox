@@ -19,7 +19,7 @@ module.exports = function setup(P, pre = {}, opts = {}) {
     tabGroups: { async update(id, o) { H0.groupTitle = o.title; } },
     runtime: { id: opts.runtimeId || "tasks@brandner.name",
       onMessage: { addListener(f) { (H0.msgListeners = H0.msgListeners || []).push(f); } },
-      async sendMessage(id, msg) { if (id && (id.type === "picker-start" || id.type === "picker-stop")) { H0.picker = (H0.picker || []).concat(id.type); return id.type === "picker-start" ? { ok: true, title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine" } : { ok: true }; } if (id && id.type === "page-text") return H0.pageText ? H0.pageText() : { ok: false, error: "kein Mock" }; if (id && id.type === "chat") { H0.chatPrompts = (H0.chatPrompts || []).concat(id.prompt); H0.chatAttachments = id.attachments || []; return H0.chatReply ? H0.chatReply(id) : { ok: false, error: "kein Mock" }; } H0.pings = (H0.pings || 0) + 1; if (H0.devReply) return H0.devReply(id, msg); throw new Error("Could not establish connection. Receiving end does not exist."); },
+      async sendMessage(id, msg) { if (id && id.type === "show-on-page") { H0.shown = (H0.shown || []).concat(id); return { ok: H0.showOk !== false }; } if (id && (id.type === "picker-start" || id.type === "picker-stop")) { H0.picker = (H0.picker || []).concat(id.type); return id.type === "picker-start" ? { ok: true, title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine" } : { ok: true }; } if (id && id.type === "page-text") return H0.pageText ? H0.pageText() : { ok: false, error: "kein Mock" }; if (id && id.type === "chat") { H0.chatPrompts = (H0.chatPrompts || []).concat(id.prompt); H0.chatAttachments = id.attachments || []; return H0.chatReply ? H0.chatReply(id) : { ok: false, error: "kein Mock" }; } H0.pings = (H0.pings || 0) + 1; if (H0.devReply) return H0.devReply(id, msg); throw new Error("Could not establish connection. Receiving end does not exist."); },
       async sendNativeMessage(app, msg) { (H0.nativeSent = H0.nativeSent || []).push(msg); return H0.nativeReply ? H0.nativeReply(msg) : { ok: true, version: "2.1.302 (Claude Code)" }; } } };
   if (!w.crypto.randomUUID) w.crypto.randomUUID = () => require("crypto").randomUUID();
   w.Element.prototype.scrollIntoView = () => {};
@@ -32,6 +32,7 @@ module.exports = function setup(P, pre = {}, opts = {}) {
     w.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
     w.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new w.Event("close")); };
   }
+  w.eval(fs.readFileSync(P + "/shared/privacy.js", "utf8"));
   w.eval(fs.readFileSync(P + "/sidebar/sidebar.js", "utf8"));
   let fails = 0;
   const H = Object.assign(H0, { w, d, sync, local });

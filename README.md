@@ -74,19 +74,27 @@ Seitenleiste unter `⋯` → „Tastenkürzel & Markdown".
 ## Zu Tasks hinzufügen (KI)
 
 Rechtsklick → **Zu Tasks hinzufügen** – auf markierten Text, einen Link, ein
-Bild oder einfach irgendwo auf der Seite. Die KI bekommt die Markierung samt den
-Link-Zielen darin, den angeklickten Link bzw. die Bildangaben (Adresse,
-Alternativtext, Bildunterschrift – nicht das Bild selbst) und den Abschnitt um
-die angeklickte Stelle; nie den ganzen Seitentext oder den Quelltext. Sie
-sucht die passende Liste und Elternaufgabe (z. B. „nat Info"), wählt den Titel
-im Stil der Geschwister („Blatt 4"), trägt die Abgabefrist mit Uhrzeit ein und
-speichert den passendsten **Link** (die Seite, den angeklickten Link oder einen
-Link aus der Markierung) mit kurzem Namen (z. B. „Abgabe Blatt 1"). Gibt es die Aufgabe schon, wird sie ergänzt statt
-doppelt angelegt. Gibt es zu einem Thema noch keine Oberkategorie, landet der erste Eintrag oben
-in der Liste; beim zweiten Eintrag zum selben Thema legt die KI die
-Oberkategorie an (z. B. „DL") und schiebt beide hinein. Einfügen und
-Gruppieren sind getrennte Schritte: Das erste Strg+Z nimmt nur die Gruppierung
-zurück, das Eingefügte bleibt.
+Bild oder einfach irgendwo auf der Seite. Die Stelle leuchtet auf der Seite kurz
+auf und landet als **Karte im Chat** (ein Klick auf die Karte zeigt sie wieder).
+Mehrere Rechtsklicks sammeln sich; erst wenn du sendest, arbeitet die KI – mit
+einer Anweisung („unter DS 2“, „nur den ersten Termin“) oder einfach mit Enter
+im leeren Feld („Zu Tasks hinzufügen“).
+
+Mit dabei: die Markierung samt den Link-Zielen darin, der angeklickte Link, die
+angeklickte Stelle und der Abschnitt drumherum, bei Bildern ein Ausschnitt des
+Bildes selbst; nie der ganze Seitentext (dafür „+ → Ganze Seite schicken“).
+Steht darin etwas wie eine IBAN, eine Kreditkartennummer, ein Schlüssel oder
+ein Passwort, fragt Tasks vorher nach („Ohne diese Stellen senden“ /
+„Trotzdem senden“ / „Abbrechen“) – geprüft wird auf deinem Rechner, bevor
+etwas verschickt wird.
+
+Die KI sucht die passende Liste und Elternaufgabe (z. B. „nat Info“), wählt den
+Titel im Stil der Geschwister („Blatt 4“), trägt die Abgabefrist mit Uhrzeit ein
+und speichert den passendsten **Link** (die Seite, den angeklickten Link oder
+einen Link aus der Markierung). Gibt es die Aufgabe schon, wird sie ergänzt
+statt doppelt angelegt. Kommt zu einem Thema ein zweiter Eintrag, legt sie die
+Oberkategorie an (z. B. „DL“) und schiebt beide hinein. Alles, was eine Antwort
+ändert, nimmt ihr „Rückgängig“ (bzw. Strg+Z) in einem Schritt zurück.
 
 Eingestellt wird das unter `⋯` → **KI einrichten …**:
 
@@ -157,8 +165,7 @@ Fälligkeit", „Öffne alle Links zu DL".
   „schalte die KI aus“ (fragt vorher nach) gehen auch im Chat. API-Schlüssel,
   Modelle und Adressen nie – die gehören nicht in den Chat (⋯ → „KI einrichten …“).
 - **Fragen zu Tasks selbst** beantwortet der Chat auch – z. B. was bei
-  „Zu Tasks hinzufügen" bei der KI ankommt (siehe oben; kein Quelltext, keine
-  Bilder selbst).
+  „Zu Tasks hinzufügen" bei der KI ankommt (siehe oben).
 
 - **Wie sie arbeitet:** Die KI antwortet mit Text und mit **Aktionen aus einem
   festen Katalog** (Aufgabe anlegen/ändern/abhaken/verschieben/löschen, Links

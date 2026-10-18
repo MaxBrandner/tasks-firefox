@@ -154,6 +154,39 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   $("chatPlusMenu").querySelector('[data-add="picker"]').click(); await H.tick(); await H.tick();
   pickCard().querySelector(".att-x").click(); await H.tick();
   ok(H.picker.slice(-1)[0] === "picker-stop" && !pickCard(), "× an der Karte beendet den Picker");
+  // right-click "Zu Tasks hinzufügen": card from the mailbox, sent with "Zu Tasks hinzufügen"
+  const capItem = (id, label, text, extra = {}) => ({ id, at: Date.now(), title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine", label, text, page: { tabId: 3, frameId: 0, locator: "li:nth-of-type(1)" }, ...extra });
+  await H.local.set({ "tk:captures": [capItem("c1", "21.04.2026 - 100. Geburtstag Elisabeth II.", "Seite: Termine 2026\nAdresse: https://www.sonntagsblatt.de/termine\n\nAngeklickte Stelle: »21.04.2026 - 100. Geburtstag Elisabeth II.«")] }); await H.tick(); await H.tick();
+  const capCard = () => [...$("chatAttach").querySelectorAll(".att-card")].find((c) => /📎/.test(c.querySelector(".att-thumb").textContent));
+  ok(capCard() && capCard().querySelector(".att-name").textContent.startsWith("21.04.2026") && capCard().querySelector(".att-sub").textContent === "www.sonntagsblatt.de" && !H.local.data["tk:captures"], "Rechtsklick-Eintrag erscheint als Karte im Chat (Briefkasten geleert)");
+  H.shown = [];
+  capCard().click(); await H.tick();
+  ok(H.shown.length === 1 && H.shown[0].locator === "li:nth-of-type(1)" && H.shown[0].tabId === 3, "Klick auf die Karte zeigt die Stelle auf der Seite");
+  await say("", { reply: "„100. Geburtstag Elisabeth II.“ angelegt.", actions: [], highlight: [] });
+  ok(/Von der Webseite \(Rechtsklick\):\n<<<\nSeite: Termine 2026[\s\S]*Angeklickte Stelle: »21\.04\.2026[\s\S]*>>>\n+Neue Nachricht des Nutzers:\n<<<\nZu Tasks hinzufügen\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]) && !capCard(), "leer gesendet: „Zu Tasks hinzufügen“ mit dem Eintrag als Anhang");
+  // privacy question before sending
+  const IBAN = "DE89 3704 0044 0532 0130 00";
+  const capCount = H.chatPrompts.length;
+  await H.local.set({ "tk:captures": [capItem("c2", "Überweisung", "Seite: Konto\n\nMarkierter Text:\n<<<\nBitte zahlen auf " + IBAN + " bis Freitag\n>>>")] }); await H.tick(); await H.tick();
+  await say("Leg eine Erinnerung an", { reply: "Erinnerung angelegt.", actions: [], highlight: [] });
+  const warn = () => $("chatLog").querySelector(".chat-warn");
+  ok(H.chatPrompts.length === capCount && warn() && /Kurz nachgefragt/.test(warn().textContent) && /IBAN \(DE89 …00\)/.test(warn().textContent) && !/Haltepunkt/.test(warn().textContent), "IBAN im Anhang → erst die Rückfrage „Kurz nachgefragt“, nichts gesendet");
+  [...warn().querySelectorAll("button")].find((b) => /Ohne diese Stellen/.test(b.textContent)).click(); await H.tick(); await H.tick();
+  ok(H.chatPrompts.length === capCount + 1 && /Bitte zahlen auf \[entfernt\] bis Freitag/.test(H.chatPrompts[H.chatPrompts.length - 1]) && !H.chatPrompts[H.chatPrompts.length - 1].includes("3704") && !warn(), "„Ohne diese Stellen senden“: IBAN durch [entfernt] ersetzt");
+  await H.local.set({ "tk:captures": [capItem("c3", "Überweisung", "Bitte zahlen auf " + IBAN)] }); await H.tick(); await H.tick();
+  await say("", { reply: "ok", actions: [], highlight: [] });
+  [...warn().querySelectorAll("button")].find((b) => /Trotzdem/.test(b.textContent)).click(); await H.tick(); await H.tick();
+  ok(H.chatPrompts[H.chatPrompts.length - 1].includes(IBAN), "„Trotzdem senden“ schickt unverändert");
+  await H.local.set({ "tk:captures": [capItem("c4", "Überweisung", "Bitte zahlen auf " + IBAN)] }); await H.tick(); await H.tick();
+  const before = H.chatPrompts.length;
+  await say("", { reply: "ok", actions: [], highlight: [] });
+  [...warn().querySelectorAll("button")].find((b) => /Abbrechen/.test(b.textContent)).click(); await H.tick();
+  ok(H.chatPrompts.length === before && !warn() && capCard(), "„Abbrechen“: nichts gesendet, Karte bleibt");
+  capCard().querySelector(".att-x").click(); await H.tick();
+  // references to things created in the same answer ([[T:ref:x]]) become real chips
+  await say("Leg Gruppe Test mit Unterpunkt an", { reply: "[[T:ref:g]] mit [[T:ref:u]] angelegt.", highlight: [], actions: [A({ op: "create_task", title: "Gruppe Test", ref: "g" }), A({ op: "create_task", parent: "ref:g", title: "Unterpunkt", ref: "u" })] });
+  const refChips = [...last().querySelectorAll(".chat-text .ref-chip")].map((c) => c.textContent);
+  ok(refChips.join() === "Gruppe Test,Unterpunkt" && !/ref:/.test(last().textContent), "Verweise auf gerade Angelegtes werden zu Chips: " + refChips);
   // highlight in another list → sidebar switches there
   d.getElementById("listSelect").value = "priv"; d.getElementById("listSelect").dispatchEvent(new H.w.Event("change")); await H.tick();
   await say("Was ist bei DL offen?", { reply: "[[T:b1]] und [[T:fo]].", actions: [], highlight: ["b1", "fo"] });

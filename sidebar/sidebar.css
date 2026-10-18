@@ -946,28 +946,8 @@ kbd {
   outline: none;
 }
 
-.ai-status {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 10px 8px;
-  padding: 7px 6px 7px 10px;
-  border-radius: 6px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 12.5px;
-}
 
-.ai-status span {
-  flex: 1;
-  min-width: 0;
-}
 
-.ai-status.error {
-  background: color-mix(in srgb, var(--danger) 14%, var(--surface));
-  color: var(--danger);
-}
 
 /* Briefly highlight a task just created by the AI. */
 .task.flash > .row {
@@ -1789,6 +1769,55 @@ kbd {
   top: 2px;
   right: 2px;
   background: var(--surface);
+}
+
+.att-card.clickable {
+  cursor: pointer;
+}
+
+.att-card.clickable:hover {
+  border-color: var(--accent);
+}
+
+/* "Kurz nachgefragt": privacy question before sending. */
+.chat-warn {
+  margin: 6px 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--soon) 45%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--soon) 9%, var(--surface));
+  font-size: 12.5px;
+}
+
+.chat-warn b {
+  color: var(--soon);
+}
+
+.warn-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.warn-btns button {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.warn-btns .warn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.warn-btns .warn-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
 }
 
 /* The picked-blocks card while the picker runs on the page. */
