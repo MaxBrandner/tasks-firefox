@@ -185,7 +185,16 @@
           <span id="chatQuoteText"></span>
           <button id="chatQuoteX" class="icon-btn small" type="button" title="Zitat entfernen" aria-label="Zitat entfernen"></button>
         </div>
+        <div id="chatAttach" class="chat-attach" hidden></div>
+        <div id="chatPlusMenu" class="menu chat-plus-menu" role="menu" hidden>
+          <button type="button" role="menuitem" data-add="picker" hidden>⌖ Element auf der Seite auswählen<small>Blöcke anklicken, die mitgehen sollen</small></button>
+          <button type="button" role="menuitem" data-add="file">📄 Datei hinzufügen …<small>PDF, Bild oder Text – auch per Drag &amp; Drop</small></button>
+          <button type="button" role="menuitem" data-add="page">🌐 Ganze Seite schicken<small>Text der aktuellen Seite</small></button>
+        </div>
+        <input id="chatFile" type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,text/*,.md,.txt,.csv" hidden />
+        <div id="chatDrop" class="chat-drop" hidden><div>📄 Datei hier ablegen<small>PDF, Bild oder Text – die KI zieht Aufgaben heraus</small></div></div>
         <form id="chatForm" class="chat-form" autocomplete="off">
+          <button id="chatPlus" class="icon-btn" type="button" title="Hinzufügen: Datei oder ganze Seite" aria-label="Hinzufügen" aria-haspopup="menu" aria-expanded="false"></button>
           <textarea id="chatInput" rows="1" maxlength="2000" placeholder="Frag oder sag, was passieren soll … (Enter = senden)" aria-label="Nachricht an die KI"></textarea>
           <button id="chatSend" class="icon-btn" type="submit" title="Senden" aria-label="Senden"></button>
         </form>

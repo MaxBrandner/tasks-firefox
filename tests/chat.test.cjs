@@ -116,6 +116,29 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   H.local.data["tk:aiMode"] = "claude-code";
   await say("Wieder hell bitte", { reply: "Ok.", highlight: [], actions: [A({ op: "set_setting", target: "theme", value: "light" })] });
   ok(/Einstellungen: theme=dark, done_section=open/.test(H.chatPrompts[H.chatPrompts.length - 1]) && d.documentElement.dataset.theme === "light", "die KI kennt die aktuellen Einstellungen");
+  // "+": files by drag & drop, cards, sending; whole page
+  $("chatPlus").click(); await H.tick();
+  ok(!$("chatPlusMenu").hidden && $("chatPlusMenu").querySelector('[data-add="picker"]').hidden, "„+“ öffnet das Menü (Picker-Punkt noch verborgen)");
+  d.body.dispatchEvent(new H.w.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); await H.tick();
+  ok($("chatPlusMenu").hidden, "Esc schließt das „+“-Menü");
+  const dropEv = (type, files) => { const ev = new H.w.Event(type, { bubbles: true, cancelable: true }); Object.defineProperty(ev, "dataTransfer", { value: { types: ["Files"], files } }); return ev; };
+  $("chatPanel").dispatchEvent(dropEv("dragenter", []));
+  ok(!$("chatDrop").hidden, "Datei über den Chat ziehen → Ablage-Hinweis");
+  const pdf = new H.w.File(["%PDF-1.4 Übungsblatt"], "Blatt4.pdf", { type: "application/pdf" });
+  const zip = new H.w.File(["PK"], "x.zip", { type: "application/zip" });
+  $("chatPanel").dispatchEvent(dropEv("drop", [pdf, zip])); await new Promise((r) => setTimeout(r, 50)); await H.tick();
+  ok($("chatDrop").hidden && $("chatAttach").querySelectorAll(".att-card").length === 1 && $("chatAttach").querySelector(".att-name").textContent === "Blatt4.pdf", "abgelegte PDF erscheint als Karte");
+  ok(/x\.zip“: nur PDF, Bild oder Text/.test($("chatAttach").textContent), "falscher Dateityp → Hinweis, keine Karte");
+  await say("", { reply: "Ich lege „Blatt 4“ an.", actions: [], highlight: [] });
+  const sentAtt = [...$("chatLog").querySelectorAll(".chat-msg.user")].pop();
+  ok(H.chatAttachments.length === 1 && H.chatAttachments[0].media_type === "application/pdf" && H.chatAttachments[0].name === "Blatt4.pdf" && H.chatAttachments[0].data.length > 10, "Datei geht als Anhang an die KI");
+  ok(/Datei: Blatt4\.pdf \(PDF\) – liegt bei/.test(H.chatPrompts[H.chatPrompts.length - 1]) && /Was ergibt sich daraus/.test(sentAtt.textContent) && /Blatt4\.pdf/.test(sentAtt.querySelector(".msg-atts").textContent) && !$("chatAttach").querySelector(".att-card"), "ohne Text gesendet: Standardfrage, Anhang-Chip in der Nachricht, Karten weg");
+  H.pageText = () => ({ ok: true, title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine", text: "21.04.2026 - 100. Geburtstag" });
+  H.perm.answer = true;
+  $("chatPlusMenu").querySelector('[data-add="page"]').click(); await H.tick(); await H.tick();
+  ok($("chatAttach").querySelector(".att-name").textContent === "Termine 2026" && $("chatAttach").querySelector(".att-sub").textContent === "www.sonntagsblatt.de", "„Ganze Seite schicken“ → Karte mit Titel und Adresse");
+  await say("Was ist hier wichtig?", { reply: "Der Geburtstag.", actions: [], highlight: [] });
+  ok(/Ganze Seite „Termine 2026“ \(https:\/\/www\.sonntagsblatt\.de\/termine\):\n<<<\n21\.04\.2026 - 100\. Geburtstag\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]), "Seitentext steht im Prompt an die KI");
   // highlight in another list → sidebar switches there
   d.getElementById("listSelect").value = "priv"; d.getElementById("listSelect").dispatchEvent(new H.w.Event("change")); await H.tick();
   await say("Was ist bei DL offen?", { reply: "[[T:b1]] und [[T:fo]].", actions: [], highlight: ["b1", "fo"] });

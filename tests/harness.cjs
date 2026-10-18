@@ -18,7 +18,7 @@ module.exports = function setup(P, pre = {}, opts = {}) {
     tabs: { async create(o) { H0.tabsOpened.push(o); return { id: H0.tabsOpened.length }; }, async group(o) { H0.grouped = o.tabIds; return 77; }, async update() {} },
     tabGroups: { async update(id, o) { H0.groupTitle = o.title; } },
     runtime: { id: opts.runtimeId || "tasks@brandner.name",
-      async sendMessage(id, msg) { if (id && id.type === "chat") { H0.chatPrompts = (H0.chatPrompts || []).concat(id.prompt); return H0.chatReply ? H0.chatReply(id) : { ok: false, error: "kein Mock" }; } H0.pings = (H0.pings || 0) + 1; if (H0.devReply) return H0.devReply(id, msg); throw new Error("Could not establish connection. Receiving end does not exist."); },
+      async sendMessage(id, msg) { if (id && id.type === "page-text") return H0.pageText ? H0.pageText() : { ok: false, error: "kein Mock" }; if (id && id.type === "chat") { H0.chatPrompts = (H0.chatPrompts || []).concat(id.prompt); H0.chatAttachments = id.attachments || []; return H0.chatReply ? H0.chatReply(id) : { ok: false, error: "kein Mock" }; } H0.pings = (H0.pings || 0) + 1; if (H0.devReply) return H0.devReply(id, msg); throw new Error("Could not establish connection. Receiving end does not exist."); },
       async sendNativeMessage(app, msg) { (H0.nativeSent = H0.nativeSent || []).push(msg); return H0.nativeReply ? H0.nativeReply(msg) : { ok: true, version: "2.1.302 (Claude Code)" }; } } };
   if (!w.crypto.randomUUID) w.crypto.randomUUID = () => require("crypto").randomUUID();
   w.Element.prototype.scrollIntoView = () => {};

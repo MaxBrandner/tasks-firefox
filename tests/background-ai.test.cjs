@@ -134,6 +134,22 @@ const click = async () => { clickHandler({ menuItemId: "tasks-add-selection", fr
   scripts = [];
   const shown = await msgListeners.map((f) => f({ type: "show-on-page", tabId: 1, frameId: 0, locator: "body > ul > li:nth-of-type(1)" })).find(Boolean);
   ok(shown && shown.ok && /"scroll":true/.test(scripts[0].code), "„Auf der Seite zeigen“: scrollt hin und hebt hervor");
+  // chat with attachments
+  local.data["tk:aiMode"] = "claude-code";
+  reply = okReply({ reply: "ok", actions: [], highlight: [] });
+  const att = [{ media_type: "application/pdf", data: "JVBERi0=", name: "Blatt4.pdf" }];
+  await msgListeners.map((f) => f({ type: "chat", prompt: "Was steht drin?", attachments: att })).find(Boolean);
+  ok(lastMsg.msg.attachments && lastMsg.msg.attachments[0].name === "Blatt4.pdf" && lastMsg.msg.prompt === "Was steht drin?", "Chat-Anhänge gehen an das Hilfsprogramm");
+  local.data["tk:aiMode"] = "api"; permGranted = true;
+  local.data["tk:api"] = { preset: "anthropic", label: "Anthropic (Claude)", protocol: "anthropic", baseUrl: "https://api.anthropic.com/v1", model: "claude-opus-5-5", key: "x" };
+  apiReply = anthrOk({ reply: "ok", actions: [], highlight: [] });
+  await msgListeners.map((f) => f({ type: "chat", prompt: "Was steht drin?", attachments: att })).find(Boolean);
+  const content = lastReq.body.messages[0].content;
+  ok(Array.isArray(content) && content[0].type === "document" && content[0].source.media_type === "application/pdf" && content[1].text === "Was steht drin?", "eigenes Claude-Modell: PDF als document-Block");
+  local.data["tk:api"] = { preset: "ollama", label: "Ollama (lokal)", protocol: "openai", baseUrl: "http://localhost:11434/v1", model: "qwen-test", key: "" };
+  const pdfErr = await msgListeners.map((f) => f({ type: "chat", prompt: "x", attachments: att })).find(Boolean);
+  ok(pdfErr && !pdfErr.ok && /PDFs gehen mit diesem Modell nicht/.test(pdfErr.error), "OpenAI-kompatibles Modell: PDF → klare Meldung");
+  local.data["tk:aiMode"] = "claude-code";
   capReply = () => ({ selection: SEL });
   console.log(fails ? `\n${fails} FEHLER` : "\nAlle Prüfungen bestanden");
   process.exit(fails ? 1 : 0);
