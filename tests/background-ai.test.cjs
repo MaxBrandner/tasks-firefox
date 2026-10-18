@@ -121,6 +121,9 @@ const click = async () => { clickHandler({ menuItemId: "tasks-add-selection", fr
   ok(/Angeklickt: Bild https:\/\/x\.de\/flyer\.jpg – Alternativtext: „Flyer Sommerfest" – Bildunterschrift: „Sommerfest 12\.7\."/.test(lastMsg.msg.prompt), "Rechtsklick auf Bild: Adresse, Alternativtext, Bildunterschrift");
   ct = await add({}, {}, { title: "Cap Später lesen", link_title: "Artikel" });
   ok(/gemeint ist die Seite selbst/.test(lastMsg.msg.prompt) && ct && ct.u && ct.u[0].url === URL, "Rechtsklick irgendwo: die Seite ist gemeint, Seitenadresse als Link");
+  const ELI = "21.04.2026 - 100. Geburtstag Elisabeth II.";
+  ct = await add({ targetElementId: 9 }, { section: "Termine April 2026\n" + ELI + "\n29.04.2026 - 75. Todestag Ludwig Wittgenstein", heading: "Termine April 2026", clicked: ELI }, { title: "Cap Elisabeth", link_title: "Termine" });
+  ok(/Angeklickte Stelle: »21\.04\.2026 - 100\. Geburtstag Elisabeth II\.«\n\nAbschnitt um die angeklickte Stelle/.test(lastMsg.msg.prompt), "Rechtsklick auf eine Zeile: die Zeile selbst geht getrennt vor dem Abschnitt mit");
   capReply = () => ({ selection: SEL });
   console.log(fails ? `\n${fails} FEHLER` : "\nAlle Prüfungen bestanden");
   process.exit(fails ? 1 : 0);
