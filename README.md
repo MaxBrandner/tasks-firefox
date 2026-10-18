@@ -134,8 +134,12 @@ Fälligkeit", „Öffne alle Links zu DL".
   geänderten (grün) Aufgaben eine Minute lang markiert – auch wenn der Chat
   nicht zu sehen ist –, dann verblassen sie. Eine Aufgabe, die du anfasst
   (anklicken, bearbeiten, abhaken, verschieben), verliert ihre Markierung
-  sofort. Eine neue Antwort ersetzt alle Markierungen; ein Klick auf eine
-  frühere Antwort zeigt deren Markierungen wieder.
+  sofort. Eine neue Antwort ersetzt alle Markierungen; „Markierungen zeigen"
+  unter einer früheren Antwort holt deren Markierungen zurück. Der Text der
+  Antworten lässt sich normal markieren und kopieren.
+- **Fragen zu Tasks selbst** beantwortet der Chat auch – z. B. was bei
+  „Zu Tasks hinzufügen" bei der KI ankommt (der markierte Text als reiner Text,
+  Seitentitel und -adresse; keine Link-Ziele aus der Markierung, kein Quelltext).
 
 - **Wie sie arbeitet:** Die KI antwortet mit Text und mit **Aktionen aus einem
   festen Katalog** (Aufgabe anlegen/ändern/abhaken/verschieben/löschen, Links

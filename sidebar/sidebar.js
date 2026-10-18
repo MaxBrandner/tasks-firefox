@@ -2587,13 +2587,6 @@
     renderBlock(m.text || "", body);
     const el = h("div", { class: "chat-msg " + m.role + (m.error ? " error" : "") }, body);
     if (m.role !== "assistant" || m.error) return el;
-    if ((m.highlight && m.highlight.length) || (m.changed && m.changed.length && !m.undone)) {
-      el.classList.add("has-marks");
-      el.title = "Klicken: Markierungen dieser Antwort wieder zeigen";
-      el.addEventListener("click", (e) => {
-        if (!e.target.closest("button, a")) showMsgMarks(m);
-      });
-    }
     if (m.pending) {
       el.append(h("div", { class: "chat-pending" },
         h("span", null, describeActions(m.actions)),
@@ -2642,6 +2635,15 @@
     if (m.undoError) el.append(h("div", { class: "chat-note warn" }, m.undoError));
     if (m.opened) el.append(h("div", { class: "chat-note" }, m.opened === 1 ? "1 Link geöffnet." : m.opened + " Links als Tab-Gruppe geöffnet."));
     if (m.problems && m.problems.length) el.append(h("div", { class: "chat-note warn" }, "Nicht ausgeführt: " + m.problems.join("; ")));
+    // A button, not a click on the bubble: the text must stay selectable.
+    if ((m.highlight && m.highlight.length) || (m.changed && m.changed.length && !m.undone)) {
+      el.append(h("div", { class: "chat-reshow" }, h("button", {
+        class: "link-btn",
+        type: "button",
+        title: "Die Aufgaben dieser Antwort in der Liste wieder hervorheben",
+        onclick: () => showMsgMarks(m),
+      }, "Markierungen zeigen")));
+    }
     return el;
   }
 

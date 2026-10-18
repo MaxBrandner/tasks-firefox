@@ -60,7 +60,9 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   H.li("Blatt 1").querySelector(".row").click(); await H.tick();
   ok(!H.li("Blatt 1").classList.contains("chat-mark") && $("tabMarks").hidden, "Aufgabe angefasst → gilt als gesehen, Markierung weg");
   last().click(); await H.tick();
-  ok(H.li("Blatt 1").classList.contains("chat-mark") && d.body.dataset.chat === "tasks", "Klick auf die KI-Antwort zeigt ihre Markierung wieder (schmal: Reiter „Aufgaben“)");
+  ok(!H.li("Blatt 1").classList.contains("chat-mark") && d.body.dataset.chat === "full", "Klick in den Antworttext ändert nichts (Text bleibt markierbar)");
+  last().querySelector(".chat-reshow .link-btn").click(); await H.tick();
+  ok(H.li("Blatt 1").classList.contains("chat-mark") && d.body.dataset.chat === "tasks", "„Markierungen zeigen“ holt die Markierung zurück (schmal: Reiter „Aufgaben“)");
   const prompt = H.chatPrompts[H.chatPrompts.length - 1];
   ok(/Blatt 1 \(id: b1, fällig 2026-10-21 12:00, Links: Abgabe <https:\/\/ilias\.hhu\.de\/b1>\)/.test(prompt) && /Gerade aufgeklappt: „Blatt 1“ \(id: b1\)/.test(prompt) && /<<<\nWas ist diese Woche fällig\?\n>>>/.test(prompt), "an die KI: Baum mit IDs/Links, aufgeklappte Aufgabe, Nachricht");
   // highlight in another list → sidebar switches there

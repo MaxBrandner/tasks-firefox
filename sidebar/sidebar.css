@@ -1646,13 +1646,14 @@ kbd {
   box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) calc(100% * var(--mark-o, 1)), transparent);
 }
 
-/* An answer whose marks can be shown again by clicking it. */
-.chat-msg.has-marks {
-  cursor: pointer;
+/* "Markierungen zeigen" under an answer. */
+.chat-reshow {
+  margin-top: 4px;
 }
 
-.chat-msg.has-marks:hover {
-  border-color: var(--accent);
+.chat-reshow .link-btn {
+  padding: 1px 4px;
+  font-size: 11.5px;
 }
 
 /* Where the chat is visible, the undo toast moves to the top (it would cover the input). */
