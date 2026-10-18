@@ -101,6 +101,8 @@
     chat: "M4 5h16v11H9l-5 4z",
     send: "M4 12l16-8-6 16-2-7z",
     check: "M5 12.5l4.5 4.5L19 7.5",
+    copy: "M8 8h12v12H8zM16 8V4H4v12h4",
+    target: "M12 3v4M12 17v4M3 12h4M17 12h4M12 8a4 4 0 1 1 0 8a4 4 0 1 1 0-8z",
     more: "M5 12h.01M12 12h.01M19 12h.01",
     grip: "M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01",
     plus: "M12 5v14M5 12h14",
@@ -2586,6 +2588,7 @@
     const body = h("div", { class: "md-view chat-text" });
     renderBlock(m.text || "", body);
     const el = h("div", { class: "chat-msg " + m.role + (m.error ? " error" : "") }, body);
+    if (!m.error) el.prepend(msgTools(m));
     if (m.role !== "assistant" || m.error) return el;
     if (m.pending) {
       el.append(h("div", { class: "chat-pending" },
@@ -2635,21 +2638,6 @@
     if (m.undoError) el.append(h("div", { class: "chat-note warn" }, m.undoError));
     if (m.opened) el.append(h("div", { class: "chat-note" }, m.opened === 1 ? "1 Link geöffnet." : m.opened + " Links als Tab-Gruppe geöffnet."));
     if (m.problems && m.problems.length) el.append(h("div", { class: "chat-note warn" }, "Nicht ausgeführt: " + m.problems.join("; ")));
-    // Buttons, not a click on the bubble: the text must stay selectable.
-    const marked = (m.highlight && m.highlight.length) || (m.changed && m.changed.length && !m.undone);
-    el.append(h("div", { class: "chat-tools" },
-      h("button", {
-        class: "link-btn",
-        type: "button",
-        title: "Antwort als Text kopieren",
-        onclick: (e) => copyChatText(m, e.currentTarget),
-      }, "Kopieren"),
-      marked && h("button", {
-        class: "link-btn",
-        type: "button",
-        title: "Die Aufgaben dieser Antwort in der Liste wieder hervorheben",
-        onclick: () => showMsgMarks(m),
-      }, "Markierungen zeigen")));
     return el;
   }
 
@@ -2691,14 +2679,29 @@
     });
   }
 
+  // Obsidian-style icons in the top-right corner of a message, shown on hover.
+  // Sticky, so they stay reachable when the top of a long message is scrolled
+  // away. Buttons, not a click on the bubble: the text must stay selectable.
+  function msgTools(m) {
+    const marked = m.role === "assistant" && !!((m.highlight && m.highlight.length) || (m.changed && m.changed.length && !m.undone));
+    const tool = (name, title, onclick) => h("button", { class: "icon-btn small", type: "button", title, "aria-label": title, onclick }, icon(name));
+    return h("div", { class: "msg-tools" }, h("div", { class: "msg-tools-inner" },
+      marked && tool("target", "Markierungen dieser Antwort in der Liste zeigen", () => showMsgMarks(m)),
+      tool("copy", "Kopieren", (e) => copyChatText(m, e.currentTarget))));
+  }
+
   async function copyChatText(m, btn) {
     try {
       await navigator.clipboard.writeText(chatPlainText(m.text));
-      btn.textContent = "Kopiert ✓";
+      btn.replaceChildren(icon("check"));
+      btn.title = "Kopiert";
     } catch (_) {
-      btn.textContent = "Kopieren nicht möglich";
+      btn.title = "Kopieren nicht möglich";
     }
-    setTimeout(() => (btn.textContent = "Kopieren"), 1500);
+    setTimeout(() => {
+      btn.replaceChildren(icon("copy"));
+      btn.title = "Kopieren";
+    }, 1500);
   }
 
   // Text selected in the chat → "↩ Antworten" quotes it in the next message.
@@ -2716,9 +2719,11 @@
 
   function updateReplyBtn() {
     const s = chatSelection();
-    replyBtnEl.hidden = !s;
-    if (!s) return;
-    const r = s.range.getBoundingClientRect();
+    const r = s && s.range.getBoundingClientRect();
+    const log = chatLogEl.getBoundingClientRect();
+    // Hidden without a selection, or once it is scrolled out of view.
+    replyBtnEl.hidden = !s || r.bottom < log.top || r.top > log.bottom;
+    if (replyBtnEl.hidden) return;
     const p = $("chatPanel").getBoundingClientRect();
     replyBtnEl.style.top = Math.max(0, r.bottom - p.top + 6) + "px";
     replyBtnEl.style.left = Math.max(8, Math.min(r.left - p.left, p.width - 130)) + "px";
@@ -2730,12 +2735,16 @@
     $("chatQuote").hidden = !chatQuote;
   }
 
-  chatLogEl.addEventListener("mouseup", () => setTimeout(updateReplyBtn, 0));
-  chatLogEl.addEventListener("keyup", updateReplyBtn);
-  chatLogEl.addEventListener("scroll", () => (replyBtnEl.hidden = true));
+  // selectionchange covers mouse and keyboard (debounced, so the button doesn't
+  // jump along while dragging); pointerup shows it right on release.
+  let replyTimer = null;
   document.addEventListener("selectionchange", () => {
+    clearTimeout(replyTimer);
     if (!chatSelection()) replyBtnEl.hidden = true;
+    else replyTimer = setTimeout(updateReplyBtn, 250);
   });
+  document.addEventListener("pointerup", () => setTimeout(updateReplyBtn, 0));
+  chatLogEl.addEventListener("scroll", updateReplyBtn);
   replyBtnEl.addEventListener("mousedown", (e) => e.preventDefault()); // keep the selection
   replyBtnEl.addEventListener("click", () => {
     const s = chatSelection();

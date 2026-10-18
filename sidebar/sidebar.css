@@ -1656,17 +1656,50 @@ kbd {
   user-select: text;
 }
 
-/* "Kopieren" / "Markierungen zeigen" under an answer. */
-.chat-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 6px;
-  margin-top: 4px;
+/* Copy / show marks: icons in the top-right corner of a message, on hover.
+   Zero height + sticky: no layout shift, and they stay in view while the top
+   of a long message is scrolled away. */
+.chat-msg {
+  position: relative;
 }
 
-.chat-tools .link-btn {
-  padding: 1px 4px;
-  font-size: 11.5px;
+.msg-tools {
+  position: sticky;
+  top: 3px;
+  z-index: 1;
+  height: 0;
+  display: flex;
+  justify-content: flex-end;
+  margin-right: -6px;
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+
+.chat-msg:hover .msg-tools,
+.msg-tools:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.msg-tools-inner {
+  display: flex;
+  gap: 2px;
+  transform: translateY(-3px);
+}
+
+.msg-tools .icon-btn {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--muted);
+}
+
+.chat-msg.user .msg-tools .icon-btn {
+  background: var(--accent-soft);
+}
+
+.msg-tools .icon-btn:hover {
+  color: var(--accent);
 }
 
 /* "↩ Antworten" next to text selected in the chat. */

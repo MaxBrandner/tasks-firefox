@@ -61,19 +61,20 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   ok(!H.li("Blatt 1").classList.contains("chat-mark") && $("tabMarks").hidden, "Aufgabe angefasst → gilt als gesehen, Markierung weg");
   last().click(); await H.tick();
   ok(!H.li("Blatt 1").classList.contains("chat-mark") && d.body.dataset.chat === "full", "Klick in den Antworttext ändert nichts (Text bleibt markierbar)");
-  [...last().querySelectorAll(".chat-tools .link-btn")].find((b) => /Markierungen/.test(b.textContent)).click(); await H.tick();
+  last().querySelector('.msg-tools [title^="Markierungen"]').click(); await H.tick();
   ok(H.li("Blatt 1").classList.contains("chat-mark") && d.body.dataset.chat === "tasks", "„Markierungen zeigen“ holt die Markierung zurück (schmal: Reiter „Aufgaben“)");
   const prompt = H.chatPrompts[H.chatPrompts.length - 1];
   ok(/Blatt 1 \(id: b1, fällig 2026-10-21 12:00, Links: Abgabe <https:\/\/ilias\.hhu\.de\/b1>\)/.test(prompt) && /Gerade aufgeklappt: „Blatt 1“ \(id: b1\)/.test(prompt) && /<<<\nWas ist diese Woche fällig\?\n>>>/.test(prompt), "an die KI: Baum mit IDs/Links, aufgeklappte Aufgabe, Nachricht");
   // copy and reply
   let copied = null;
   Object.defineProperty(H.w.navigator, "clipboard", { configurable: true, value: { writeText: async (t) => { copied = t; } } });
-  [...last().querySelectorAll(".chat-tools .link-btn")].find((b) => b.textContent === "Kopieren").click(); await H.tick();
-  ok(copied === "Fällig ist Blatt 1 in Uni.", "„Kopieren“: Antwort als Text, Verweise als Namen: " + copied);
+  last().querySelector('.msg-tools [title="Kopieren"]').click(); await H.tick();
+  ok(copied === "Fällig ist Blatt 1 in Uni.", "Kopier-Symbol: Antwort als Text, Verweise als Namen: " + copied);
+  ok(d.querySelectorAll("#chatLog .chat-msg.user .msg-tools [title=Kopieren]").length > 0, "auch eigene Nachrichten haben das Kopier-Symbol");
   const tn = last().querySelector(".chat-text .md-p").firstChild;
   const range = d.createRange(); range.setStart(tn, 0); range.setEnd(tn, 6);
   H.w.getSelection().removeAllRanges(); H.w.getSelection().addRange(range);
-  $("chatLog").dispatchEvent(new H.w.MouseEvent("mouseup", { bubbles: true })); await H.tick(); await H.tick();
+  $("chatLog").dispatchEvent(new H.w.Event("pointerup", { bubbles: true })); await H.tick(); await H.tick();
   ok(!$("chatReplyBtn").hidden, "Text im Chat markiert → „Antworten“ erscheint");
   $("chatReplyBtn").click(); await H.tick();
   ok(!$("chatQuote").hidden && $("chatQuoteText").textContent === "Fällig" && $("chatReplyBtn").hidden, "„Antworten“ setzt die Markierung als Zitat über das Eingabefeld");
