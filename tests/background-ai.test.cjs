@@ -21,7 +21,7 @@ const ctx = { console, crypto: globalThis.crypto, structuredClone, URL: globalTh
     browserAction: { onClicked: { addListener() {} } },
     sidebarAction: { open() { opened++; }, toggle() {} },
     contextMenus: { create(o) { ctx.menu = o; }, async removeAll() { ctx.menu = null; }, onClicked: { addListener(f) { clickHandler = f; } } },
-    tabs: { async executeScript(id, o) { scripts.push(o); if (/highlightInPage/.test(o.code)) return [true]; lastScript = o; return [capReply()]; } } } };
+    tabs: { async query() { return [{ id: 5, url: "https://www.sonntagsblatt.de/termine", title: "Termine 2026" }]; }, async executeScript(id, o) { scripts.push(o); if (/pickerInPage/.test(o.code)) return [{ ok: true, title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine" }]; if (/highlightInPage/.test(o.code)) return [true]; lastScript = o; return [capReply()]; } } } };
 vm.createContext(ctx); vm.runInContext(fs.readFileSync(P + "/background.js", "utf8"), ctx);
 const tick = () => new Promise((r) => setTimeout(r, 20));
 const okReply = (obj) => () => ({ ok: true, data: obj });
@@ -134,6 +134,10 @@ const click = async () => { clickHandler({ menuItemId: "tasks-add-selection", fr
   scripts = [];
   const shown = await msgListeners.map((f) => f({ type: "show-on-page", tabId: 1, frameId: 0, locator: "body > ul > li:nth-of-type(1)" })).find(Boolean);
   ok(shown && shown.ok && /"scroll":true/.test(scripts[0].code), "„Auf der Seite zeigen“: scrollt hin und hebt hervor");
+  // element picker on the active tab
+  scripts = [];
+  const pk = await msgListeners.map((f) => f({ type: "picker-start" })).find(Boolean);
+  ok(pk && pk.ok && pk.title === "Termine 2026" && /pickerInPage/.test(scripts[0].code) && /cssPathInPage/.test(scripts[0].code), "Picker startet im aktiven Tab (mit CSS-Pfad-Helfer)");
   // chat with attachments
   local.data["tk:aiMode"] = "claude-code";
   reply = okReply({ reply: "ok", actions: [], highlight: [] });

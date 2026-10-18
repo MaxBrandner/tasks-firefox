@@ -118,7 +118,7 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   ok(/Einstellungen: theme=dark, done_section=open/.test(H.chatPrompts[H.chatPrompts.length - 1]) && d.documentElement.dataset.theme === "light", "die KI kennt die aktuellen Einstellungen");
   // "+": files by drag & drop, cards, sending; whole page
   $("chatPlus").click(); await H.tick();
-  ok(!$("chatPlusMenu").hidden && $("chatPlusMenu").querySelector('[data-add="picker"]').hidden, "„+“ öffnet das Menü (Picker-Punkt noch verborgen)");
+  ok(!$("chatPlusMenu").hidden && !$("chatPlusMenu").querySelector('[data-add="picker"]').hidden, "„+“ öffnet das Menü mit Element, Datei, ganzer Seite");
   d.body.dispatchEvent(new H.w.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })); await H.tick();
   ok($("chatPlusMenu").hidden, "Esc schließt das „+“-Menü");
   const dropEv = (type, files) => { const ev = new H.w.Event(type, { bubbles: true, cancelable: true }); Object.defineProperty(ev, "dataTransfer", { value: { types: ["Files"], files } }); return ev; };
@@ -139,6 +139,21 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   ok($("chatAttach").querySelector(".att-name").textContent === "Termine 2026" && $("chatAttach").querySelector(".att-sub").textContent === "www.sonntagsblatt.de", "„Ganze Seite schicken“ → Karte mit Titel und Adresse");
   await say("Was ist hier wichtig?", { reply: "Der Geburtstag.", actions: [], highlight: [] });
   ok(/Ganze Seite „Termine 2026“ \(https:\/\/www\.sonntagsblatt\.de\/termine\):\n<<<\n21\.04\.2026 - 100\. Geburtstag\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]), "Seitentext steht im Prompt an die KI");
+  // element picker: live card while picking, ends with Enter/Esc on the page
+  H.perm.answer = true; H.picker = [];
+  $("chatPlusMenu").querySelector('[data-add="picker"]').click(); await H.tick(); await H.tick();
+  const pickCard = () => $("chatAttach").querySelector(".att-card");
+  ok(H.picker.join() === "picker-start" && pickCard().classList.contains("picking") && /Enter oder Esc beendet/.test(pickCard().textContent), "Picker startet, Karte zeigt „Blöcke anklicken · Enter oder Esc beendet“");
+  const toSidebar = (m) => H.msgListeners.forEach((f) => f(m));
+  toSidebar({ type: "picker-update", title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine", items: [{ text: "21.04.2026 - 100. Geburtstag Elisabeth II.", locator: "li:nth-of-type(1)" }, { text: "30.04.2026 - Walpurgisnacht", locator: "li:nth-of-type(3)" }] }); await H.tick();
+  ok(pickCard().querySelector(".att-name").textContent === "2 Blöcke" && /Elisabeth/.test(pickCard().querySelector(".att-sub").textContent), "gewählte Blöcke erscheinen live als Karte");
+  toSidebar({ type: "picker-end", title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine", items: [{ text: "21.04.2026 - 100. Geburtstag Elisabeth II.", locator: "li:nth-of-type(1)" }] }); await H.tick();
+  ok(!pickCard().classList.contains("picking") && pickCard().querySelector(".att-name").textContent === "1 Block", "Enter/Esc auf der Seite beendet den Picker, Karte bleibt");
+  await say("Leg das an", { reply: "Ok.", actions: [], highlight: [] });
+  ok(/Gewählte Blöcke von „Termine 2026“ \(https:\/\/www\.sonntagsblatt\.de\/termine\):\n1\. »21\.04\.2026 - 100\. Geburtstag Elisabeth II\.«/.test(H.chatPrompts[H.chatPrompts.length - 1]) && !pickCard(), "gesendet: Blöcke stehen im Prompt, Karte weg");
+  $("chatPlusMenu").querySelector('[data-add="picker"]').click(); await H.tick(); await H.tick();
+  pickCard().querySelector(".att-x").click(); await H.tick();
+  ok(H.picker.slice(-1)[0] === "picker-stop" && !pickCard(), "× an der Karte beendet den Picker");
   // highlight in another list → sidebar switches there
   d.getElementById("listSelect").value = "priv"; d.getElementById("listSelect").dispatchEvent(new H.w.Event("change")); await H.tick();
   await say("Was ist bei DL offen?", { reply: "[[T:b1]] und [[T:fo]].", actions: [], highlight: ["b1", "fo"] });

@@ -13,7 +13,7 @@ const bg = vm.createContext({ browser: stub, console, URL, setTimeout, clearTime
 vm.runInContext(fs.readFileSync(path.join(ROOT, "background.js"), "utf8"), bg);
 const STYLE = vm.runInContext("HIGHLIGHT_STYLE", bg); // const: not a property of the context
 
-const page = new JSDOM(`<!DOCTYPE html><html><head><meta name="description" content="Jahrestage 2026"></head><body>
+const page = new JSDOM(`<!DOCTYPE html><html><head><meta name="description" content="Jahrestage 2026"><style>a, b, span { display: inline; }</style></head><body>
   <header><h1>Termine 2026</h1></header>
   <main><h3>Termine April 2026</h3><ul>
     <li>21.04.2026 - 100. Geburtstag Elisabeth II.</li>
@@ -22,7 +22,7 @@ const page = new JSDOM(`<!DOCTYPE html><html><head><meta name="description" cont
   { runScripts: "outside-only", url: "https://www.sonntagsblatt.de/termine-2026" });
 const w = page.window;
 w.CSS = { escape: (s) => String(s).replace(/[^\w-]/g, (c) => "\\" + c) }; // Firefox has CSS.escape, jsdom not
-const run = (fn, args) => w.eval(`(${bg[fn]})(${JSON.stringify(args)})`);
+const run = (fn, args) => w.eval(`(${bg[fn]})(${JSON.stringify(args)}, ${bg.cssPathInPage})`);
 const limits = { selection: 20000, section: 4000, clicked: 600, links: 50 };
 const li = w.document.querySelectorAll("li")[0];
 
@@ -48,6 +48,29 @@ const box = w.document.getElementById("tasks-ext-highlight");
 ok(found === true && box && /→ Tasks/.test(box.textContent) && /pointer-events:\s*none/.test(box.getAttribute("style")), "Overlay „→ Tasks“ liegt über der Stelle, ohne Klicks abzufangen");
 ok(w.document.querySelectorAll("li")[1].getAttribute("style") === null, "die Seite selbst bleibt unverändert");
 ok(run("highlightInPage", { locator: "body > nav > li", style: STYLE, ms: 50, scroll: false }) === false, "Stelle nicht (mehr) da → false, kein Fehler");
+
+// element picker
+const sent = [];
+w.browser = { runtime: { sendMessage: async (m) => { sent.push(m); } } };
+const PICK = vm.runInContext("PICK_STYLE", bg);
+ok(run("pickerInPage", { style: PICK }).ok === true, "Picker startet auf der Seite");
+const lis = w.document.querySelectorAll("li");
+const mouse = (type, el) => { const ev = new w.MouseEvent(type, { bubbles: true, cancelable: true }); el.dispatchEvent(ev); return ev; };
+mouse("mousemove", lis[0]);
+const overlays = () => [...w.document.documentElement.lastElementChild.children];
+ok(overlays().length >= 1 && overlays()[0].style.display === "block", "Darüberfahren: Block leuchtet auf");
+mouse("click", lis[0]); mouse("click", lis[1]);
+let last = sent[sent.length - 1];
+ok(last.type === "picker-update" && last.items.length === 2 && last.items[0].text === "21.04.2026 - 100. Geburtstag Elisabeth II." && w.document.querySelector(last.items[1].locator) === lis[1], "zwei Blöcke gewählt, Text und Pfad gehen live an die Seitenleiste");
+mouse("click", lis[0]);
+ok(sent[sent.length - 1].items.length === 1 && sent[sent.length - 1].items[0].text.startsWith("29.04.2026"), "nochmal klicken wählt ab");
+const link = w.document.querySelector("#intro a");
+const linkClick = mouse("click", link);
+ok(linkClick.defaultPrevented && w.document.querySelector(sent[sent.length - 1].items[1].locator) === w.document.getElementById("intro"), "Klick auf einen Link öffnet ihn nicht; gewählt wird der Absatz darum");
+w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+ok(sent[sent.length - 1].type === "picker-end" && !w.__tasksPicker && w.document.documentElement.lastElementChild.tagName === "BODY", "Enter beendet den Picker, Overlays weg");
+mouse("click", lis[1]);
+ok(sent[sent.length - 1].type === "picker-end", "danach reagiert die Seite wieder normal (kein Picker mehr)");
 
 setTimeout(() => {
   ok(!w.document.getElementById("tasks-ext-highlight"), "Overlay verschwindet nach der Zeit wieder");

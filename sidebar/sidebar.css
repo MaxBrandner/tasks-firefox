@@ -1791,6 +1791,12 @@ kbd {
   background: var(--surface);
 }
 
+/* The picked-blocks card while the picker runs on the page. */
+.att-card.picking {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
 .attach-note {
   align-self: center;
   color: var(--soon);

@@ -147,7 +147,9 @@ Fälligkeit", „Öffne alle Links zu DL".
   steht dann als Zitat über dem Eingabefeld (mit Herkunft, z. B. „KI-Antwort ·
   18:44“) und geht mit deiner nächsten Nachricht mit – die KI erfährt, worauf
   du antwortest. Ein Klick auf das Zitat springt zur Stelle und hebt sie hervor.
-- **„+“ im Chat:** Datei hinzufügen (PDF, Bild, Text – auch per Drag & Drop auf
+- **„+“ im Chat:** Element auf der Seite auswählen (Blöcke leuchten beim
+  Darüberfahren auf, Klick wählt sie, sie erscheinen sofort als Anhang; Enter
+  oder Esc beendet), Datei hinzufügen (PDF, Bild, Text – auch per Drag & Drop auf
   den Chat) oder die ganze aktuelle Seite schicken (Firefox fragt einmal nach der
   Erlaubnis). Anhänge erscheinen als Karten über dem Eingabefeld und gehen mit
   der nächsten Nachricht an die KI, die daraus Aufgaben zieht.

@@ -76,25 +76,27 @@ function compact(obj) {
 
 const CAPTURE_LIMITS = { selection: 20000, section: 4000, clicked: 600, links: 50 };
 
+// Runs inside the page (handed to the page scripts): a CSS path that finds the
+// element again – for highlighting it later.
+function cssPathInPage(node) {
+  const parts = [];
+  for (let e = node; e && e.nodeType === 1 && e !== document.body && e !== document.documentElement; e = e.parentElement) {
+    if (e.id && document.querySelectorAll("#" + CSS.escape(e.id)).length === 1) {
+      parts.unshift("#" + CSS.escape(e.id));
+      return parts.join(" > ");
+    }
+    const same = [...e.parentElement.children].filter((c) => c.tagName === e.tagName);
+    parts.unshift(e.tagName.toLowerCase() + (same.length > 1 ? `:nth-of-type(${same.indexOf(e) + 1})` : ""));
+  }
+  return ["body", ...parts].join(" > ");
+}
+
 // Runs inside the page via tabs.executeScript (only data comes back): the
 // selection with the links in it, the section around the clicked element
 // (Firefox: menus.getTargetElement) and details of a clicked image.
-function captureInPage(args) {
+function captureInPage(args, cssPath) {
   const clip = (s, n) => String(s || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, n);
   const out = { selection: "", links: [], clicked: "", section: "", heading: "", description: "", image: null, locator: "" };
-  // A CSS path that finds the element again (for highlighting it on the page).
-  const cssPath = (node) => {
-    const parts = [];
-    for (let e = node; e && e.nodeType === 1 && e !== document.body && e !== document.documentElement; e = e.parentElement) {
-      if (e.id && document.querySelectorAll("#" + CSS.escape(e.id)).length === 1) {
-        parts.unshift("#" + CSS.escape(e.id));
-        return parts.join(" > ");
-      }
-      const same = [...e.parentElement.children].filter((c) => c.tagName === e.tagName);
-      parts.unshift(e.tagName.toLowerCase() + (same.length > 1 ? `:nth-of-type(${same.indexOf(e) + 1})` : ""));
-    }
-    return ["body", ...parts].join(" > ");
-  };
   const sel = window.getSelection();
   out.selection = String(sel).slice(0, args.limits.selection);
   const seen = new Set();
@@ -217,6 +219,120 @@ browser.runtime.onMessage.addListener((msg) => {
   })();
 });
 
+// --- Element picker -----------------------------------------------------------
+// "+ → Element auf der Seite auswählen": in the active tab blocks light up on
+// hover, a click picks or unpicks one (numbered). Every change goes live to
+// the sidebar (picker-update); Enter or Esc ends it (picker-end). Overlays
+// only – the page itself is not changed; link clicks are caught.
+const PICK_STYLE = {
+  hover: "box-shadow:0 0 0 2px #2f6f5e;background:rgba(47,111,94,.06);border-radius:4px",
+  chosen: "box-shadow:0 0 0 2px #2f6f5e;background:rgba(47,111,94,.13);border-radius:4px",
+  badge: "background:#2f6f5e;color:#fff;font:600 11px/18px system-ui,sans-serif;width:18px;height:18px;border-radius:50%;text-align:center",
+};
+
+function pickerInPage(args, cssPath) {
+  if (window.__tasksPicker) window.__tasksPicker.stop(false);
+  const clip = (s, n) => String(s || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, n);
+  const layer = document.createElement("div");
+  layer.setAttribute("style", "all:initial;position:absolute;left:0;top:0;width:0;height:0;z-index:2147483647;pointer-events:none");
+  document.documentElement.append(layer);
+  const makeBox = (style) => {
+    const b = document.createElement("div");
+    b.setAttribute("style", "all:initial;position:absolute;pointer-events:none;display:none;" + style);
+    layer.append(b);
+    return b;
+  };
+  const hoverBox = makeBox(args.style.hover);
+  const chosen = [];
+  let hovered = null;
+  // Inline bits (a link, a bold word) stand for the block around them.
+  const blockOf = (el) => {
+    while (el && el.parentElement && el !== document.body && el.tagName !== "IMG" && getComputedStyle(el).display.startsWith("inline")) el = el.parentElement;
+    return el === document.body || el === document.documentElement ? null : el;
+  };
+  const place = (b, el) => {
+    const r = el.getBoundingClientRect();
+    b.style.left = r.left + scrollX - 3 + "px";
+    b.style.top = r.top + scrollY - 3 + "px";
+    b.style.width = r.width + 6 + "px";
+    b.style.height = r.height + 6 + "px";
+    b.style.display = "block";
+  };
+  const redraw = () => {
+    if (hovered) place(hoverBox, hovered);
+    chosen.forEach((c, i) => {
+      place(c.box, c.el);
+      c.badge.textContent = String(i + 1);
+    });
+  };
+  const send = (type) => browser.runtime.sendMessage({
+    type, url: location.href, title: document.title,
+    items: chosen.map((c) => ({ text: clip(c.el.innerText || c.el.textContent, 2000), locator: cssPath(c.el) })),
+  }).catch(() => {});
+  const onMove = (e) => {
+    const el = blockOf(e.target);
+    if (el === hovered) return;
+    hovered = el;
+    if (el) place(hoverBox, el);
+    else hoverBox.style.display = "none";
+  };
+  const onClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = blockOf(e.target);
+    if (!el) return;
+    const i = chosen.findIndex((c) => c.el === el);
+    if (i >= 0) chosen.splice(i, 1)[0].box.remove();
+    else {
+      const box = makeBox(args.style.chosen);
+      const badge = document.createElement("span");
+      badge.setAttribute("style", "all:initial;position:absolute;left:-9px;top:-9px;" + args.style.badge);
+      box.append(badge);
+      chosen.push({ el, box, badge });
+    }
+    redraw();
+    send("picker-update");
+  };
+  const onKey = (e) => {
+    if (e.key !== "Enter" && e.key !== "Escape") return;
+    e.preventDefault();
+    e.stopPropagation();
+    stop(true);
+  };
+  const stop = (notify) => {
+    removeEventListener("mousemove", onMove, true);
+    removeEventListener("click", onClick, true);
+    removeEventListener("keydown", onKey, true);
+    removeEventListener("resize", redraw);
+    layer.remove();
+    delete window.__tasksPicker;
+    if (notify) send("picker-end");
+  };
+  addEventListener("mousemove", onMove, true);
+  addEventListener("click", onClick, true);
+  addEventListener("keydown", onKey, true);
+  addEventListener("resize", redraw);
+  window.__tasksPicker = { stop };
+  return { ok: true, title: document.title, url: location.href };
+}
+
+browser.runtime.onMessage.addListener((msg) => {
+  if (!msg || (msg.type !== "picker-start" && msg.type !== "picker-stop")) return undefined;
+  return (async () => {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !/^(https?|file):/i.test(tab.url || "")) return { ok: false, error: "Auf dieser Seite geht das Auswählen nicht." };
+    const code = msg.type === "picker-start"
+      ? `(${pickerInPage})(${JSON.stringify({ style: PICK_STYLE })}, ${cssPathInPage})`
+      : "window.__tasksPicker && window.__tasksPicker.stop(false)";
+    try {
+      const [res] = await browser.tabs.executeScript(tab.id, { code });
+      return res || { ok: true };
+    } catch (err) {
+      return { ok: false, error: "Seite nicht erreichbar: " + ((err && err.message) || err) };
+    }
+  })();
+});
+
 // "◎ Auf der Seite zeigen" from the sidebar: scroll there, light up longer.
 browser.runtime.onMessage.addListener((msg) => {
   if (!msg || msg.type !== "show-on-page") return undefined;
@@ -229,7 +345,7 @@ async function capturePage(info, tab) {
   let cap = null;
   try {
     const args = { targetId: info.targetElementId ?? null, srcUrl: info.srcUrl || "", limits: CAPTURE_LIMITS };
-    [cap] = await browser.tabs.executeScript(tab.id, { frameId: info.frameId || 0, code: `(${captureInPage})(${JSON.stringify(args)})` });
+    [cap] = await browser.tabs.executeScript(tab.id, { frameId: info.frameId || 0, code: `(${captureInPage})(${JSON.stringify(args)}, ${cssPathInPage})` });
   } catch (_) {
     // e.g. about: pages – the menu data has to do
   }
@@ -637,7 +753,7 @@ So funktioniert Tasks – für Fragen zur Erweiterung selbst; antworte danach, n
 - Markdown in Titel und Notiz (fett, kursiv, durchgestrichen, Code, Links; in Notizen auch Listen, Überschriften, Zitate).
 - Tastatur: Strg+Alt+A Seitenleiste auf/zu, / Chat, Enter neue Aufgabe, Tab / Shift+Tab ein-/ausrücken, Strg+Enter abhaken, Alt+↑/↓ verschieben, Esc schließt. Alles unter ⋯ → „Tastenkürzel & Markdown".
 - Einstellungen: Design (System/hell/dunkel), Bereich „Erledigt" auf/zu und die KI-Verbindung lassen sich auch hier im Chat ändern (set_setting); alles andere über ⋯ und den Knopf oben rechts.
-- „+" im Chat: Datei hinzufügen (PDF, Bild, Text; auch per Drag & Drop auf den Chat) und ganze Seite schicken (Text der aktuellen Seite, Firefox fragt einmal nach der Erlaubnis). Anhänge gehen mit der nächsten Nachricht an dich.
+- „+" im Chat: Element auf der Seite auswählen (Blöcke anklicken, sie erscheinen als Anhang; Enter oder Esc beendet), Datei hinzufügen (PDF, Bild, Text; auch per Drag & Drop auf den Chat) und ganze Seite schicken (Text der aktuellen Seite, Firefox fragt einmal nach der Erlaubnis). Anhänge gehen mit der nächsten Nachricht an dich.
 - Layout: Ist die Seitenleiste breit, stehen Liste und Chat nebeneinander; schmal gibt es die Reiter „Aufgaben | Chat" und mit / eine Schnell-Karte.
 
 Was es NICHT gibt: Tags, Prioritäten, Farben, Erinnerungen/Benachrichtigungen, Suche/Filter, Anhänge, Teilen, Zugriff auf Webseiten oder das Internet. Listen löschen kannst du nicht – das macht der Nutzer selbst über ⋯ → „Liste löschen". Wird danach gefragt, sag ehrlich, dass es das (noch) nicht gibt, und biete – wenn sinnvoll – eine Lösung mit vorhandenen Mitteln an (z. B. „#klausur" als Konvention im Titel; markieren oder öffnen kannst du dann alles mit #klausur). Täusche nie vor, etwas getan zu haben, das keine Aktion ist.

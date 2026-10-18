@@ -2831,13 +2831,70 @@
 
   function renderAttachments() {
     attachEl.hidden = !chatAttachments.length && !attachNote;
-    attachEl.replaceChildren(...chatAttachments.map((a, i) => h("div", { class: "att-card", title: a.url || a.name },
-      h("div", { class: "att-thumb" }, a.preview ? h("img", { src: a.preview, alt: "" }) : attIcon(a)),
-      h("div", { class: "att-name" }, a.kind === "blocks" ? a.items.length + (a.items.length === 1 ? " Block" : " Blöcke") : a.name),
-      h("div", { class: "att-sub" }, a.kind === "file" ? fmtSize(a.size) : a.kind === "blocks" ? (a.items[0] || {}).text || "" : (() => { try { return new URL(a.url).hostname; } catch (_) { return ""; } })()),
-      h("button", { class: "icon-btn small att-x", type: "button", title: "Entfernen", "aria-label": "Anhang entfernen", onclick: () => { chatAttachments.splice(i, 1); renderAttachments(); } }, icon("close")))),
-      ...(attachNote ? [h("span", { class: "attach-note" }, attachNote)] : []));
+    attachEl.replaceChildren(...chatAttachments.map((a, i) => {
+      const picking = a.kind === "blocks" && pickerActive;
+      const name = a.kind !== "blocks" ? a.name : a.items.length ? a.items.length + (a.items.length === 1 ? " Block" : " Blöcke") : "Auswählen …";
+      const sub = a.kind === "file" ? fmtSize(a.size)
+        : a.kind === "blocks" ? (a.items.length ? a.items[0].text : "Blöcke auf der Seite anklicken · Enter oder Esc beendet")
+        : (() => { try { return new URL(a.url).hostname; } catch (_) { return ""; } })();
+      return h("div", { class: "att-card" + (picking ? " picking" : ""), title: picking ? "Blöcke auf der Seite anklicken – Enter oder Esc beendet" : a.url || a.name },
+        h("div", { class: "att-thumb" }, a.preview ? h("img", { src: a.preview, alt: "" }) : attIcon(a)),
+        h("div", { class: "att-name" }, name),
+        h("div", { class: "att-sub" }, sub),
+        h("button", { class: "icon-btn small att-x", type: "button", title: "Entfernen", "aria-label": "Anhang entfernen", onclick: () => {
+          if (a.kind === "blocks") stopPicker();
+          chatAttachments.splice(i, 1);
+          renderAttachments();
+        } }, icon("close")));
+    }), ...(attachNote ? [h("span", { class: "attach-note" }, attachNote)] : []));
   }
+
+  // --- Element picker: the page reports every change (picker-update) and the
+  // end (picker-end); the picked blocks are one attachment card.
+  let pickerActive = false;
+
+  async function startPicker() {
+    const granted = await browser.permissions.request({ origins: ["*://*/*"] }).catch(() => false);
+    if (!granted) {
+      attachNote = "Ohne Erlaubnis kann Tasks auf der Seite nichts auswählen.";
+      renderAttachments();
+      return;
+    }
+    const r = await browser.runtime.sendMessage({ type: "picker-start" }).catch((err) => ({ ok: false, error: err.message }));
+    if (!r || !r.ok) {
+      attachNote = (r && r.error) || "Auswählen geht hier nicht.";
+      renderAttachments();
+      return;
+    }
+    pickerActive = true;
+    let card = chatAttachments.find((a) => a.kind === "blocks");
+    if (!card) addAttachment({ kind: "blocks", name: r.title || r.url, url: r.url, items: [] });
+    else renderAttachments();
+  }
+
+  function stopPicker() {
+    if (!pickerActive) return;
+    pickerActive = false;
+    browser.runtime.sendMessage({ type: "picker-stop" }).catch(() => {});
+  }
+
+  browser.runtime.onMessage.addListener((msg) => {
+    if (!msg || (msg.type !== "picker-update" && msg.type !== "picker-end")) return undefined;
+    let card = chatAttachments.find((a) => a.kind === "blocks");
+    if (!card) {
+      card = { kind: "blocks", name: msg.title || msg.url, url: msg.url, items: [] };
+      chatAttachments.push(card);
+    }
+    card.items = Array.isArray(msg.items) ? msg.items : [];
+    card.name = msg.title || card.name;
+    if (msg.type === "picker-end") {
+      pickerActive = false;
+      if (!card.items.length) chatAttachments.splice(chatAttachments.indexOf(card), 1);
+      chatInputEl.focus();
+    }
+    renderAttachments();
+    return undefined;
+  });
 
   function togglePlusMenu(open = plusMenuEl.hidden) {
     plusMenuEl.hidden = !open;
@@ -2856,6 +2913,7 @@
     if (!b) return;
     togglePlusMenu(false);
     if (b.dataset.add === "file") $("chatFile").click();
+    else if (b.dataset.add === "picker") startPicker();
     else if (b.dataset.add === "page") attachPage();
   });
   $("chatFile").addEventListener("change", (e) => {
@@ -3101,7 +3159,8 @@
     if (!text) text = "Was ergibt sich daraus für meine Aufgaben?";
     const quote = chatQuote;
     setChatQuote(null);
-    const atts = chatAttachments;
+    stopPicker();
+    const atts = chatAttachments.filter((a) => a.kind !== "blocks" || a.items.length);
     chatAttachments = [];
     renderAttachments();
     chatMarks.clear();
