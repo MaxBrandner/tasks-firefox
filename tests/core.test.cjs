@@ -31,7 +31,12 @@ const { d, ok, T, li, edit, key, bodyKey, type, add, unfocus, idOf, nTasks, root
   li("E").querySelector(":scope>.row .check").click(); await tick();
   ta = await key(edit("E"), "Enter"); await type(ta, "F"); await unfocus();
   ok(kids("C").join() === "D,E,F" && !T("F").x, "Enter unter abgehakter Unteraufgabe");
-  await bodyKey("ArrowDown"); ok(d.activeElement.closest("li.task") === d.querySelector("#openList li.task"), "↓ ohne Auswahl → oberste");
+  await bodyKey("ArrowDown"); ok(d.querySelector("#openList li.task").classList.contains("selected") && d.activeElement.id === "main", "↓ ohne Auswahl → oberste ausgewählt");
+  await key(d.activeElement, "ArrowUp"); ok(d.activeElement.id === "addBtn", "↑ auf oberster Aufgabe → „Aufgabe hinzufügen“");
+  await key(d.activeElement, "ArrowUp"); ok(d.activeElement.id === "addBtn", "↑ dort bleibt oben (kein Sprung nach ganz unten)");
+  const last = [...d.querySelectorAll("#openList li.task")].pop();
+  const lv = last.querySelector(":scope > .row .title .md-view"); lv.click(); lv.click(); await tick();
+  await key(d.activeElement, "ArrowDown"); ok(d.activeElement.closest("li.task") === last, "↓ auf unterster bleibt unten");
   ok(d.getElementById("main").nextElementSibling.id === "doneSection", "Erledigt unten verankert");
   H.finish();
 })().catch((e) => { console.error(e); process.exit(1); });

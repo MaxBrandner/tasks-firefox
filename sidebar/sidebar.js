@@ -24,6 +24,7 @@
   const THEME_KEY = "tk:themeMode";
   const CURRENT_KEY = "tk:currentList";
   const DONE_OPEN_KEY = "tk:doneOpen";
+  const COLLAPSED_KEY = "tk:collapsed"; // folded tasks – per device, keeps the sync quota free
   // AI integration (context menu "Zu Tasks hinzufügen", see background.js).
   // Real version vs. test copy (npm run dev).
   const DEV_ID = "tasks-dev@brandner.name";
@@ -45,6 +46,10 @@
   const tasks = new Map(); // id -> { l, p, t, n, d, x, xa, o }
   let currentList = null;
   let doneOpen = false;
+  const collapsed = new Set(); // ids of folded tasks (subtasks hidden)
+  const selected = new Set(); // selected tasks (not being edited), see "Selection"
+  let selAnchor = null; // start of a Shift range
+  let selCursor = null; // where ↑/↓ continue from
   // The task being edited – it is expanded (details, date). As in Google
   // Tasks: editing and expanding are the same thing.
   let expandedId = null;
@@ -65,6 +70,7 @@
   const helpEl = $("help");
   const addBtnEl = $("addBtn");
   const openListEl = $("openList");
+  const mainEl = $("main");
   const emptyEl = $("empty");
   const doneSectionEl = $("doneSection");
   const doneToggleEl = $("doneToggle");
@@ -304,7 +310,9 @@
 
   // Markdown field: shows the rendered view; on click (not on a link) the raw
   // text for editing. Back to the view on blur.
-  function mdField({ value, multiline, cls, placeholder, label, onInput, onCommit, onKeyDown }) {
+  // clickEdits: false = a click on the view does not start editing by itself
+  // (task titles: the first click selects, see "Selection").
+  function mdField({ value, multiline, cls, placeholder, label, onInput, onCommit, onKeyDown, clickEdits = true }) {
     const view = h("div", { class: "md-view" });
     const ta = h("textarea", {
       class: "md-edit",
@@ -330,6 +338,7 @@
     wrap.startEdit = (caret = "end") => {
       ta._startValue = ta.value; // for Ctrl+Z: text undo in the field first
       ta._checkpointed = false;
+      wrap.dataset.value = ta.value; // sizes the field where it is only as wide as its text
       view.hidden = true;
       ta.hidden = false;
       autosize(ta);
@@ -339,9 +348,10 @@
       ta.setSelectionRange(pos, pos);
     };
 
+    wrap.startEditAt = (e) => wrap.startEdit(caretFromClick(view, ta.value, e));
     view.addEventListener("click", (e) => {
       if (e.target.closest("a")) return; // open the link instead of editing
-      wrap.startEdit(caretFromClick(view, ta.value, e));
+      if (clickEdits) wrap.startEditAt(e);
     });
     ta.addEventListener("input", () => {
       // First keystroke in this field: remember the previous state for Ctrl+Z.
@@ -355,6 +365,7 @@
         scheduleCommit();
       }
       if (!multiline && ta.value.includes("\n")) ta.value = ta.value.replace(/\s*\n\s*/g, " ");
+      wrap.dataset.value = ta.value;
       autosize(ta);
       if (onInput) onInput(ta.value);
     });
@@ -501,6 +512,38 @@
       out.push(p);
     }
     return out;
+  }
+
+  // --- Folding ----------------------------------------------------------------
+  // Like collapsing a cell in Jupyter: the bar along a block folds it, the row
+  // then shows the number of open subtasks.
+
+  function setCollapsed(id, on) {
+    if (on === collapsed.has(id)) return;
+    if (on) collapsed.add(id);
+    else collapsed.delete(id);
+    for (const c of collapsed) if (!tasks.has(c)) collapsed.delete(c);
+    browser.storage.local.set({ [COLLAPSED_KEY]: [...collapsed] });
+  }
+
+  // Unfolds everything above `id`, so it can be seen.
+  function unfoldTo(id) {
+    for (const a of ancestors(id)) setCollapsed(a, false);
+  }
+
+  function toggleFold(id) {
+    const on = !collapsed.has(id);
+    const li = findLi(id);
+    const a = document.activeElement;
+    // Keep the caret: in the block's own title it stays; inside the folded
+    // subtasks it moves up to the block.
+    if (li && a && a.matches("textarea.md-edit") && li.contains(a)) {
+      const own = a.closest("li.task").dataset.id;
+      focusAfterRender = own === id || !on ? { id: own, caret: a.selectionStart } : { id, caret: "end" };
+    }
+    if (on && expandedId && descendants(id).includes(expandedId)) expandedId = null;
+    setCollapsed(id, on);
+    render();
   }
 
   // Places task `id` as a child of `parentId` at position `index` among the
@@ -933,6 +976,12 @@
       });
     } else if (action === "delete") {
       deleteList(currentList);
+    } else if (action === "foldAll") {
+      for (const k of visibleChildren(currentList, "")) if (visibleChildren(currentList, k.id).length) setCollapsed(k.id, true);
+      render();
+    } else if (action === "unfoldAll") {
+      for (const id of [...collapsed]) if ((tasks.get(id) || {}).l === currentList) setCollapsed(id, false);
+      render();
     } else if (action === "history") {
       openHistory();
     } else if (action === "export") {
@@ -1018,7 +1067,7 @@
   function insertBelow(id, text) {
     const t = tasks.get(id);
     const nid = createTask({ l: t.l, t: text });
-    if (!t.x && visibleChildren(t.l, id).length) {
+    if (!t.x && visibleChildren(t.l, id).length && !collapsed.has(id)) {
       placeTask(nid, id, 0);
     } else {
       const par = parentOf(id);
@@ -1324,12 +1373,20 @@
       }
     } else if (e.key === "Escape") {
       e.preventDefault();
-      ta.blur();
-      setExpanded(null);
+      select(id);
     } else if (e.altKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
       e.preventDefault();
       saveNow();
       moveBy(id, e.key === "ArrowUp" ? -1 : 1, pos);
+    } else if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      // Ctrl+↑ folds (in a subtask: the block it is in), Ctrl+↓ unfolds.
+      const fold = e.key === "ArrowUp";
+      const target = visibleChildren(t.l, id).length ? id : fold ? parentOf(id) : "";
+      if (target) {
+        e.preventDefault();
+        saveNow();
+        if (collapsed.has(target) !== fold) toggleFold(target);
+      }
     } else if (plain && !e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
       // Single line: jump right away; multi-line: only at the start/end.
       const up = e.key === "ArrowUp";
@@ -1352,8 +1409,12 @@
       const first = openListEl.querySelector("li.task");
       if (first) {
         e.preventDefault();
-        focusTitle(first.dataset.id, "end");
+        select(first.dataset.id);
       }
+    } else if (e.key === "ArrowUp") {
+      // Top of the list: stay. (Otherwise the "nothing selected" rule below
+      // would jump to the bottom – the list doesn't wrap around.)
+      e.preventDefault();
     }
   });
 
@@ -1369,7 +1430,7 @@
     if (!lis.length) return;
     e.preventDefault();
     const li = e.key === "ArrowUp" ? lis[lis.length - 1] : lis[0];
-    focusTitle(li.dataset.id, "end");
+    select(li.dataset.id);
   });
 
   // --- Editing = expanding (only one task at a time) ------------------------
@@ -1392,7 +1453,267 @@
     if (!(el instanceof Element)) return;
     const li = el.closest("li.task");
     if (!li) return;
-    if (el.classList.contains("md-edit") || el.closest(".details")) setExpanded(li.dataset.id);
+    if (el.classList.contains("md-edit") || el.closest(".details")) {
+      if (selected.size) clearSelection();
+      setExpanded(li.dataset.id);
+    }
+  });
+
+  // --- Selection (as in a file explorer) ---------------------------------------
+  // A click selects a task, a second click on its title (or a double click,
+  // Enter, typing) edits it; Esc while editing comes back here. Keys act on
+  // all selected tasks at once. Focus sits on the list (#main) meanwhile.
+
+  const visibleIds = () => [...document.querySelectorAll("#openList li.task, #doneList li.task")].map((li) => li.dataset.id);
+
+  function paintSelection() {
+    for (const li of document.querySelectorAll("li.task")) li.classList.toggle("selected", selected.has(li.dataset.id));
+  }
+
+  // how: "only" (just this one), "toggle" (Ctrl+click) or "range" (Shift, from the anchor).
+  function select(id, how = "only") {
+    const ids = visibleIds();
+    if (how === "toggle") {
+      if (selected.has(id)) selected.delete(id);
+      else selected.add(id);
+      selAnchor = id;
+    } else if (how === "range" && ids.includes(selAnchor)) {
+      const a = ids.indexOf(selAnchor);
+      const b = ids.indexOf(id);
+      selected.clear();
+      for (const x of ids.slice(Math.min(a, b), Math.max(a, b) + 1)) selected.add(x);
+    } else {
+      selected.clear();
+      selected.add(id);
+      selAnchor = id;
+    }
+    selCursor = id;
+    mainEl.focus({ preventScroll: true }); // ends editing (the field saves on blur)
+    if (expandedId) setExpanded(null);
+    paintSelection();
+    const li = findLi(id);
+    if (li) li.querySelector(":scope > .row").scrollIntoView({ block: "nearest" });
+  }
+
+  function clearSelection() {
+    selected.clear();
+    selAnchor = selCursor = null;
+    paintSelection();
+  }
+
+  // Selected tasks in display order, without those inside another selected
+  // one (they move along with it).
+  function selectedRoots() {
+    return visibleIds().filter((id) => selected.has(id) && !ancestors(id).some((a) => selected.has(a)));
+  }
+
+  // The visible task to select once the selected ones are gone (deleted,
+  // checked off into the done section): the next one below, else above.
+  function besideSelection() {
+    const ids = visibleIds();
+    const inSel = (id) => selected.has(id) || ancestors(id).some((a) => selected.has(a));
+    const last = ids.map(inSel).lastIndexOf(true);
+    return ids.slice(last + 1).find((id) => !inSel(id)) || [...ids].reverse().find((id) => !inSel(id)) || null;
+  }
+
+  // After a change: the cursor stays in view; if all selected tasks vanished, the neighbor takes over.
+  function settleSelection(fallback) {
+    render();
+    if (!selected.size && fallback && findLi(fallback)) return select(fallback);
+    const li = findLi(selected.has(selCursor) ? selCursor : [...selected][0]);
+    if (li) li.querySelector(":scope > .row").scrollIntoView({ block: "nearest" });
+  }
+
+  const many = (roots, one, n) => (roots.length === 1 ? q(roots[0]) + " " + one : roots.length + " Aufgaben " + n);
+
+  function moveSelected(dir) {
+    const roots = selectedRoots();
+    const steps = [];
+    for (const id of dir < 0 ? roots : [...roots].reverse()) steps.push(id);
+    const canMove = (id) => {
+      const par = parentOf(id);
+      const sibs = visibleChildren(tasks.get(id).l, par);
+      const j = sibs.findIndex((s) => s.id === id) + dir;
+      return j >= 0 && j < sibs.length && !selected.has(sibs[j].id) ? { par, j } : null;
+    };
+    if (!steps.some(canMove)) return;
+    checkpoint(many(roots, "verschoben", "verschoben"));
+    // One after the other: a block of selected neighbors moves as a whole.
+    for (const id of steps) {
+      const m = canMove(id);
+      if (m) placeTask(id, m.par, m.j);
+    }
+    roots.forEach(unmarkTask);
+    settleSelection();
+  }
+
+  // Tab: under the nearest unselected task above on the same level (several
+  // selected neighbors end up side by side there). Shift+Tab: out, behind the parent.
+  function indentSelected(out) {
+    const roots = selectedRoots();
+    const targetOf = (id) => {
+      const sibs = visibleChildren(tasks.get(id).l, parentOf(id));
+      const i = sibs.findIndex((s) => s.id === id);
+      for (let j = i - 1; j >= 0; j--) if (!selected.has(sibs[j].id)) return sibs[j].id;
+      return null;
+    };
+    if (!roots.some((id) => (out ? parentOf(id) : targetOf(id)))) return;
+    checkpoint(many(roots, out ? "ausgerückt" : "eingerückt", out ? "ausgerückt" : "eingerückt"));
+    if (out) {
+      for (const id of [...roots].reverse()) {
+        const par = parentOf(id);
+        if (!par) continue;
+        const gp = parentOf(par);
+        const sibs = visibleChildren(tasks.get(id).l, gp);
+        const i = sibs.findIndex((s) => s.id === par);
+        placeTask(id, gp, i < 0 ? sibs.length : i + 1);
+      }
+    } else {
+      for (const id of roots) {
+        const target = targetOf(id);
+        if (!target) continue;
+        placeTask(id, target, visibleChildren(tasks.get(id).l, target).length);
+        setCollapsed(target, false);
+      }
+    }
+    roots.forEach(unmarkTask);
+    settleSelection();
+  }
+
+  // Space / Ctrl+Enter: all checked off – or all reopened if they already were.
+  function checkSelected() {
+    const roots = selectedRoots();
+    if (!roots.length) return;
+    const done = !roots.every((id) => tasks.get(id).x);
+    const fallback = besideSelection();
+    checkpoint(many(roots, done ? "abgehakt" : "wieder geöffnet", done ? "abgehakt" : "wieder geöffnet"));
+    for (const id of roots) setDoneState(id, done);
+    rollRecurring();
+    roots.forEach(unmarkTask);
+    settleSelection(fallback);
+  }
+
+  function deleteSelected() {
+    const roots = selectedRoots();
+    if (!roots.length) return;
+    const fallback = besideSelection();
+    checkpoint(many(roots, "gelöscht", "gelöscht"));
+    const removed = {};
+    for (const id of roots) Object.assign(removed, withDescendants(id));
+    applyRemoval(removed);
+    selected.clear();
+    settleSelection(fallback);
+    const n = Object.keys(removed).length;
+    toast(n === 1 ? "Aufgabe gelöscht" : `${n} Aufgaben gelöscht`, removed);
+  }
+
+  // Ctrl+↑/↓ as while editing: a task without subtasks folds the block it is in.
+  function foldSelected(on) {
+    for (const id of selectedRoots()) {
+      const target = visibleChildren(tasks.get(id).l, id).length ? id : on ? parentOf(id) : "";
+      if (!target) continue;
+      setCollapsed(target, on);
+      if (target !== id) {
+        selected.delete(id);
+        selected.add(target);
+        selCursor = target;
+      }
+    }
+    settleSelection();
+  }
+
+  // ← / → as in a file explorer's tree: fold / unfold; on something already
+  // folded (or without subtasks) ← goes to the parent, → into the first subtask.
+  function foldOrWalk(id, left) {
+    if (selected.size > 1) {
+      for (const s of selectedRoots()) if (visibleChildren(tasks.get(s).l, s).length) setCollapsed(s, left);
+      return settleSelection();
+    }
+    const kids = visibleChildren(tasks.get(id).l, id);
+    if (kids.length && collapsed.has(id) !== left) return toggleFold(id);
+    if (left && parentOf(id)) select(parentOf(id));
+    else if (!left && kids.length) select(kids[0].id);
+  }
+
+  // Typing on a selected task starts editing, the letter lands at the end.
+  function typeInto(id, ch) {
+    const li = findLi(id);
+    const field = li && li.querySelector(":scope > .row .field.title");
+    if (!field) return;
+    field.startEdit("end");
+    const ta = field.querySelector("textarea");
+    ta.setRangeText(ch, ta.value.length, ta.value.length, "end");
+    ta.dispatchEvent(new Event("input"));
+  }
+
+  // Capture phase: runs before the general Esc / arrow handlers.
+  document.addEventListener("keydown", (e) => {
+    if (!selected.size || modalOpen() || e.isComposing) return;
+    const a = document.activeElement;
+    if (a && a.matches("textarea, input, select, button")) return;
+    const k = e.key;
+    const ctrl = e.ctrlKey || e.metaKey;
+    const cur = selected.has(selCursor) ? selCursor : selectedRoots()[0];
+    const act = (fn) => {
+      e.preventDefault();
+      e.stopPropagation();
+      fn();
+    };
+    if (k === "ArrowUp" || k === "ArrowDown") {
+      const dir = k === "ArrowUp" ? -1 : 1;
+      if (e.altKey) return act(() => moveSelected(dir));
+      if (ctrl) return act(() => foldSelected(dir < 0));
+      const next = neighbor(cur, dir);
+      if (e.shiftKey) return act(() => next && select(next, "range"));
+      return act(() => {
+        if (next) select(next);
+        else if (dir < 0) {
+          clearSelection();
+          addBtnEl.focus(); // top of the list – as from the first title
+        }
+      });
+    }
+    if (ctrl && k === "Enter") return act(checkSelected);
+    if (ctrl || e.altKey) return; // Ctrl+Z and the like keep their own handlers
+    if (k === "ArrowLeft" || k === "ArrowRight") return act(() => foldOrWalk(cur, k === "ArrowLeft"));
+    if (k === "Enter") return act(() => focusTitle(cur, "end"));
+    if (k === " ") return act(checkSelected);
+    if (k === "Tab") return act(() => indentSelected(e.shiftKey));
+    if (k === "Delete" || k === "Backspace") return act(deleteSelected);
+    if (k === "Escape") return act(clearSelection);
+    // "/" stays the chat shortcut.
+    if (k.length === 1 && k !== "/" && selected.size === 1) return act(() => typeInto(cur, k));
+  }, true);
+
+  function onRowClick(e) {
+    const row = e.target instanceof Element ? e.target.closest("li.task > .row") : null;
+    if (!row || e.target.closest("a, button, input, textarea, .grip")) return;
+    const id = row.parentElement.dataset.id;
+    if (e.shiftKey) return select(id, "range");
+    if (e.ctrlKey || e.metaKey) return select(id, "toggle");
+    // Second click on the title of the (only) selected task: edit, caret where clicked.
+    if (e.target.closest(".field.title .md-view") && selected.size === 1 && selected.has(id)) {
+      return row.querySelector(".field.title").startEditAt(e);
+    }
+    select(id);
+  }
+
+  for (const ul of [openListEl, doneListEl]) {
+    ul.addEventListener("click", onRowClick);
+    // Double click outside the title (on the title, the two clicks already edit).
+    ul.addEventListener("dblclick", (e) => {
+      const row = e.target instanceof Element ? e.target.closest("li.task > .row") : null;
+      if (!row || e.target.closest("a, button, input, textarea, .grip, .field.title")) return;
+      focusTitle(row.parentElement.dataset.id, "end");
+    });
+    // Shift+click would also mark text between the clicks.
+    ul.addEventListener("mousedown", (e) => {
+      if (e.shiftKey && e.target instanceof Element && e.target.closest("li.task > .row")) e.preventDefault();
+    });
+  }
+
+  mainEl.addEventListener("click", (e) => {
+    if (e.target instanceof Element && !e.target.closest("li.task")) clearSelection();
   });
 
   // Updates only details/preview of one row – without a full re-render, so a
@@ -1941,6 +2262,7 @@
   function taskEl(t, tree, depth, sortable) {
     const kids = tree.get(t.id) || [];
     const isExp = expandedId === t.id;
+    const folded = kids.length > 0 && collapsed.has(t.id);
     const canDrag = sortable && !t.x;
 
     const title = mdField({
@@ -1952,6 +2274,7 @@
       onInput: (v) => debounce("t:" + t.id, () => patchTask(t.id, { t: v })),
       onCommit: (v) => commitTitle(t.id, v),
       onKeyDown: (e, ta) => onTitleKey(e, t.id, ta),
+      clickEdits: false,
     });
 
     const row = h("div", { class: "row" },
@@ -1966,7 +2289,13 @@
         title: t.x ? "Als offen markieren" : "Als erledigt markieren (Strg+Enter)",
         onclick: () => toggleDone(t.id),
       }, icon("check")),
-      h("div", { class: "main" }, title, buildMeta(t, isExp)),
+      h("div", { class: "main" },
+        folded ? h("div", {
+          class: "title-line",
+          // The title is only as wide as its text here: a click next to it edits too.
+          onclick: (e) => e.target === e.currentTarget && title.startEdit("end"),
+        }, title, foldCount(t.id)) : title,
+        buildMeta(t, isExp)),
       // Only visible in edit mode (CSS).
       h("button", {
         class: "del icon-btn small",
@@ -1979,15 +2308,33 @@
 
     return h("li", {
       class: "task" + (t.x ? " done" : "") + (isExp ? " expanded" : "") +
-        (chatMarks.has(t.id) ? " chat-mark" : "") + (chatChanged.has(t.id) ? " chat-changed" : ""),
+        (chatMarks.has(t.id) ? " chat-mark" : "") + (chatChanged.has(t.id) ? " chat-changed" : "") +
+        (kids.length ? " parent" : "") + (folded ? " folded" : "") + (selected.has(t.id) ? " selected" : ""),
       dataset: { id: t.id },
     },
       row,
       isExp && buildDetails(t.id),
-      kids.length > 0 && h("ul", { class: "subtasks" },
+      kids.length > 0 && !folded && h("ul", { class: "subtasks" },
         kids.map((k) => taskEl(k, tree, depth + 1, sortable && !t.x))
-      )
+      ),
+      kids.length > 0 && h("div", {
+        class: "fold-bar",
+        title: folded ? "Aufklappen (Strg+↓)" : "Einklappen (Strg+↑)",
+        onclick: () => toggleFold(t.id),
+      })
     );
+  }
+
+  // Folded block: how many subtasks (all levels) are still open.
+  function foldCount(id) {
+    const all = descendants(id);
+    const open = all.filter((c) => !tasks.get(c).x).length;
+    return h("button", {
+      class: "fold-count",
+      type: "button",
+      title: `${open} von ${all.length} Unteraufgaben offen – aufklappen`,
+      onclick: () => toggleFold(id),
+    }, open ? String(open) : "✓");
   }
 
   function isBusy() {
@@ -2010,6 +2357,42 @@
     if (renderPending) scheduleRender();
   });
 
+  // The current list as a tree: parent id -> children in display order.
+  function buildTree() {
+    const all = [];
+    for (const [id, t] of tasks) if (t.l === currentList) all.push({ id, ...t });
+    const tree = new Map(); // parent id -> children
+    for (const t of all) {
+      const p = parentOf(t.id);
+      if (!tree.has(p)) tree.set(p, []);
+      tree.get(p).push(t);
+    }
+    // By order – checked subtasks keep their place.
+    for (const kids of tree.values()) kids.sort(byOrder);
+
+    // Guard against cycles (e.g. conflicting changes from two devices):
+    // unreachable tasks are shown at the top level.
+    const roots = tree.get("") || [];
+    const seen = new Set();
+    const mark = (id) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      for (const k of tree.get(id) || []) mark(k.id);
+    };
+    roots.forEach((r) => mark(r.id));
+    for (const t of all) {
+      if (!seen.has(t.id)) {
+        roots.push(t);
+        mark(t.id);
+        for (const kids of tree.values()) {
+          const i = kids.indexOf(t);
+          if (i >= 0 && kids !== roots) kids.splice(i, 1);
+        }
+      }
+    }
+    return { all, tree, roots };
+  }
+
   function render() {
     flushPending();
     renderPending = false;
@@ -2017,39 +2400,12 @@
     try {
       renderListSelect();
 
-      const all = [];
-      for (const [id, t] of tasks) if (t.l === currentList) all.push({ id, ...t });
-      const tree = new Map(); // parent id -> children
-      for (const t of all) {
-        const p = parentOf(t.id);
-        if (!tree.has(p)) tree.set(p, []);
-        tree.get(p).push(t);
-      }
-      // By order – checked subtasks keep their place.
-      for (const kids of tree.values()) kids.sort(byOrder);
-
-      // Guard against cycles (e.g. conflicting changes from two devices):
-      // unreachable tasks are shown at the top level.
-      const roots = tree.get("") || [];
-      const seen = new Set();
-      const mark = (id) => {
-        if (seen.has(id)) return;
-        seen.add(id);
-        for (const k of tree.get(id) || []) mark(k.id);
-      };
-      roots.forEach((r) => mark(r.id));
-      for (const t of all) {
-        if (!seen.has(t.id)) {
-          roots.push(t);
-          mark(t.id);
-          for (const kids of tree.values()) {
-            const i = kids.indexOf(t);
-            if (i >= 0 && kids !== roots) kids.splice(i, 1);
-          }
-        }
-      }
+      const { all, tree, roots } = buildTree();
 
       if (expandedId && !tasks.has(expandedId)) expandedId = null;
+      // A line that is about to get the caret (new subtask, Tab into a folded
+      // block, …) must not sit inside a folded block.
+      if (focusAfterRender) unfoldTo(focusAfterRender.id);
 
       const open = roots.filter((t) => !t.x).sort(byOrder);
       const done = roots.filter((t) => t.x).sort((a, b) => (b.xa || 0) - (a.xa || 0));
@@ -2066,6 +2422,8 @@
     } finally {
       rendering = false;
     }
+
+    for (const id of [...selected]) if (!findLi(id)) selected.delete(id);
 
     if (focusAfterRender) {
       const { id, caret } = focusAfterRender;
@@ -2097,12 +2455,14 @@
   // --- Drag & drop -----------------------------------------------------------
   // Dragging only via the grip (otherwise text in the title couldn't be
   // selected). Upper half of a row = before, lower half = after; further right
-  // (over the title) or on a task with subtasks = as first child.
+  // (over the title) or on a task with subtasks = as first child. Below the
+  // last task = at the end of the top level.
 
   function clearDropMarks() {
     for (const el of openListEl.querySelectorAll(".drop-before, .drop-after, .drop-inside")) {
       el.classList.remove("drop-before", "drop-after", "drop-inside");
     }
+    openListEl.classList.remove("drop-end");
   }
 
   openListEl.addEventListener("pointerdown", (e) => {
@@ -2124,32 +2484,87 @@
     li.classList.add("dragging");
   });
 
-  openListEl.addEventListener("dragover", (e) => {
-    if (!dragging) return;
-    clearDropMarks();
-    dropInfo = null;
-    const li = e.target instanceof Element ? e.target.closest("li.task") : null;
+  // Where a drop at this point would land, or null (also marks it).
+  function dropTargetAt(e) {
     const src = findLi(dragging.id);
-    if (!li || !src || src.contains(li)) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
+    if (!src) return null;
+    const li = e.target instanceof Element ? e.target.closest("#openList li.task") : null;
+    if (!li) {
+      const last = openListEl.lastElementChild;
+      if (!last || e.clientY < last.getBoundingClientRect().bottom) return null;
+      openListEl.classList.add("drop-end");
+      return { id: "", mode: "end" };
+    }
+    if (src.contains(li)) return null;
     const row = li.querySelector(":scope > .row");
     const rect = row.getBoundingClientRect();
     const titleLeft = row.querySelector(".main").getBoundingClientRect().left;
     const lower = e.clientY > rect.top + rect.height / 2;
-    const hasKids = visibleChildren(currentList, li.dataset.id).some((k) => k.id !== dragging.id);
-    const mode = !lower ? "before" : hasKids || e.clientX > titleLeft + 24 ? "inside" : "after";
+    // Below an unfolded block's row come its subtasks – so "after" would be misleading there.
+    const openKids = !collapsed.has(li.dataset.id) && visibleChildren(currentList, li.dataset.id).some((k) => k.id !== dragging.id);
+    const mode = !lower ? "before" : openKids || e.clientX > titleLeft + 24 ? "inside" : "after";
     row.classList.add("drop-" + mode);
-    dropInfo = { id: li.dataset.id, mode };
+    return { id: li.dataset.id, mode };
+  }
+
+  // Hovering a folded block while dragging opens it after a moment, so the
+  // task can go inside. Opened this way, it folds again unless the task ends
+  // up inside it.
+  const SPRING_MS = 700;
+  let spring = null; // { id, timer }
+  const springOpened = new Set();
+
+  function springAt(li) {
+    const src = findLi(dragging.id);
+    const id = li && src && li.classList.contains("folded") && !src.contains(li) ? li.dataset.id : null;
+    if (spring && spring.id === id) return;
+    if (spring) clearTimeout(spring.timer);
+    spring = id ? { id, timer: setTimeout(() => springOpen(id), SPRING_MS) } : null;
+  }
+
+  function springOpen(id) {
+    spring = null;
+    const li = findLi(id);
+    if (!dragging || !li) return;
+    setCollapsed(id, false);
+    springOpened.add(id);
+    // Only this block is rebuilt: a full render would replace the dragged row
+    // and end the drag.
+    const { tree } = buildTree();
+    const t = (tree.get(parentOf(id)) || []).find((k) => k.id === id);
+    if (t) li.replaceWith(taskEl(t, tree, ancestors(id).length, true));
+  }
+
+  // Over the whole scroll area, so the empty space below the list counts too.
+  mainEl.addEventListener("dragover", (e) => {
+    if (!dragging) return;
+    springAt(e.target instanceof Element ? e.target.closest("#openList li.task") : null);
+    clearDropMarks();
+    dropInfo = dropTargetAt(e);
+    if (!dropInfo) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
   });
 
-  openListEl.addEventListener("drop", (e) => {
+  // Outside the list a drop does nothing – so no mark may stay behind either.
+  document.addEventListener("dragover", (e) => {
+    if (dragging && !mainEl.contains(e.target)) {
+      springAt(null);
+      clearDropMarks();
+      dropInfo = null;
+    }
+  });
+
+  mainEl.addEventListener("drop", (e) => {
     if (!dragging || !dropInfo) return;
     e.preventDefault();
     const { id: target, mode } = dropInfo;
     checkpoint(q(dragging.id) + " verschoben");
-    if (mode === "inside") {
+    if (mode === "end") {
+      placeTask(dragging.id, "", visibleChildren(currentList, "").filter((s) => s.id !== dragging.id).length);
+    } else if (mode === "inside") {
       placeTask(dragging.id, target, 0);
+      setCollapsed(target, false);
     } else {
       const par = parentOf(target);
       const sibs = visibleChildren(currentList, par).filter((s) => s.id !== dragging.id);
@@ -2164,6 +2579,10 @@
       e.target.classList.remove("dragging");
     }
     clearDropMarks();
+    springAt(null);
+    const keep = dragging ? ancestors(dragging.id) : [];
+    for (const id of springOpened) if (!keep.includes(id)) setCollapsed(id, true);
+    springOpened.clear();
     dragging = null;
     dropInfo = null;
     render();
@@ -2394,6 +2813,11 @@
     if (!t) return;
     if (t.l !== currentList) setCurrentList(t.l);
     let li = findLi(id);
+    if (!li && ancestors(id).some((a) => collapsed.has(a))) {
+      unfoldTo(id);
+      render();
+      li = findLi(id);
+    }
     if (!li && t.x && !doneOpen) {
       doneOpen = true;
       render();
@@ -2803,6 +3227,7 @@
   function showChatFocus(ids) {
     const present = ids.filter((id) => tasks.has(id));
     if (!present.length) return;
+    present.forEach(unfoldTo);
     if (!present.some((id) => tasks.get(id).l === currentList)) setCurrentList(tasks.get(present[0]).l);
     else render();
     const li = present.map(findLi).find(Boolean);
@@ -3533,6 +3958,8 @@
     chatChanged.clear();
     for (const id of m.highlight || []) if (tasks.has(id)) chatMarks.add(id);
     if (!m.undone) for (const id of m.changed || []) if (tasks.has(id)) chatChanged.add(id);
+    // What the AI points at must not hide in a folded block.
+    for (const id of [...chatMarks, ...chatChanged]) unfoldTo(id);
     if (chatMode === "full" && !isWide()) setChatMode("tasks"); // the list sits behind the tab "Aufgaben"
     stampChatMarks();
     showChatFocus([...chatMarks, ...chatChanged]);
@@ -3623,7 +4050,8 @@
     $("chatSend").append(icon("send"));
     for (const b of document.querySelectorAll(".modal-close")) b.append(icon("close"));
     setupEnvBanner();
-    const local = await browser.storage.local.get([THEME_KEY, CURRENT_KEY, DONE_OPEN_KEY]);
+    const local = await browser.storage.local.get([THEME_KEY, CURRENT_KEY, DONE_OPEN_KEY, COLLAPSED_KEY]);
+    for (const id of local[COLLAPSED_KEY] || []) collapsed.add(id);
     applyTheme(local[THEME_KEY]);
     refreshAiSettings();
     doneOpen = !!local[DONE_OPEN_KEY];

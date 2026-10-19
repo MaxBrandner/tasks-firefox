@@ -18,6 +18,9 @@
         <button type="button" role="menuitem" data-action="rename">Liste umbenennen</button>
         <button type="button" role="menuitem" data-action="delete" class="danger">Liste löschen</button>
         <hr />
+        <button type="button" role="menuitem" data-action="foldAll">Alle einklappen</button>
+        <button type="button" role="menuitem" data-action="unfoldAll">Alle ausklappen</button>
+        <hr />
         <button type="button" role="menuitem" data-action="history">Verlauf …</button>
         <button type="button" role="menuitem" data-action="export">Sicherung exportieren</button>
         <button type="button" role="menuitem" data-action="import">Sicherung importieren …</button>
@@ -38,17 +41,45 @@
         <button class="icon-btn modal-close" type="button" data-close aria-label="Schließen" title="Schließen"></button>
       </header>
       <div class="help-grid">
-        <kbd>Enter</kbd><span>neue Aufgabe darunter</span>
-        <kbd>Tab</kbd><span>einrücken</span>
-        <kbd>Shift+Tab</kbd><span>ausrücken</span>
+        <h3>Ausgewählte Aufgaben (Klick auf eine Aufgabe)</h3>
+        <kbd>Klick</kbd><span>auswählen; nochmal auf den Titel, Doppelklick oder Enter = bearbeiten</span>
+        <kbd>Shift / Strg+Klick</kbd><span>Bereich / einzelne dazu (auch Shift+↑/↓)</span>
+        <kbd>↑ / ↓</kbd><span>Auswahl wandern; ohne Auswahl: unterste/oberste</span>
+        <kbd>← / →</kbd><span>einklappen / aufklappen; sonst zur Überkategorie / ersten Unteraufgabe</span>
+        <kbd>Alt+↑ / ↓</kbd><span>verschieben</span>
+        <kbd>Tab / Shift+Tab</kbd><span>einrücken / ausrücken</span>
+        <kbd>Leertaste</kbd><span>abhaken (auch Strg+Enter)</span>
+        <kbd>Entf</kbd><span>löschen (Strg+Z holt zurück)</span>
+        <kbd>Buchstabe</kbd><span>losschreiben: bearbeitet den Titel, Text ans Ende</span>
+        <kbd>Esc</kbd><span>Auswahl aufheben</span>
+        <h3>Beim Bearbeiten (Cursor im Titel)</h3>
+        <kbd>Enter</kbd><span>neue Aufgabe darunter (Text rechts vom Cursor wandert mit)</span>
+        <kbd>Tab / Shift+Tab</kbd><span>einrücken / ausrücken</span>
         <kbd>Strg+Enter</kbd><span>abhaken</span>
-        <kbd>Backspace</kbd><span>leere Zeile löschen</span>
-        <kbd>↑ / ↓</kbd><span>zur Aufgabe darüber/darunter; ohne Auswahl: unterste/oberste</span>
+        <kbd>Backspace</kbd><span>am Zeilenanfang ausrücken, in leerer Zeile löschen</span>
+        <kbd>↑ / ↓</kbd><span>zum Titel darüber/darunter</span>
+        <kbd>Alt+↑ / ↓</kbd><span>verschieben</span>
+        <kbd>Strg+↑ / ↓</kbd><span>einklappen / aufklappen (auch in der Auswahl)</span>
         <kbd>Strg+Z / Strg+Y</kbd><span>rückgängig / wiederholen (alle Schritte: ⋯ → Verlauf …)</span>
-        <kbd>Alt+↑ / ↓</kbd><span>Aufgabe verschieben</span>
-        <kbd>Esc</kbd><span>Bearbeiten/Details schließen</span>
-        <kbd>/</kbd><span>in den KI-Chat schreiben (schmale Seitenleiste: Schnell-Chat über den Aufgaben)</span>
-        <kbd>Strg+Alt+A</kbd><span>Tasks öffnen/schließen (überall in Firefox)</span>
+        <kbd>Esc</kbd><span>zurück zur Auswahl</span>
+        <h3>Maus</h3>
+        <kbd>⋮⋮ ziehen</kbd><span>verschieben; weiter rechts = Unteraufgabe, unter allem = ganz unten; über eingeklapptem Block kurz warten = aufklappen</span>
+        <kbd>Leiste links</kbd><span>Block ein-/aufklappen; die Zahl dahinter = offene Unteraufgaben (alle: ⋯-Menü)</span>
+        <kbd>Dateien ziehen</kbd><span>irgendwohin auf Tasks: Anhang im Chat</span>
+        <h3>KI-Chat</h3>
+        <kbd>/</kbd><span>in den Chat schreiben (schmale Seitenleiste: Schnell-Chat über den Aufgaben)</span>
+        <kbd>Enter / Shift+Enter</kbd><span>senden / neue Zeile</span>
+        <kbd>Esc</kbd><span>Markierungen auf der Webseite entfernen (Strg+Z holt sie zurück), sonst Chat schließen</span>
+        <kbd>Rechtsklick</kbd><span>auf einer Webseite „Zu Tasks hinzufügen“: die Stelle landet im Bezug</span>
+        <h3>Auf der Webseite (+ → Element auswählen)</h3>
+        <kbd>Klick</kbd><span>Block oder markierten Text an/aus</span>
+        <kbd>Umschalt+Klick</kbd><span>alles dazwischen</span>
+        <kbd>Ziehen / Alt+Ziehen</kbd><span>Rahmen aufziehen / Text markieren</span>
+        <kbd>Strg+A</kbd><span>alle sichtbaren Blöcke</span>
+        <kbd>Strg+Z / Strg+Y</kbd><span>zurück / wieder</span>
+        <kbd>Enter / Esc</kbd><span>fertig – danach landet, was man tippt, im Chat; zweites Esc: Markierungen dieser Seite weg</span>
+        <h3>Überall in Firefox</h3>
+        <kbd>Strg+Alt+A</kbd><span>Tasks öffnen/schließen</span>
       </div>
       <p>Markdown: <code>**fett**</code> <code>*kursiv*</code> <code>~~durch~~</code> <code>`code`</code> <code>[Text](https://…)</code>, Links werden automatisch erkannt. In Notizen zusätzlich <code>- Liste</code>, <code>1. Liste</code>, <code># Überschrift</code>, <code>&gt; Zitat</code>.</p>
       </div>
@@ -146,7 +177,7 @@
           Aufgabe hinzufügen
         </button>
 
-        <main id="main" class="scroll">
+        <main id="main" class="scroll" tabindex="-1">
           <ul id="openList" class="tasks"></ul>
           <div id="empty" class="empty" hidden>
             <p>Keine offenen Aufgaben.</p>

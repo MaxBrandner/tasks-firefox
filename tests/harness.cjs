@@ -44,7 +44,8 @@ module.exports = function setup(P, pre = {}, opts = {}) {
   H.idOf = (t) => { const e = Object.entries(sync.data).find(([k, v]) => k.startsWith("T:") && v.t === t); return e && e[0].slice(2); };
   H.T = (t) => sync.data["T:" + H.idOf(t)];
   H.li = (t) => d.querySelector(`li.task[data-id="${H.idOf(t)}"]`);
-  H.edit = (t) => { H.li(t).querySelector(":scope>.row .title .md-view").click(); return d.activeElement; };
+  // First click selects, the second one edits (unless the first already did).
+  H.edit = (t) => { const v = () => H.li(t).querySelector(":scope>.row .title .md-view"); v().click(); if (!d.activeElement.matches("textarea")) v().click(); return d.activeElement; };
   H.key = async (el, k, o = {}) => { el.dispatchEvent(new w.KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...o })); await H.tick(); return d.activeElement; };
   H.bodyKey = (k, o) => H.key(d.body, k, o);
   H.type = async (ta, v) => { ta.value = v; ta.dispatchEvent(new w.Event("input")); await new Promise((r) => setTimeout(r, 450)); };

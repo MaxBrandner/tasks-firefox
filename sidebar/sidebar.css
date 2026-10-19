@@ -275,7 +275,23 @@ kbd {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 4px 10px;
-  align-items: center;
+  align-items: baseline;
+}
+
+.help-grid kbd {
+  justify-self: start;
+}
+
+.help-grid h3 {
+  grid-column: 1 / -1;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.help-grid h3:first-child {
+  margin-top: 0;
 }
 
 .modal p {
@@ -377,7 +393,8 @@ kbd {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 2px 4px 24px;
+  /* Left: room for the fold bar of the top level. */
+  padding: 2px 4px 24px 10px;
 }
 
 .tasks,
@@ -730,6 +747,119 @@ kbd {
   background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
 
+/* --- Selection ------------------------------------------------------------ */
+
+/* The list holds the focus while tasks are selected. */
+#main:focus {
+  outline: none;
+}
+
+.task.selected > .row {
+  background: var(--accent-soft);
+}
+
+/* Focus elsewhere (e.g. in the chat): the selection stays, but pale. */
+:root:not(:has(#main:focus)) .task.selected > .row {
+  background: color-mix(in srgb, var(--accent-soft) 45%, transparent);
+}
+
+/* --- Folding (like Jupyter) ---------------------------------------------- */
+
+.task.parent {
+  position: relative;
+}
+
+/* Bar along the whole block (row + subtasks), left of it; click folds. The
+   clickable strip is wider than the visible line. */
+.fold-bar {
+  position: absolute;
+  left: -10px;
+  top: 2px;
+  bottom: 2px;
+  width: 13px;
+  cursor: pointer;
+}
+
+.fold-bar::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.task.folded > .fold-bar::before {
+  opacity: 0.55;
+}
+
+.task.parent > .fold-bar:hover::before {
+  opacity: 1;
+}
+
+.title-line {
+  display: flex;
+  align-items: flex-start;
+  cursor: text;
+}
+
+.title-line > .field {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* While editing, an invisible copy of the text (data-value) sizes the field,
+   so the count stays right behind the title. */
+.title-line > .field:has(> .md-edit:not([hidden])) {
+  position: relative;
+  min-width: 2em;
+}
+
+.title-line > .field:has(> .md-edit:not([hidden]))::after {
+  content: attr(data-value) " ";
+  display: block;
+  visibility: hidden;
+  padding: 2px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.title-line > .field > .md-edit {
+  position: absolute;
+  inset: 0;
+  height: 100% !important;
+}
+
+.fold-count {
+  flex: none;
+  min-width: 18px;
+  height: 18px;
+  margin: 3px 0 0 6px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--hover);
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  line-height: 18px;
+  cursor: pointer;
+}
+
+.row:hover .fold-count,
+.task.expanded > .row .fold-count {
+  background: var(--line);
+}
+
+.fold-count:hover {
+  color: var(--text);
+}
+
 /* --- Drag & Drop --------------------------------------------------------- */
 
 .task.dragging > .row {
@@ -761,6 +891,23 @@ kbd {
 /* Drop as subtask: line indented one level further. */
 .row.drop-inside::after {
   left: 44px;
+}
+
+/* Drop below everything: line under the last task, at the top level. */
+.tasks.drop-end {
+  position: relative;
+}
+
+.tasks.drop-end::after {
+  content: "";
+  position: absolute;
+  left: 20px;
+  right: 4px;
+  bottom: -2px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
 }
 
 /* --- Empty state ------------------------------------------------------------ */

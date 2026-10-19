@@ -34,8 +34,16 @@ Google, kein eigener Server.
 - **Markdown** in Titel und Notiz: `**fett**`, `*kursiv*`, `~~durch~~`,
   `` `code` ``, `[Text](https://…)`; Links werden automatisch erkannt. In
   Notizen zusätzlich `- Liste`, `1. Liste`, `# Überschrift`, `> Zitat`.
-- **Sortieren** – am Griff `⋮⋮` ziehen (weiter rechts loslassen = Unteraufgabe)
+- **Auswählen** – wie im Explorer: Klick wählt aus, nochmal auf den Titel
+  (oder Doppelklick, Enter) bearbeitet. Mehrere mit Shift/Strg; dann wirken
+  Verschieben, Einrücken, Abhaken und Löschen auf alle (Tasten siehe unten).
+- **Sortieren** – am Griff `⋮⋮` ziehen (weiter rechts loslassen = Unteraufgabe,
+  unter allem = ganz unten, kurz über einem eingeklappten Block warten = aufklappen)
   oder im Titel **Alt+↑ / Alt+↓**.
+- **Einklappen** – wie in Jupyter: Leiste links an einem Block mit
+  Unteraufgaben anklicken (oder **Strg+↑ / Strg+↓** im Titel); eingeklappt zeigt
+  eine Zahl die offenen Unteraufgaben. ⋯ → „Alle einklappen“ / „Alle ausklappen“.
+  Gilt pro Gerät.
 - **Erledigt** – einklappbarer Bereich, unten verankert; „Erledigte löschen".
 - **Rückgängig / Wiederholen** – **Strg+Z** / **Strg+Y** für alle Änderungen;
   beim Tippen wirkt Strg+Z zuerst auf den Text im Feld. Nach dem Löschen
@@ -57,15 +65,43 @@ Google, kein eigener Server.
 | Taste | Wirkung |
 |---|---|
 | `Strg+Alt+A` | Tasks öffnen/schließen (überall in Firefox) |
-| `Enter` | neue Aufgabe darunter (Text rechts vom Cursor wandert mit) |
+| `/` | in den KI-Chat schreiben (schmal: Schnell-Chat über den Aufgaben) |
+| `Enter` / `Shift+Enter` im Chat | senden / neue Zeile |
+
+**Ausgewählte Aufgaben** – ein Klick wählt eine Aufgabe aus (wie im Explorer);
+nochmal auf den Titel, Doppelklick oder `Enter` bearbeitet sie.
+
+| Taste | Wirkung |
+|---|---|
+| `Shift`/`Strg`+Klick, `Shift+↑`/`↓` | Bereich / einzelne dazu |
+| `↑` / `↓` | Auswahl wandern; ohne Auswahl: unterste/oberste |
+| `←` / `→` | einklappen / aufklappen; sonst zur Überkategorie / ersten Unteraufgabe |
+| `Alt+↑` / `Alt+↓` | verschieben (alle ausgewählten zusammen) |
+| `Tab` / `Shift+Tab` | einrücken / ausrücken |
+| `Leertaste` / `Strg+Enter` | abhaken |
+| `Entf` | löschen (`Strg+Z` holt zurück) |
+| Buchstabe | losschreiben: bearbeitet den Titel, Text ans Ende |
+| `Esc` | Auswahl aufheben |
+
+**Beim Bearbeiten** (Cursor im Titel):
+
+| Taste | Wirkung |
+|---|---|
+| `Enter` | neue Aufgabe darunter (Text rechts vom Cursor wandert mit; bei eingeklapptem Block unter den Block) |
 | `Tab` / `Shift+Tab` | einrücken / ausrücken |
 | `Strg+Enter` | abhaken |
-| `Backspace` in leerer Zeile | Zeile löschen |
-| `↑` / `↓` | Aufgabe darüber/darunter; ohne Auswahl: unterste/oberste |
+| `Backspace` | am Zeilenanfang ausrücken, in leerer Zeile löschen |
+| `↑` / `↓` | zum Titel darüber/darunter |
 | `Alt+↑` / `Alt+↓` | Aufgabe verschieben |
+| `Strg+↑` / `Strg+↓` | Unteraufgaben einklappen / aufklappen |
 | `Strg+Z` / `Strg+Y` | rückgängig / wiederholen |
-| `Esc` | Bearbeiten bzw. Popup schließen |
-| `/` | in den KI-Chat schreiben (schmal: Schnell-Chat über den Aufgaben) |
+| `Esc` | zurück zur Auswahl; im Chat-Feld: Markierungen auf der Webseite weg, sonst eine Stufe zurück |
+
+Mit der Maus: am Griff `⋮⋮` ziehen (weiter rechts loslassen = Unteraufgabe,
+unter allem = ganz unten; kurz über einem eingeklappten Block warten klappt ihn
+auf – legt man woanders ab, geht er wieder zu). Die Leiste links an einem Block
+klappt ihn ein und aus. Die Tasten beim Auswählen auf der Webseite stehen unten
+bei „+ im Chat“.
 
 `Strg+Alt+A` lässt sich ändern unter `about:addons` → Zahnrad →
 „Erweiterungs-Tastenkombinationen verwalten". Alle Kürzel stehen auch in der
