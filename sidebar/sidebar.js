@@ -1432,7 +1432,10 @@
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || e.defaultPrevented) return;
     closeMenu();
-    if (!plusMenuEl.hidden) return togglePlusMenu(false);
+    if (!plusMenuEl.hidden) {
+      togglePlusMenu(false);
+      return chatInputEl.focus();
+    }
     // Innermost first: an expanded task collapses, the next Esc steps the chat back.
     if (expandedId) setExpanded(null);
     else chatStepBack();
@@ -3177,6 +3180,7 @@
   $("chatPlus").addEventListener("click", (e) => {
     e.stopPropagation();
     togglePlusMenu();
+    if (plusMenuEl.hidden) chatInputEl.focus(); // closed again: back to typing
   });
   document.addEventListener("click", (e) => {
     if (!plusMenuEl.hidden && !plusMenuEl.contains(e.target)) togglePlusMenu(false);
@@ -3198,44 +3202,42 @@
   // web pages (request must come straight from the click).
   async function attachPage() {
     const granted = await browser.permissions.request({ origins: ["*://*/*"] }).catch(() => false);
-    if (!granted) {
-      attachNote = "Ohne Erlaubnis kann Tasks die Seite nicht lesen.";
-      renderAttachments();
-      return;
-    }
+    if (!granted) return flashNote("Ohne Erlaubnis kann Tasks die Seite nicht lesen.");
     const r = await browser.runtime.sendMessage({ type: "page-text" }).catch((err) => ({ ok: false, error: err.message }));
-    if (!r || !r.ok) {
-      attachNote = (r && r.error) || "Seite nicht lesbar.";
-      renderAttachments();
-      return;
-    }
+    if (!r || !r.ok) return flashNote((r && r.error) || "Seite nicht lesbar.");
     addAttachment({ kind: "page", name: r.title || r.url, url: r.url, text: r.text });
     chatInputEl.focus();
   }
 
-  // Drag & drop of files onto the chat (other drags – e.g. tasks – are ignored).
+  // Drag & drop of files anywhere onto Tasks – also onto the task list: they
+  // become attachments in the chat, which opens (other drags – e.g. tasks –
+  // are ignored).
   const hasFiles = (e) => e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
   let dragDepth = 0;
-  const chatPanel = $("chatPanel");
-  chatPanel.addEventListener("dragenter", (e) => {
+  const dropEl = $("chatDrop");
+  document.body.append(dropEl); // over the whole sidebar, whatever view shows
+  document.addEventListener("dragenter", (e) => {
     if (!hasFiles(e)) return;
     e.preventDefault();
     dragDepth++;
-    $("chatDrop").hidden = false;
+    dropEl.hidden = false;
   });
-  chatPanel.addEventListener("dragover", (e) => {
-    if (hasFiles(e)) e.preventDefault();
+  document.addEventListener("dragover", (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
   });
-  chatPanel.addEventListener("dragleave", (e) => {
+  document.addEventListener("dragleave", (e) => {
     if (!hasFiles(e)) return;
     dragDepth = Math.max(0, dragDepth - 1);
-    if (!dragDepth) $("chatDrop").hidden = true;
+    if (!dragDepth) dropEl.hidden = true;
   });
-  chatPanel.addEventListener("drop", (e) => {
+  document.addEventListener("drop", (e) => {
     if (!hasFiles(e)) return;
     e.preventDefault();
     dragDepth = 0;
-    $("chatDrop").hidden = true;
+    dropEl.hidden = true;
+    if (!isWide() && chatMode === "tasks") setChatMode("quick");
     addFiles([...e.dataTransfer.files]);
     chatInputEl.focus();
   });

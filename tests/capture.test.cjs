@@ -1,6 +1,6 @@
 // Run: npm test (all) or npm test <name>
 // The page scripts of "Zu Tasks hinzufügen" (background.js: captureInPage,
-// highlightInPage) inside a real test page (jsdom).
+// marksInPage, pickerInPage) inside a real test page (jsdom).
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
@@ -11,8 +11,7 @@ const ok = (c, m) => { console.log((c ? "✔ " : "✘ ") + m); if (!c) fails++; 
 const stub = new Proxy(function () {}, { get: (t, k) => (k === "then" ? undefined : stub), apply: () => stub });
 const bg = vm.createContext({ browser: stub, console, URL, setTimeout, clearTimeout, crypto: globalThis.crypto });
 vm.runInContext(fs.readFileSync(path.join(ROOT, "background.js"), "utf8"), bg);
-const STYLE = vm.runInContext("HIGHLIGHT_STYLE", bg); // const: not a property of the context
-const MARKS = vm.runInContext("MARK_STYLE", bg);
+const MARKS = vm.runInContext("MARK_STYLE", bg); // const: not a property of the context
 
 const page = new JSDOM(`<!DOCTYPE html><html><head><meta name="description" content="Jahrestage 2026"><style>a, b, span { display: inline; }</style></head><body>
   <header><h1>Termine 2026</h1></header>
@@ -51,13 +50,6 @@ out = run("captureInPage", { targetId: null, srcUrl: "", limits });
 const back = w.eval(`(${bg.rangeFromSpotInPage})(${JSON.stringify(out.spot)})`);
 ok(out.spot && out.spot.start === 5 && back && back.toString() === "unter Termine", "Markierung als Stelle gemerkt, findet genau diesen Text wieder: »" + (back && back.toString()) + "«");
 w.getSelection().removeAllRanges();
-
-// highlight overlay
-const found = run("highlightInPage", { locator: "body > main > ul > li:nth-of-type(2)", style: STYLE, ms: 50, scroll: false });
-const box = w.document.getElementById("tasks-ext-highlight");
-ok(found === true && box && /→ Tasks/.test(box.textContent) && /pointer-events:\s*none/.test(box.getAttribute("style")), "Overlay „→ Tasks“ liegt über der Stelle, ohne Klicks abzufangen");
-ok(w.document.querySelectorAll("li")[1].getAttribute("style") === null, "die Seite selbst bleibt unverändert");
-ok(run("highlightInPage", { locator: "body > nav > li", style: STYLE, ms: 50, scroll: false }) === false, "Stelle nicht (mehr) da → false, kein Fehler");
 
 // marks of the Bezug: stay until the list changes
 const marks = (items, off = false) => w.eval(`(${bg.marksInPage})(${JSON.stringify({ style: MARKS, items, off })}, ${bg.rangeFromSpotInPage})`);
@@ -180,9 +172,27 @@ const later = (ms) => new Promise((r) => setTimeout(r, ms));
   ul.innerHTML = "<li>ganz anders</li>";
   await later(250);
   ok(!piece(), "Block ganz weg → keine Markierung an falscher Stelle");
-  marks([]);
-  await later(450);
-  ok(!w.document.getElementById("tasks-ext-highlight"), "Overlay verschwindet nach der Zeit wieder");
+  // lighting a place up (right-click, "show on page"): the same marks, brighter for a moment
+  marks([], true);
+  const flash = (spot, ms) => w.eval(`if (!window.__tasksMarks) (${bg.marksInPage})(${JSON.stringify({ style: MARKS, items: [], quiet: true })}, ${bg.rangeFromSpotInPage});
+    window.__tasksMarks.flash(${JSON.stringify(spot)}, { ms: ${ms} })`);
+  const lit = () => piece() && /8px/.test(piece().getAttribute("style"));
+  ok(flash({ locator: "#intro" }, 120) === true && lit() && !piece().querySelector("span") && /pointer-events:\s*none/.test(piece().getAttribute("style")), "Rechtsklick ohne Markierung: die Stelle leuchtet im Markierungs-Look auf (ohne Nummer, ohne Klicks abzufangen)");
+  ok(w.document.getElementById("intro").getAttribute("style") === null, "die Seite selbst bleibt unverändert");
+  let n1 = sent.length;
+  key("Escape");
+  ok(sent.length === n1, "nur zum Aufleuchten: keine Tasten auf der Seite");
+  await later(200);
+  ok(!piece(), "danach ist sie wieder weg");
+  ok(flash({ locator: "body > nav > li" }, 100) === false, "Stelle nicht (mehr) da → false, kein Fehler");
+  marks([{ locator: "#intro", n: 2 }]);
+  flash({ locator: "#intro" }, 150);
+  ok(lit() && piece().querySelector("span").textContent === "2", "„Auf der Seite zeigen“: die vorhandene Markierung Nr. 2 leuchtet auf");
+  marks([{ locator: "#intro", n: 1 }]);
+  ok(lit() && piece().querySelector("span").textContent === "1", "kommt gleichzeitig die neue Liste der Seitenleiste, leuchtet sie weiter");
+  await later(220);
+  ok(piece() && !lit() && piece().querySelector("span").textContent === "1", "danach bleibt die normale Markierung");
+  marks([], true);
   console.log(fails ? `\n${fails} FEHLER` : "\nAlle Prüfungen bestanden");
   process.exit(fails ? 1 : 0);
 })();

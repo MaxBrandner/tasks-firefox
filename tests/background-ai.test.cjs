@@ -23,7 +23,7 @@ const ctx = { console, crypto: globalThis.crypto, structuredClone, URL: globalTh
     tabs: { onUpdated: { addListener(f) { tabUpdated.add(f); }, removeListener(f) { tabUpdated.delete(f); } }, async update(id, o) { activated.push([id, o.active]); },
       async query() { return [{ id: 5, url: "https://www.sonntagsblatt.de/termine", title: "Termine 2026" }]; },
       async executeScript(id, o) { scripts.push(o);
-        if (/highlightInPage/.test(o.code)) return [true];
+        if (/\.flash\(/.test(o.code)) return [true];
         if (/pickerInPage/.test(o.code)) return [{ ok: true, title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine" }];
         return [capReply()]; } } } };
 vm.createContext(ctx);
@@ -51,7 +51,7 @@ const capture = async (info, cap, tab = { id: 1, url: URL0, title: "Übung 2" })
   ok(opened === 1 && c && c.label === "Blatt 2 ist online" && nativeCalls === 0, "Rechtsklick: Seitenleiste geht auf, Stelle landet als Karte im Chat – noch ohne KI-Anfrage");
   ok(c.picking === true && scripts.some((s) => /pickerInPage/.test(s.code) && /unitOfInPage/.test(s.code)), "Rechtsklick startet gleich den Picker in diesem Tab");
   ok(/^Seite: Übung 2\nAdresse: https:\/\/ilias/.test(c.text) && /Markierter Text:\n<<<\nBlatt 2 ist online\nAbgabe 26\.10\.\n>>>/.test(c.text) && /Links in der Markierung:\n- Blatt 2 → https:\/\/ilias\.hhu\.de\/blatt2\.pdf/.test(c.text), "Karte enthält Seite, Adresse, Markierung mit Zeilenumbrüchen und Link-Zielen");
-  ok(c.page && c.page.locator === "body > p" && c.page.tabId === 1 && scripts.some((o) => /highlightInPage/.test(o.code) && /"locator":"body > p"/.test(o.code)), "Stelle leuchtet auf der Seite auf; Pfad für „Auf der Seite zeigen“ steht in der Karte");
+  ok(c.page && c.page.locator === "body > p" && c.page.tabId === 1 && scripts.some((o) => /marksInPage/.test(o.code) && /\.flash\(\{"locator":"body > p"\}/.test(o.code)), "Stelle leuchtet auf der Seite auf; Pfad für „Auf der Seite zeigen“ steht in der Karte");
   c = await capture({ linkUrl: PDF, linkText: "Blatt 3", targetElementId: 42 }, { selection: "", section: "Übungen\nBlatt 3 – Abgabe 26. Okt", heading: "Übungen" });
   ok(/Angeklickt: Link „Blatt 3" → https:\/\/ilias\.hhu\.de\/blatt2\.pdf/.test(c.text) && /Abschnitt um die angeklickte Stelle \(Überschrift: „Übungen"\)/.test(c.text) && !/Markierter Text/.test(c.text) && c.label === "Blatt 3" && /Blatt 3/.test(c.excerpt), "Rechtsklick auf Link: Linktext, Ziel und Abschnitt");
   ok(scripts.some((o) => /"targetId":42/.test(o.code) && /cssPathInPage/.test(o.code)), "angeklicktes Element geht an das Seiten-Skript");

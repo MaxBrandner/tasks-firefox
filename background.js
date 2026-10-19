@@ -211,44 +211,16 @@ function captureInPage(args, cssPath, textSpot, unitOf) {
   return out;
 }
 
-// Highlights an element on the page as an overlay (the page itself is not
-// changed), fading out after `ms`; with `scroll` it is brought into view
-// first. One look for all highlights – switch here.
-const HIGHLIGHT_STYLE = {
-  box: "border-radius:4px;box-shadow:0 0 0 2px #2f6f5e;background:rgba(47,111,94,.13)", // same look as a picked block
-  badge: "background:#2f6f5e;color:#fff;font:600 11px/18px system-ui,sans-serif;padding:0 8px;border-radius:999px",
-  label: "→ Tasks",
-};
-
-function highlightInPage(args) {
-  const el = args.locator && document.querySelector(args.locator);
-  if (!el) return false;
-  const old = document.getElementById("tasks-ext-highlight");
-  if (old) old.remove();
-  if (args.scroll) el.scrollIntoView({ block: "center" });
-  const r = el.getBoundingClientRect();
-  const box = document.createElement("div");
-  box.id = "tasks-ext-highlight";
-  box.setAttribute("style", `all:initial;position:absolute;z-index:2147483647;pointer-events:none;transition:opacity .4s;` +
-    `left:${r.left + scrollX - 3}px;top:${r.top + scrollY - 3}px;width:${r.width + 6}px;height:${r.height + 6}px;` + args.style.box);
-  const badge = document.createElement("span");
-  badge.textContent = args.style.label;
-  badge.setAttribute("style", "all:initial;position:absolute;right:-6px;top:-11px;" + args.style.badge);
-  box.append(badge);
-  document.body.append(box);
-  setTimeout(() => {
-    box.style.opacity = "0";
-    setTimeout(() => box.remove(), 450);
-  }, args.ms);
-  return true;
-}
-
-// Runs highlightInPage in the tab (activeTab: as long as it shows the same page).
-async function highlightOnPage(tabId, frameId, locator, opts = {}) {
-  if (!locator) return false;
-  const args = { locator, style: HIGHLIGHT_STYLE, ms: opts.ms || 1600, scroll: !!opts.scroll };
+// Lights a place up on its page (right-click, "show on page"): the same
+// marks as for the Bezug (marksInPage), only brighter for a moment – they
+// follow scrolling like the others. Without marks on the page yet, a quiet
+// instance (no keys) holds the mark just for that moment.
+async function flashOnPage(tabId, frameId, spot, opts = {}) {
+  if (!spot || !spot.locator) return false;
+  const code = `if (!window.__tasksMarks) (${marksInPage})(${JSON.stringify({ style: MARK_STYLE, items: [], quiet: true })}, ${rangeFromSpotInPage});
+    window.__tasksMarks.flash(${JSON.stringify(spot)}, ${JSON.stringify({ ms: opts.ms || 1600, scroll: !!opts.scroll })})`;
   try {
-    const [found] = await browser.tabs.executeScript(tabId, { frameId: frameId || 0, code: `(${highlightInPage})(${JSON.stringify(args)})` });
+    const [found] = await browser.tabs.executeScript(tabId, { frameId: frameId || 0, code });
     return !!found;
   } catch (_) {
     return false; // tab closed, navigated away, or no access
@@ -261,7 +233,7 @@ browser.runtime.onMessage.addListener((msg) => {
   if (!msg || msg.type !== "page-text") return undefined;
   return (async () => {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-    if (!tab || !/^(https?|file):/i.test(tab.url || "")) return { ok: false, error: "Diese Seite kann Tasks nicht lesen." };
+    if (!tab || !/^https?:/i.test(tab.url || "")) return { ok: false, error: "Diese Seite darf Tasks nicht lesen – Firefox sperrt eigene Seiten und lokale Dateien für Add-ons. Eine Datei kannst du einfach in Tasks ziehen." };
     try {
       const [text] = await browser.tabs.executeScript(tab.id, { code: "document.body ? document.body.innerText : ''" });
       return { ok: true, title: tab.title || "", url: tab.url, text: String(text || "").slice(0, 50000) };
@@ -528,7 +500,7 @@ browser.runtime.onMessage.addListener((msg) => {
   if (msg.type !== "picker-start") return undefined;
   return (async () => {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-    if (!tab || !/^(https?|file):/i.test(tab.url || "")) return { ok: false, error: "Auf dieser Seite geht das Auswählen nicht." };
+    if (!tab || !/^https?:/i.test(tab.url || "")) return { ok: false, error: "Hier geht das Auswählen nicht – Firefox sperrt eigene Seiten und lokale Dateien für Add-ons." };
     try {
       return await startPicker(tab.id, 0);
     } catch (err) {
@@ -542,17 +514,21 @@ browser.runtime.onMessage.addListener((msg) => {
   if (!msg || msg.type !== "show-on-page") return undefined;
   return (async () => {
     if (msg.tabId != null) await browser.tabs.update(msg.tabId, { active: true }).catch(() => {});
-    return { ok: await highlightOnPage(msg.tabId, msg.frameId, msg.locator, { scroll: true, ms: 2600 }) };
+    const spot = msg.start != null ? { locator: msg.locator, start: msg.start, end: msg.end } : { locator: msg.locator };
+    return { ok: await flashOnPage(msg.tabId, msg.frameId, spot, { scroll: true, ms: 2600 }) };
   })();
 });
 
 // --- Marks: what sits in the chat's "Bezug" stays outlined on its page,
 // numbered like the list there, until it is removed or sent. The sidebar
 // reports the full list per tab over a port; when the sidebar closes, its
-// marks go too. Below the flash highlight and the picker.
-const MARK_STYLE = { box: PICK_STYLE.chosen, text: PICK_STYLE.text, badge: PICK_STYLE.badge };
+// marks go too. Below the picker; flashOnPage lights one of them up.
+const MARK_STYLE = { box: PICK_STYLE.chosen, text: PICK_STYLE.text, badge: PICK_STYLE.badge,
+  flashBox: "box-shadow:0 0 0 3px #2f6f5e,0 0 0 8px rgba(47,111,94,.22);background:rgba(47,111,94,.2)", flashText: "background:rgba(47,111,94,.5)" };
 
 function marksInPage(args, rangeFromSpot) {
+  // A place lighting up right now keeps doing so in the new set of marks.
+  const flashing = window.__tasksMarks ? window.__tasksMarks.flashing() : [];
   if (window.__tasksMarks) window.__tasksMarks.stop();
   if (args.off) return 0; // the sidebar closed
   const plain = "all:initial;position:absolute;left:0;top:0;pointer-events:none;";
@@ -587,16 +563,21 @@ function marksInPage(args, rangeFromSpot) {
     if (m.el) probes.set(m.key, { text: want, node: m.el });
   };
   const here = location.href.split("#")[0];
+  const keyOf = (it) => (it.start != null ? `${it.locator}@${it.start}-${it.end}` : it.locator);
   const marks = [];
-  for (const it of args.items) {
-    if (it.url && it.url.split("#")[0] !== here) continue; // the tab shows another page by now
+  const addMark = (it, extra) => {
     const holder = document.createElement("div");
     holder.setAttribute("style", plain);
     layer.append(holder);
     const spot = it.start != null ? { locator: it.locator, start: it.start, end: it.end } : null;
-    const m = { locator: it.locator, spot, key: spot ? `${it.locator}@${it.start}-${it.end}` : it.locator, holder, n: it.n };
+    const m = { locator: it.locator, spot, key: keyOf(it), holder, n: it.n, flashUntil: 0, ...extra };
     find(m);
     marks.push(m);
+    return m;
+  };
+  for (const it of args.items) {
+    if (it.url && it.url.split("#")[0] !== here) continue; // the tab shows another page by now
+    addMark(it);
   }
   const gone = (m) => (m.el ? !m.el.isConnected : m.range ? !m.range.startContainer.isConnected : true);
   // Blocks get a frame, text the marker look (one piece per line). Drawn in
@@ -608,11 +589,12 @@ function marksInPage(args, rangeFromSpot) {
       if (!m.el && !m.range) continue;
       const rects = m.el ? [m.el.getBoundingClientRect()] : [...m.range.getClientRects()].filter((r) => r.width > 1);
       const pad = m.el ? 3 : 1;
+      const lit = m.flashUntil > Date.now();
       rects.forEach((r, i) => {
         const piece = document.createElement("div");
-        piece.setAttribute("style", plain + (m.el ? args.style.box : args.style.text));
+        piece.setAttribute("style", plain + (m.el ? args.style.box : args.style.text) + (lit ? ";" + (m.el ? args.style.flashBox : args.style.flashText) : ""));
         Object.assign(piece.style, { left: r.left + scrollX - pad + "px", top: r.top + scrollY - pad + "px", width: r.width + 2 * pad + "px", height: r.height + 2 * pad + "px" });
-        if (!i) {
+        if (!i && m.n) {
           const badge = document.createElement("span");
           badge.textContent = String(m.n);
           badge.setAttribute("style", "all:initial;position:absolute;left:-9px;top:-9px;" + args.style.badge);
@@ -631,7 +613,7 @@ function marksInPage(args, rangeFromSpot) {
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
     const k = e.key.toLowerCase();
     const mod = (e.ctrlKey || e.metaKey) && !e.altKey;
-    const type = e.key === "Escape" && !mod ? (marks.length && !window.__tasksPicker && !window.__tasksTyping ? "marks-clear" : "")
+    const type = e.key === "Escape" && !mod ? (marks.some((m) => !m.temp) && !window.__tasksPicker && !window.__tasksTyping ? "marks-clear" : "")
       : mod && k === "z" && !e.shiftKey ? "marks-undo"
       : mod && (k === "y" || (k === "z" && e.shiftKey)) ? "marks-redo" : "";
     if (!type) return;
@@ -670,14 +652,52 @@ function marksInPage(args, rangeFromSpot) {
     mutationTimer = setTimeout(redraw, 150);
   });
   const ro = typeof ResizeObserver === "function" ? new ResizeObserver(redraw) : null;
-  const handlers = [["scroll", redraw, true], ["resize", redraw, false], ["keydown", onKey, false], ...(marks.length ? [["mousemove", onMove, true]] : [])];
-  for (const [type, f, capture] of handlers) addEventListener(type, f, capture);
-  document.documentElement.addEventListener("mouseleave", onLeave);
-  if (marks.length) {
-    redraw();
+  const handlers = [["scroll", redraw, true], ["resize", redraw, false], ["mousemove", onMove, true]];
+  let live = false;
+  const goLive = () => { // only pages with marks are watched
+    if (live) return;
+    live = true;
+    for (const [type, f, capture] of handlers) addEventListener(type, f, capture);
+    document.documentElement.addEventListener("mouseleave", onLeave);
     document.documentElement.append(layer);
     if (ro) ro.observe(document.body);
     observer.observe(document.body, { childList: true, subtree: true });
+  };
+  if (!args.quiet) addEventListener("keydown", onKey);
+  // Lighting a place up (right-click, "show on page"): its mark – or, if it
+  // has none, a mark just for the moment – shines brighter for `ms`.
+  let flashTimer = 0;
+  const drop = (m) => {
+    marks.splice(marks.indexOf(m), 1);
+    m.holder.remove();
+  };
+  const schedule = () => {
+    clearTimeout(flashTimer);
+    const lit = marks.filter((m) => m.flashUntil > Date.now());
+    if (!lit.length) return;
+    flashTimer = setTimeout(() => {
+      for (const m of marks.filter((x) => x.temp && x.flashUntil <= Date.now())) drop(m);
+      redraw();
+      schedule();
+    }, Math.min(...lit.map((m) => m.flashUntil)) - Date.now() + 20);
+  };
+  const flash = (it, opts = {}) => {
+    const m = marks.find((x) => x.key === keyOf(it)) || addMark(it, { temp: true });
+    if (!m.el && !m.range) {
+      if (m.temp) drop(m);
+      return false;
+    }
+    m.flashUntil = Math.max(m.flashUntil, Date.now() + (opts.ms || 1600));
+    goLive();
+    if (opts.scroll) (m.el || m.range.startContainer.parentElement).scrollIntoView({ block: "center" });
+    redraw();
+    schedule();
+    return true;
+  };
+  for (const f of flashing) flash(f, { ms: f.until - Date.now() });
+  if (marks.length) {
+    goLive();
+    redraw();
   }
   window.__tasksMarks = {
     hide: () => { layer.style.display = "none"; },
@@ -691,8 +711,12 @@ function marksInPage(args, rangeFromSpot) {
       }
       return null;
     },
+    flash,
+    flashing: () => marks.filter((m) => m.flashUntil > Date.now()).map((m) => ({ ...(m.spot || { locator: m.locator }), until: m.flashUntil })),
     stop: () => {
       for (const [type, f, capture] of handlers) removeEventListener(type, f, capture);
+      removeEventListener("keydown", onKey);
+      clearTimeout(flashTimer);
       document.documentElement.removeEventListener("mouseleave", onLeave);
       if (hot) hoverTo(0);
       if (ro) ro.disconnect();
@@ -703,7 +727,7 @@ function marksInPage(args, rangeFromSpot) {
       delete window.__tasksMarks;
     },
   };
-  return marks.filter((m) => m.el || m.range).length;
+  return marks.filter((m) => !m.temp && (m.el || m.range)).length;
 }
 
 browser.runtime.onConnect.addListener((port) => {
@@ -756,7 +780,7 @@ async function captureToChat(info, tab) {
   const cap = await capturePage(info, tab);
   // Image first: the highlight must not end up in the cut-out.
   const image = info.srcUrl ? await captureImage(tab, info.frameId, cap.locator) : null;
-  highlightOnPage(tab.id, info.frameId, cap.locator);
+  flashOnPage(tab.id, info.frameId, cap.spot || (cap.locator && { locator: cap.locator }));
   // Straight on with the picker: more places from the same page.
   const picking = await startPicker(tab.id, info.frameId || 0).then((r) => !!(r && r.ok), () => false);
   const page = { tabId: tab.id, frameId: info.frameId || 0 };
@@ -1080,7 +1104,7 @@ So funktioniert Tasks – für Fragen zur Erweiterung selbst; antworte danach, n
 - Markdown in Titel und Notiz (fett, kursiv, durchgestrichen, Code, Links; in Notizen auch Listen, Überschriften, Zitate).
 - Tastatur: Strg+Alt+A Seitenleiste auf/zu, / Chat, Enter neue Aufgabe, Tab / Shift+Tab ein-/ausrücken, Strg+Enter abhaken, Alt+↑/↓ verschieben, Esc schließt. Alles unter ⋯ → „Tastenkürzel & Markdown".
 - Einstellungen: Design (System/hell/dunkel), Bereich „Erledigt" auf/zu und die KI-Verbindung lassen sich auch hier im Chat ändern (set_setting); alles andere über ⋯ und den Knopf oben rechts.
-- „+" im Chat: Element auf der Seite auswählen (alle Blöcke sind gestrichelt umrandet; Klick wählt einen Block an oder ab, Umschalt+Klick alles dazwischen, Ziehen einen Rahmen, Strg+A alle sichtbaren, Alt+Ziehen markiert Text, Klick auf markierten Text nimmt ihn raus; jedes Stück wird ein eigener nummerierter Eintrag im „Bezug"; Strg+Z/Strg+Y auf der Seite: rückgängig/wieder; Enter oder Esc beendet das Auswählen – danach geht, was man auf der Seite tippt, direkt ins Chat-Feld (Klick auf die Seite beendet das); Esc im Chat-Feld nimmt alle Markierungen raus, Strg+Z holt sie zurück; zeigt man auf der Seite auf eine Markierung, leuchtet ihr Eintrag im „Bezug" auf; nach einem Neuladen der Seite erscheinen die Markierungen wieder. Die Tasten erklärt der Bezug einmal beim ersten Auswählen; fragt der Nutzer nach den Tasten, erkläre sie ihm), Datei hinzufügen (PDF, Bild, Text; auch per Drag & Drop auf den Chat) und ganze Seite schicken (Text der aktuellen Seite, Firefox fragt einmal nach der Erlaubnis). Anhänge gehen mit der nächsten Nachricht an dich. Markierter Chat-Text kommt über „↩ Antworten" als Zitat in den „Bezug"; mehrere Zitate werden angehängt.
+- „+" im Chat: Element auf der Seite auswählen (alle Blöcke sind gestrichelt umrandet; Klick wählt einen Block an oder ab, Umschalt+Klick alles dazwischen, Ziehen einen Rahmen, Strg+A alle sichtbaren, Alt+Ziehen markiert Text, Klick auf markierten Text nimmt ihn raus; jedes Stück wird ein eigener nummerierter Eintrag im „Bezug"; Strg+Z/Strg+Y auf der Seite: rückgängig/wieder; Enter oder Esc beendet das Auswählen – danach geht, was man auf der Seite tippt, direkt ins Chat-Feld (Klick auf die Seite beendet das); Esc im Chat-Feld nimmt alle Markierungen raus, Strg+Z holt sie zurück; zeigt man auf der Seite auf eine Markierung, leuchtet ihr Eintrag im „Bezug" auf; nach einem Neuladen der Seite erscheinen die Markierungen wieder. Die Tasten erklärt der Bezug einmal beim ersten Auswählen; fragt der Nutzer nach den Tasten, erkläre sie ihm), Datei hinzufügen (PDF, Bild, Text; auch per Drag & Drop irgendwohin auf die Seitenleiste) und ganze Seite schicken (Text der aktuellen Seite, Firefox fragt einmal nach der Erlaubnis; Firefox-eigene Seiten und lokale Dateien file:// sperrt Firefox für Add-ons – lokale Dateien einfach in die Seitenleiste ziehen). Anhänge gehen mit der nächsten Nachricht an dich. Markierter Chat-Text kommt über „↩ Antworten" als Zitat in den „Bezug"; mehrere Zitate werden angehängt.
 - Layout: Ist die Seitenleiste breit, stehen Liste und Chat nebeneinander; schmal gibt es die Reiter „Aufgaben | Chat" und mit / eine Schnell-Karte.
 
 Was es NICHT gibt: Tags, Prioritäten, Farben, Erinnerungen/Benachrichtigungen, Suche/Filter, Anhänge, Teilen, Zugriff auf Webseiten oder das Internet. Listen löschen kannst du nicht – das macht der Nutzer selbst über ⋯ → „Liste löschen". Wird danach gefragt, sag ehrlich, dass es das (noch) nicht gibt, und biete – wenn sinnvoll – eine Lösung mit vorhandenen Mitteln an (z. B. „#klausur" als Konvention im Titel; markieren oder öffnen kannst du dann alles mit #klausur). Täusche nie vor, etwas getan zu haben, das keine Aktion ist.

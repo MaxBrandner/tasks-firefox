@@ -1827,7 +1827,7 @@ kbd {
 }
 
 .chat-drop {
-  position: absolute;
+  position: fixed;
   inset: 6px;
   z-index: 30;
   display: grid;

@@ -78,8 +78,8 @@ Bild oder einfach irgendwo auf der Seite. Die Stelle landet im Chat in der Liste
 **„Bezug“** über dem Eingabefeld – mit ihrem Text, bei Bildern mit Vorschau – und
 bleibt auf der Seite markiert (mit derselben Nummer), bis du sie entfernst oder
 sendest. Gleich danach ist die Auswahl an (siehe „+“), um weitere Stellen
-dazuzunehmen. Ein Klick auf einen Eintrag holt den Tab nach vorn und hebt die
-Stelle noch einmal hervor; mit × fliegt ein einzelner Eintrag raus.
+dazuzunehmen. Ein Klick auf einen Eintrag holt den Tab nach vorn, scrollt hin
+und lässt die Markierung kurz heller aufleuchten; mit × fliegt ein einzelner Eintrag raus.
 Mehrere Rechtsklicks sammeln sich; erst wenn du sendest, arbeitet die KI – mit
 einer Anweisung („unter DS 2“, „nur den ersten Termin“) oder einfach mit Enter
 im leeren Feld („Zu Tasks hinzufügen“).
@@ -175,9 +175,11 @@ Fälligkeit", „Öffne alle Links zu DL".
   Seite auf eine Markierung, leuchtet ihr Eintrag im Bezug auf. Nach einem
   Neuladen erscheinen die Markierungen wieder; baut eine Seite ihren Inhalt
   um, finden sie ihren Block über den Text wieder. Die Tasten erklärt der
-  Bezug beim ersten Mal; danach weiß der Chat sie. Außerdem: Datei hinzufügen (PDF, Bild, Text – auch per Drag & Drop auf
-  den Chat) oder die ganze aktuelle Seite schicken (Firefox fragt einmal nach der
-  Erlaubnis). Dateien und ganze Seiten erscheinen als Karten über dem
+  Bezug beim ersten Mal; danach weiß der Chat sie. Außerdem: Datei hinzufügen (PDF, Bild, Text – auch per Drag & Drop
+  irgendwohin auf Tasks, der Chat geht dann auf) oder die ganze aktuelle Seite
+  schicken (Firefox fragt einmal nach der Erlaubnis). Firefox-eigene Seiten und
+  lokale Dateien (file://) sperrt Firefox für Add-ons – eine lokale Datei
+  ziehst du einfach in Tasks. Dateien und ganze Seiten erscheinen als Karten über dem
   Eingabefeld und gehen mit
   der nächsten Nachricht an die KI, die daraus Aufgaben zieht.
 - **Einstellungen per Chat:** „Stell auf dunkel“, „klapp Erledigt zu“ oder
