@@ -122,11 +122,23 @@ key("z", { ctrlKey: true });
 ok(types() === "marks-undo", "Strg+Z im Picker → ein Schritt zurück");
 let n0 = sent.length;
 key("Escape");
-ok(sent.length === n0 + 1 && types() === "picker-end", "erstes Esc beendet nur den Picker");
-key("Escape");
-ok(sent.length === n0 + 2 && types() === "marks-clear", "zweites Esc nimmt alle Markierungen der Seite raus");
+ok(sent.length === n0 + 1 && types() === "picker-end" && sent.slice(-1)[0].typing, "Esc beendet den Picker – jetzt geht Tippen in den Chat");
+const typed = (k, o) => { key(k, o); return sent.slice(-1)[0]; };
+ok(typed("H").type === "chat-type" && typed("i").text === "i" && typed("Backspace").key === "backspace" && typed("Enter", { shiftKey: true }).key === "newline" && typed("Enter").key === "enter", "getippte Buchstaben, Rücktaste, Umschalt+Enter und Enter gehen ans Chat-Feld");
+const pasteEv = new w.Event("paste", { bubbles: true, cancelable: true });
+pasteEv.clipboardData = { getData: () => "eingefügt" };
+w.document.body.dispatchEvent(pasteEv);
+ok(sent.slice(-1)[0].text === "eingefügt" && pasteEv.defaultPrevented, "Strg+V: der eingefügte Text geht auch hin");
 key("y", { ctrlKey: true });
-ok(types() === "marks-redo", "Strg+Y → wieder");
+ok(types() === "marks-redo", "Strg+Y bleibt bei den Markierungen");
+n0 = sent.length;
+key("Escape");
+ok(sent.length === n0 + 1 && sent.slice(-1)[0].key === "escape", "das nächste Esc gilt dem Chat-Feld (dort: Markierungen raus)");
+mouse("mousedown", lis[1]);
+ok(sent.slice(-1)[0].end === true && !w.__tasksTyping, "Klick auf die Seite beendet das Tippen in den Chat");
+n0 = sent.length;
+key("Escape");
+ok(sent.length === n0 + 1 && types() === "marks-clear", "danach: Esc auf der Seite nimmt ihre Markierungen raus");
 const field = w.document.createElement("input");
 w.document.body.append(field);
 n0 = sent.length;
@@ -143,10 +155,34 @@ const before = sent.length;
 w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
 ok(sent.length === before + 1 && sent[sent.length - 1].type === "picker-end" && !w.__tasksPicker && !top().some((c) => c.tagName === "STYLE" || c.tagName === "DIV"), "Enter beendet den Picker, Overlays und Zeiger weg");
 click(lis[1]);
-ok(sent.length === before + 1, "danach reagiert die Seite wieder normal (kein Picker mehr)");
+ok(sent.length === before + 2 && sent.slice(-1)[0].end && !sent.some((m, i) => i > before && m.type === "picker-pick"), "danach reagiert die Seite wieder normal (kein Picker mehr)");
 
-setTimeout(() => {
+const later = (ms) => new Promise((r) => setTimeout(r, ms));
+(async () => {
+  // pointing at a mark lights up its entry in the sidebar
+  marks([{ locator: "#intro", start: 0, end: 10, n: 3 }]);
+  w.dispatchEvent(new w.MouseEvent("mousemove", { clientX: 5, clientY: 5 }));
+  await later(80);
+  ok(sent.slice(-1)[0].type === "marks-hover" && sent.slice(-1)[0].n === 3, "Zeigen auf eine Markierung → ihr Eintrag leuchtet (Nummer 3)");
+  w.dispatchEvent(new w.MouseEvent("mousemove", { clientX: 300, clientY: 300 }));
+  await later(80);
+  ok(sent.slice(-1)[0].n === 0, "weg davon → nichts leuchtet");
+  // another page in the tab by now: no marks from the old one
+  ok(marks([{ locator: "#intro", n: 1, url: "https://example.org/anders" }]) === 0 && marks([{ locator: "#intro", n: 1, url: "https://www.sonntagsblatt.de/termine-2026#x" }]) === 1, "Markierungen nur auf der Seite, von der sie stammen");
+  // the page re-renders its list (new entry on top): the mark follows its text
+  const ul = w.document.querySelector("ul");
+  marks([{ locator: "body > main > ul > li:nth-of-type(2)", n: 1 }]);
+  ul.innerHTML = "<li>01.04.2026 - Neu oben</li><li>21.04.2026 - 100. Geburtstag Elisabeth II.</li><li>29.04.2026 - 75. Todestag Ludwig Wittgenstein</li>";
+  const moved = ul.children[2];
+  moved.getBoundingClientRect = () => ({ left: 10, top: 222, right: 200, bottom: 242, width: 190, height: 20 });
+  await later(250);
+  ok(piece() && piece().style.top === "219px", "Seite baut die Liste neu: die Markierung findet ihren Block über den Text wieder");
+  ul.innerHTML = "<li>ganz anders</li>";
+  await later(250);
+  ok(!piece(), "Block ganz weg → keine Markierung an falscher Stelle");
+  marks([]);
+  await later(450);
   ok(!w.document.getElementById("tasks-ext-highlight"), "Overlay verschwindet nach der Zeit wieder");
   console.log(fails ? `\n${fails} FEHLER` : "\nAlle Prüfungen bestanden");
   process.exit(fails ? 1 : 0);
-}, 700);
+})();

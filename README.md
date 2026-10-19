@@ -167,9 +167,15 @@ Fälligkeit", „Öffne alle Links zu DL".
   sichtbaren, Alt+Ziehen markiert Text (ein Klick auf markierten Text nimmt
   ihn wieder raus). Jedes Stück wird ein eigener nummerierter Eintrag im
   „Bezug“ (Text kursiv; die KI bekommt den Absatz drum herum mit). Strg+Z /
-  Strg+Y auf der Seite machen Auswahl-Schritte rückgängig bzw. wieder; Enter
-  oder Esc beendet, ein zweites Esc nimmt alle Markierungen dieser Seite
-  wieder aus dem Bezug. Außerdem: Datei hinzufügen (PDF, Bild, Text – auch per Drag & Drop auf
+  Strg+Y auf der Seite machen Auswahl-Schritte rückgängig bzw. wieder. Enter
+  oder Esc beendet das Auswählen; danach geht, was du auf der Seite tippst,
+  direkt ins Chat-Feld (Firefox lässt Add-ons den Fokus nicht in die
+  Seitenleiste legen) – ein Klick auf die Seite beendet das. Esc im Chat-Feld
+  nimmt alle Markierungen raus, Strg+Z holt sie zurück. Zeigst du auf der
+  Seite auf eine Markierung, leuchtet ihr Eintrag im Bezug auf. Nach einem
+  Neuladen erscheinen die Markierungen wieder; baut eine Seite ihren Inhalt
+  um, finden sie ihren Block über den Text wieder. Die Tasten erklärt der
+  Bezug beim ersten Mal; danach weiß der Chat sie. Außerdem: Datei hinzufügen (PDF, Bild, Text – auch per Drag & Drop auf
   den Chat) oder die ganze aktuelle Seite schicken (Firefox fragt einmal nach der
   Erlaubnis). Dateien und ganze Seiten erscheinen als Karten über dem
   Eingabefeld und gehen mit

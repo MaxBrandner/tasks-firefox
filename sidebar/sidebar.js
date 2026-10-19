@@ -684,7 +684,10 @@
   // Called right before an action: record the previous one, name the next.
   // The action's own result is recorded shortly after (scheduleCommit), so the
   // saved history is complete even if the sidebar is closed right away.
+  // Ctrl+Z in the sidebar: the Bezug when it changed last, else the tasks.
+  let undoScope = "tasks";
   function checkpoint(label) {
+    undoScope = "tasks";
     commitPending();
     pendingLabel = label || "Änderung";
     scheduleCommit();
@@ -816,6 +819,10 @@
     if (!isUndo && !isRedo) return;
     if (modalOpen()) return;
     const a = document.activeElement;
+    if (undoScope === "ctx" && (isUndo ? ctxUndo : ctxRedo).length && (a === chatInputEl ? !chatInputEl.value : !(a && /^(TEXTAREA|INPUT)$/.test(a.tagName)))) {
+      e.preventDefault();
+      return isUndo ? ctxBack(ctxUndo, ctxRedo) : ctxBack(ctxRedo, ctxUndo);
+    }
     if (a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT")) {
       if (a._startValue === undefined || a.value !== a._startValue) return;
     }
@@ -2888,11 +2895,32 @@
     });
   }
 
+  // The keys are explained once (until "Verstanden"); after that only a short
+  // line says the picker runs. The chat knows the keys too.
+  const HINT_KEY = "tk:pickerHintSeen";
+  let pickerHintSeen = false;
+  browser.storage.local.get(HINT_KEY).then((o) => { pickerHintSeen = !!(o && o[HINT_KEY]); }, () => {});
+
+  function pickerHint() {
+    const stop = h("button", { class: "icon-btn small ctx-x", type: "button", title: "Auswählen beenden", "aria-label": "Auswählen beenden", onclick: stopPicker }, icon("close"));
+    if (pickerHintSeen) return h("div", { class: "ctx-item ctx-hint" }, "⌖ Auswählen auf der Seite – Enter oder Esc: fertig", stop);
+    return h("div", { class: "ctx-item ctx-hint ctx-hint-full" },
+      h("div", null, "⌖ Klick: Block/Text an·aus · Umschalt+Klick: alles dazwischen · Ziehen: Rahmen · Alt+Ziehen markiert Text · Strg+A: alle sichtbaren · Strg+Z/Y: zurück/wieder"),
+      h("div", null, "Enter/Esc: fertig, dann einfach lostippen · Esc im Chat-Feld: Markierungen weg · Vergessen? Frag einfach im Chat."),
+      h("button", { class: "ctx-ok", type: "button", onclick: () => {
+        pickerHintSeen = true;
+        browser.storage.local.set({ [HINT_KEY]: true }).catch(() => {});
+        renderCtx();
+      } }, "Verstanden"),
+      stop);
+  }
+
+  let ctxHot = 0; // entry under the mouse on the page (marks-hover)
   function renderCtx() {
     ctxEl.hidden = !chatCtx.length && !pickerActive;
-    ctxEl.replaceChildren(...ctxView(chatCtx, false),
-      ...(pickerActive ? [h("div", { class: "ctx-item ctx-hint" }, "⌖ Klick: an/aus · Umschalt+Klick: alles dazwischen · Ziehen: Rahmen · Alt+Ziehen: Text · Strg+A: alle sichtbaren · Strg+Z: zurück · Esc: fertig, 2× Esc: alle weg",
-        h("button", { class: "icon-btn small ctx-x", type: "button", title: "Auswählen beenden", "aria-label": "Auswählen beenden", onclick: stopPicker }, icon("close")))] : []));
+    ctxEl.replaceChildren(...ctxView(chatCtx, false), ...(pickerActive ? [pickerHint()] : []));
+    const hot = ctxHot && ctxEl.querySelectorAll(".ctx-web")[ctxHot - 1];
+    if (hot) hot.classList.add("ctx-hot");
     syncMarks();
   }
 
@@ -2910,7 +2938,7 @@
       if (!e.page || e.page.tabId == null || !e.page.locator) continue;
       const key = e.page.tabId + ":" + (e.page.frameId || 0);
       if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(e.page.start == null ? { locator: e.page.locator, n } : { locator: e.page.locator, n, start: e.page.start, end: e.page.end });
+      groups.get(key).push(e.page.start == null ? { locator: e.page.locator, n, url: e.url } : { locator: e.page.locator, n, url: e.url, start: e.page.start, end: e.page.end });
     }
     const next = new Map();
     for (const key of new Set([...marksSent.keys(), ...groups.keys()])) {
@@ -2943,6 +2971,7 @@
   let ctxUndo = [];
   let ctxRedo = [];
   function ctxStep() {
+    undoScope = "ctx";
     ctxUndo.push(chatCtx.slice());
     if (ctxUndo.length > 100) ctxUndo.shift();
     ctxRedo = [];
@@ -2964,10 +2993,47 @@
     renderCtx();
   }
 
+  // Esc in the chat field: first the marks go (and the picker), then the chat
+  // steps back as before.
+  function chatEscape() {
+    if (!pickerActive && !chatCtx.some((e) => e.type === "web")) return chatStepBack();
+    stopPicker();
+    ctxStep();
+    chatCtx = chatCtx.filter((e) => e.type !== "web");
+    renderCtx();
+    flashNote("Markierungen entfernt – Strg+Z holt sie zurück.");
+  }
+
+  // After picking, typing on the page lands here (chat-type, see the picker).
+  const placeholder = chatInputEl.placeholder;
+  function setRemoteTyping(on) {
+    $("chatForm").classList.toggle("remote-typing", on);
+    chatInputEl.placeholder = on ? "Tipp einfach los – auch auf der Seite (Enter = senden, Esc = Markierungen weg)" : placeholder;
+  }
+  window.addEventListener("focus", () => setRemoteTyping(false));
+
+  function typeIn(msg) {
+    if (msg.end) return setRemoteTyping(false);
+    setRemoteTyping(true);
+    const el = chatInputEl;
+    const [a, b] = [el.selectionStart, el.selectionEnd];
+    if (msg.key === "enter") return sendChat(el.value);
+    if (msg.key === "escape") return chatEscape();
+    if (msg.key === "backspace") el.setRangeText("", a === b ? Math.max(0, a - 1) : a, b, "end");
+    else el.setRangeText(msg.key === "newline" ? "\n" : String(msg.text || ""), a, b, "end");
+    el.dispatchEvent(new Event("input"));
+  }
+
   browser.runtime.onMessage.addListener((msg, sender) => {
-    if (!msg || !/^marks-(clear|undo|redo)$/.test(msg.type) || !sender || !sender.tab) return undefined;
+    if (!msg || !/^(marks-(clear|undo|redo|hover)|chat-type)$/.test(msg.type) || !sender || !sender.tab) return undefined;
     if (myWindowId != null && sender.tab.windowId !== myWindowId) return undefined; // another window's sidebar
-    if (msg.type === "marks-clear") clearPageCtx(sender.tab.id, sender.frameId || 0);
+    if (msg.type === "chat-type") typeIn(msg);
+    else if (msg.type === "marks-hover") {
+      ctxHot = msg.n || 0;
+      ctxEl.querySelectorAll(".ctx-web").forEach((r, i) => r.classList.toggle("ctx-hot", i + 1 === ctxHot));
+      const hot = ctxEl.querySelector(".ctx-hot");
+      if (hot) hot.scrollIntoView({ block: "nearest" });
+    } else if (msg.type === "marks-clear") clearPageCtx(sender.tab.id, sender.frameId || 0);
     else if (msg.type === "marks-undo") ctxBack(ctxUndo, ctxRedo);
     else ctxBack(ctxRedo, ctxUndo);
     return undefined;
@@ -3081,6 +3147,8 @@
     if (myWindowId != null && sender && sender.tab && sender.tab.windowId !== myWindowId) return undefined; // another window's sidebar
     if (msg.type === "picker-end") {
       pickerActive = false;
+      if (msg.typing) setRemoteTyping(true);
+      if (!isWide() && chatMode === "tasks") setChatMode("quick");
       chatInputEl.focus();
       renderCtx();
       return undefined;
@@ -3524,7 +3592,7 @@
       sendChat(chatInputEl.value);
     } else if (e.key === "Escape") {
       e.preventDefault();
-      chatStepBack();
+      chatEscape();
     }
   });
   chatInputEl.addEventListener("input", () => autosize(chatInputEl));

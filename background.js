@@ -292,6 +292,7 @@ const PICK_STYLE = {
 
 function pickerInPage(args, cssPath, textSpot, unitOf) {
   if (window.__tasksPicker) window.__tasksPicker.stop(false);
+  if (window.__tasksTyping) window.__tasksTyping.stop();
   const clip = (s, n) => String(s || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, n);
   const plain = "all:initial;position:absolute;left:0;top:0;pointer-events:none;";
   const add = (parent, style) => {
@@ -437,8 +438,9 @@ function pickerInPage(args, cssPath, textSpot, unitOf) {
       setCursor("text");
     } else if (e.key === "Enter" || e.key === "Escape") {
       e.preventDefault();
-      e.stopImmediatePropagation(); // a second Esc is for the marks
+      e.stopImmediatePropagation(); // the next Esc is for the chat
       stop(true);
+      typeToChat();
     } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
       e.preventDefault();
       e.stopPropagation();
@@ -460,7 +462,40 @@ function pickerInPage(args, cssPath, textSpot, unitOf) {
     layer.remove();
     cursor.remove();
     delete window.__tasksPicker;
-    if (notify) browser.runtime.sendMessage({ type: "picker-end" }).catch(() => {});
+    if (notify) browser.runtime.sendMessage({ type: "picker-end", typing: true }).catch(() => {});
+  };
+  // Done picking: Firefox gives an add-on no way to move the keyboard focus
+  // into the sidebar, so what is typed on the page now goes to the chat field
+  // (chat-type) – letters, paste, Backspace, Enter (send), Shift+Enter, Esc.
+  // A click on the page, another key or leaving the page ends it.
+  const typeToChat = () => {
+    const tell = (m) => browser.runtime.sendMessage({ type: "chat-type", ...m }).catch(() => {});
+    const onType = (e) => {
+      if (e.isComposing || /^(Shift|Control|Alt|AltGraph|Meta|CapsLock|Dead)$/.test(e.key)) return;
+      if ((e.ctrlKey && !e.altKey) || e.metaKey) return; // Ctrl+Z/Y are for the marks, Ctrl+V comes as paste
+      const m = e.key.length === 1 ? { text: e.key }
+        : e.key === "Enter" ? { key: e.shiftKey ? "newline" : "enter" }
+        : e.key === "Backspace" ? { key: "backspace" }
+        : e.key === "Escape" ? { key: "escape" } : null;
+      if (!m) return end();
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      tell(m);
+    };
+    const onPaste = (e) => {
+      const text = e.clipboardData ? e.clipboardData.getData("text/plain") : "";
+      if (!text) return;
+      e.preventDefault();
+      tell({ text });
+    };
+    const ends = [["keydown", onType], ["paste", onPaste], ["mousedown", () => end()], ["blur", (e) => e.target === window && end()]];
+    const end = (notify = true) => {
+      for (const [type, f] of ends) removeEventListener(type, f, true);
+      delete window.__tasksTyping;
+      if (notify) tell({ end: true });
+    };
+    for (const [type, f] of ends) addEventListener(type, f, true);
+    window.__tasksTyping = { stop: () => end(false) };
   };
   for (const [type, f] of handlers) addEventListener(type, f, true);
   drawAll();
@@ -523,27 +558,54 @@ function marksInPage(args, rangeFromSpot) {
   const plain = "all:initial;position:absolute;left:0;top:0;pointer-events:none;";
   const layer = document.createElement("div");
   layer.setAttribute("style", plain + "width:0;height:0;z-index:2147483646");
-  const marks = [];
-  for (const it of args.items) {
-    let el = null;
-    let range = null;
+  // Pages that change while marked: the text of each place is remembered on
+  // first sight (per page, across redraws); when the page re-renders, a place
+  // is looked up again – at its path if the text still matches, else by its
+  // text among elements of the same kind. Not found: not drawn, it may appear.
+  const probes = window.__tasksMarkProbes || (window.__tasksMarkProbes = new Map());
+  const norm = (s) => String(s || "").replace(/\s+/g, " ").trim().slice(0, 300);
+  const textOf = (m) => norm(m.range ? m.range.toString() : m.el.innerText || m.el.textContent);
+  const find = (m) => {
+    m.el = null;
+    m.range = null;
     try {
-      if (it.start != null) range = rangeFromSpot(it);
-      else el = document.querySelector(it.locator);
+      if (m.spot) m.range = rangeFromSpot(m.spot);
+      else m.el = document.querySelector(m.locator);
     } catch (_) {
       // stale locator
     }
-    if (!el && !range) continue;
+    const seen = probes.get(m.key);
+    const node = m.el || (m.range && m.range.startContainer);
+    if (!node) return;
+    // first sight, same node as before (its text may change) or same text
+    if (!seen || seen.node === node || textOf(m) === seen.text) return probes.set(m.key, { text: textOf(m), node });
+    const want = seen.text;
+    m.el = null;
+    m.range = null;
+    const tag = !m.spot && (m.locator.split(">").pop().trim().match(/^[a-z][a-z0-9-]*/i) || [])[0];
+    if (tag && want) m.el = [...document.getElementsByTagName(tag)].find((x) => norm(x.innerText || x.textContent) === want) || null;
+    if (m.el) probes.set(m.key, { text: want, node: m.el });
+  };
+  const here = location.href.split("#")[0];
+  const marks = [];
+  for (const it of args.items) {
+    if (it.url && it.url.split("#")[0] !== here) continue; // the tab shows another page by now
     const holder = document.createElement("div");
     holder.setAttribute("style", plain);
     layer.append(holder);
-    marks.push({ el, range, holder, n: it.n, spot: range ? { locator: it.locator, start: it.start, end: it.end } : null });
+    const spot = it.start != null ? { locator: it.locator, start: it.start, end: it.end } : null;
+    const m = { locator: it.locator, spot, key: spot ? `${it.locator}@${it.start}-${it.end}` : it.locator, holder, n: it.n };
+    find(m);
+    marks.push(m);
   }
+  const gone = (m) => (m.el ? !m.el.isConnected : m.range ? !m.range.startContainer.isConnected : true);
   // Blocks get a frame, text the marker look (one piece per line). Drawn in
   // page coordinates and again on every scroll – also inside scrolling boxes.
   const redraw = () => {
     for (const m of marks) {
       m.holder.replaceChildren();
+      if (gone(m)) find(m);
+      if (!m.el && !m.range) continue;
       const rects = m.el ? [m.el.getBoundingClientRect()] : [...m.range.getClientRects()].filter((r) => r.width > 1);
       const pad = m.el ? 3 : 1;
       rects.forEach((r, i) => {
@@ -569,21 +631,48 @@ function marksInPage(args, rangeFromSpot) {
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
     const k = e.key.toLowerCase();
     const mod = (e.ctrlKey || e.metaKey) && !e.altKey;
-    const type = e.key === "Escape" && !mod ? (marks.length && !window.__tasksPicker ? "marks-clear" : "")
+    const type = e.key === "Escape" && !mod ? (marks.length && !window.__tasksPicker && !window.__tasksTyping ? "marks-clear" : "")
       : mod && k === "z" && !e.shiftKey ? "marks-undo"
       : mod && (k === "y" || (k === "z" && e.shiftKey)) ? "marks-redo" : "";
     if (!type) return;
     e.preventDefault();
     browser.runtime.sendMessage({ type }).catch(() => {});
   };
+  // Pointing at a mark lights up its entry in the sidebar (marks-hover, n or 0).
+  const markAt = (x, y) => {
+    let best = null;
+    for (const m of marks) {
+      const rects = m.el ? [m.el.getBoundingClientRect()] : m.range ? [...m.range.getClientRects()] : [];
+      for (const r of rects) {
+        if (x < r.left || x > r.right || y < r.top || y > r.bottom) continue;
+        const area = m.range ? 0 : r.width * r.height; // text before the block around it
+        if (!best || area < best.area) best = { n: m.n, area };
+      }
+    }
+    return best ? best.n : 0;
+  };
+  let hot = 0;
+  let moveTimer = 0;
+  const hoverTo = (n) => {
+    if (n === hot) return;
+    hot = n;
+    browser.runtime.sendMessage({ type: "marks-hover", n }).catch(() => {});
+  };
+  const onMove = (e) => {
+    if (moveTimer) return;
+    const { clientX: x, clientY: y } = e;
+    moveTimer = setTimeout(() => { moveTimer = 0; hoverTo(markAt(x, y)); }, 40);
+  };
+  const onLeave = () => hoverTo(0);
   let mutationTimer = 0;
   const observer = new MutationObserver(() => {
     clearTimeout(mutationTimer);
     mutationTimer = setTimeout(redraw, 150);
   });
   const ro = typeof ResizeObserver === "function" ? new ResizeObserver(redraw) : null;
-  const handlers = [["scroll", redraw, true], ["resize", redraw, false], ["keydown", onKey, false]];
+  const handlers = [["scroll", redraw, true], ["resize", redraw, false], ["keydown", onKey, false], ...(marks.length ? [["mousemove", onMove, true]] : [])];
   for (const [type, f, capture] of handlers) addEventListener(type, f, capture);
+  document.documentElement.addEventListener("mouseleave", onLeave);
   if (marks.length) {
     redraw();
     document.documentElement.append(layer);
@@ -604,29 +693,42 @@ function marksInPage(args, rangeFromSpot) {
     },
     stop: () => {
       for (const [type, f, capture] of handlers) removeEventListener(type, f, capture);
+      document.documentElement.removeEventListener("mouseleave", onLeave);
+      if (hot) hoverTo(0);
       if (ro) ro.disconnect();
       observer.disconnect();
       clearTimeout(mutationTimer);
+      clearTimeout(moveTimer);
       layer.remove();
       delete window.__tasksMarks;
     },
   };
-  return marks.length;
+  return marks.filter((m) => m.el || m.range).length;
 }
 
 browser.runtime.onConnect.addListener((port) => {
   if (port.name !== "marks") return;
-  const marked = new Set();
+  const marked = new Map(); // "tabId:frameId" → items
   const draw = (tabId, frameId, items, off = false) => browser.tabs.executeScript(tabId, { frameId,
     code: `(${marksInPage})(${JSON.stringify({ style: MARK_STYLE, items, off })}, ${rangeFromSpotInPage})` }).catch(() => {}); // tab gone or no access
   port.onMessage.addListener((msg) => {
     if (!msg || msg.type !== "marks-set") return;
     const key = msg.tabId + ":" + msg.frameId;
-    marked.add(key); // even when empty: its keys stay until the sidebar closes
+    marked.set(key, msg.items); // even when empty: its keys stay until the sidebar closes
     draw(msg.tabId, msg.frameId, msg.items);
   });
+  // A reloaded page gets its marks again (the page script compares the address).
+  const reloaded = (tabId, change) => {
+    if (change.status !== "complete") return;
+    for (const [key, items] of marked) {
+      const [t, frameId] = key.split(":").map(Number);
+      if (t === tabId && items.length) draw(tabId, frameId, items);
+    }
+  };
+  browser.tabs.onUpdated.addListener(reloaded);
   port.onDisconnect.addListener(() => {
-    for (const key of marked) {
+    browser.tabs.onUpdated.removeListener(reloaded);
+    for (const key of marked.keys()) {
       const [tabId, frameId] = key.split(":").map(Number);
       draw(tabId, frameId, [], true);
     }
@@ -978,7 +1080,7 @@ So funktioniert Tasks – für Fragen zur Erweiterung selbst; antworte danach, n
 - Markdown in Titel und Notiz (fett, kursiv, durchgestrichen, Code, Links; in Notizen auch Listen, Überschriften, Zitate).
 - Tastatur: Strg+Alt+A Seitenleiste auf/zu, / Chat, Enter neue Aufgabe, Tab / Shift+Tab ein-/ausrücken, Strg+Enter abhaken, Alt+↑/↓ verschieben, Esc schließt. Alles unter ⋯ → „Tastenkürzel & Markdown".
 - Einstellungen: Design (System/hell/dunkel), Bereich „Erledigt" auf/zu und die KI-Verbindung lassen sich auch hier im Chat ändern (set_setting); alles andere über ⋯ und den Knopf oben rechts.
-- „+" im Chat: Element auf der Seite auswählen (alle Blöcke sind gestrichelt umrandet; Klick wählt einen Block an oder ab, Umschalt+Klick alles dazwischen, Ziehen einen Rahmen, Strg+A alle sichtbaren, Alt+Ziehen markiert Text, Klick auf markierten Text nimmt ihn raus; jedes Stück wird ein eigener nummerierter Eintrag im „Bezug"; Strg+Z/Strg+Y auf der Seite: rückgängig/wieder; Enter oder Esc beendet, ein zweites Esc nimmt alle Stellen dieser Seite aus dem Bezug), Datei hinzufügen (PDF, Bild, Text; auch per Drag & Drop auf den Chat) und ganze Seite schicken (Text der aktuellen Seite, Firefox fragt einmal nach der Erlaubnis). Anhänge gehen mit der nächsten Nachricht an dich. Markierter Chat-Text kommt über „↩ Antworten" als Zitat in den „Bezug"; mehrere Zitate werden angehängt.
+- „+" im Chat: Element auf der Seite auswählen (alle Blöcke sind gestrichelt umrandet; Klick wählt einen Block an oder ab, Umschalt+Klick alles dazwischen, Ziehen einen Rahmen, Strg+A alle sichtbaren, Alt+Ziehen markiert Text, Klick auf markierten Text nimmt ihn raus; jedes Stück wird ein eigener nummerierter Eintrag im „Bezug"; Strg+Z/Strg+Y auf der Seite: rückgängig/wieder; Enter oder Esc beendet das Auswählen – danach geht, was man auf der Seite tippt, direkt ins Chat-Feld (Klick auf die Seite beendet das); Esc im Chat-Feld nimmt alle Markierungen raus, Strg+Z holt sie zurück; zeigt man auf der Seite auf eine Markierung, leuchtet ihr Eintrag im „Bezug" auf; nach einem Neuladen der Seite erscheinen die Markierungen wieder. Die Tasten erklärt der Bezug einmal beim ersten Auswählen; fragt der Nutzer nach den Tasten, erkläre sie ihm), Datei hinzufügen (PDF, Bild, Text; auch per Drag & Drop auf den Chat) und ganze Seite schicken (Text der aktuellen Seite, Firefox fragt einmal nach der Erlaubnis). Anhänge gehen mit der nächsten Nachricht an dich. Markierter Chat-Text kommt über „↩ Antworten" als Zitat in den „Bezug"; mehrere Zitate werden angehängt.
 - Layout: Ist die Seitenleiste breit, stehen Liste und Chat nebeneinander; schmal gibt es die Reiter „Aufgaben | Chat" und mit / eine Schnell-Karte.
 
 Was es NICHT gibt: Tags, Prioritäten, Farben, Erinnerungen/Benachrichtigungen, Suche/Filter, Anhänge, Teilen, Zugriff auf Webseiten oder das Internet. Listen löschen kannst du nicht – das macht der Nutzer selbst über ⋯ → „Liste löschen". Wird danach gefragt, sag ehrlich, dass es das (noch) nicht gibt, und biete – wenn sinnvoll – eine Lösung mit vorhandenen Mitteln an (z. B. „#klausur" als Konvention im Titel; markieren oder öffnen kannst du dann alles mit #klausur). Täusche nie vor, etwas getan zu haben, das keine Aktion ist.

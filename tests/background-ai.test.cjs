@@ -9,7 +9,7 @@ function area() { const data = {}; return { data,
   async set(o) { Object.assign(data, structuredClone(o)); }, async remove(k) { for (const x of [].concat(k)) delete data[x]; } }; }
 const sync = area(), local = area();
 const storageListeners = [], msgListeners = [];
-let clickHandler, opened = 0, lastMsg, reply, nativeCalls = 0, permGranted = true, lastReq, apiReply, reqs = [], scripts = [], capReply = () => ({}), activated = [], connectHandler;
+let clickHandler, opened = 0, lastMsg, reply, nativeCalls = 0, permGranted = true, lastReq, apiReply, reqs = [], scripts = [], capReply = () => ({}), activated = [], connectHandler, tabUpdated = new Set();
 const URL0 = "https://ilias.hhu.de/ilias.php?baseClass=ilexercisehandlergui&ref_id=2209395&ass_id=74843";
 const ctx = { console, crypto: globalThis.crypto, structuredClone, URL: globalThis.URL, TextDecoder, atob, btoa,
   fetch: async (url, init) => { const r = { url, init, body: JSON.parse(init.body) }; reqs.push(r); lastReq = r; return apiReply(r); },
@@ -20,7 +20,7 @@ const ctx = { console, crypto: globalThis.crypto, structuredClone, URL: globalTh
     browserAction: { onClicked: { addListener() {} } },
     sidebarAction: { open() { opened++; }, toggle() {} },
     contextMenus: { create(o) { ctx.menu = o; }, async removeAll() { ctx.menu = null; }, onClicked: { addListener(f) { clickHandler = f; } } },
-    tabs: { async update(id, o) { activated.push([id, o.active]); },
+    tabs: { onUpdated: { addListener(f) { tabUpdated.add(f); }, removeListener(f) { tabUpdated.delete(f); } }, async update(id, o) { activated.push([id, o.active]); },
       async query() { return [{ id: 5, url: "https://www.sonntagsblatt.de/termine", title: "Termine 2026" }]; },
       async executeScript(id, o) { scripts.push(o);
         if (/highlightInPage/.test(o.code)) return [true];
@@ -76,8 +76,13 @@ const capture = async (info, cap, tab = { id: 1, url: URL0, title: "Übung 2" })
   connectHandler(port);
   port.send({ type: "marks-set", tabId: 4, frameId: 0, items: [{ locator: "li", n: 2 }] }); await tick();
   ok(scripts.length === 1 && /marksInPage/.test(scripts[0].code) && /"items":\[\{"locator":"li","n":2\}\]/.test(scripts[0].code), "Bezug: Stellen bleiben auf der Seite markiert (mit Nummer aus der Liste)");
+  tabUpdated.forEach((f) => f(5, { status: "complete" }));
+  tabUpdated.forEach((f) => f(4, { status: "loading" }));
+  ok(scripts.length === 1, "andere Tabs und halb geladene Seiten: nichts neu zeichnen");
+  tabUpdated.forEach((f) => f(4, { status: "complete" })); await tick();
+  ok(scripts.length === 2 && /"items":\[\{"locator":"li","n":2\}\]/.test(scripts[1].code), "Seite neu geladen → Markierungen kommen wieder");
   port.close(); await tick();
-  ok(scripts.length === 2 && /"items":\[\]/.test(scripts[1].code), "Seitenleiste zu → Markierungen verschwinden");
+  ok(scripts.length === 3 && /"items":\[\],"off":true/.test(scripts[2].code) && !tabUpdated.size, "Seitenleiste zu → Markierungen und Tasten verschwinden");
   scripts = [];
   const pk = await msgListeners.map((f) => f({ type: "picker-start" })).find(Boolean);
   ok(pk && pk.ok && pk.title === "Termine 2026" && /__tasksPicker\.stop\(false\)/.test(scripts[0].code) && /pickerInPage/.test(scripts[1].code) && /cssPathInPage/.test(scripts[1].code), "Picker startet im aktiven Tab (ein laufender anderer endet vorher)");
