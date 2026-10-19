@@ -1883,6 +1883,7 @@
     }
     const row = li.querySelector(":scope > .row");
     li.classList.toggle("expanded", isExp);
+    row.querySelector(".chips").replaceWith(buildChips({ id, ...tasks.get(id) }, isExp));
     row.querySelector(".meta").replaceWith(buildMeta({ id, ...tasks.get(id) }, isExp));
     if (isExp) row.after(buildDetails(id));
   }
@@ -2259,19 +2260,20 @@
     if (Object.keys(updates).length) write(updates);
   }
 
-  function buildMeta(t, isExpanded) {
-    const meta = h("div", { class: "meta" });
-    if (isExpanded) return meta;
+  // Time and links, right-aligned in the title row.
+  function buildChips(t, isExpanded) {
+    const chips = h("span", { class: "chips" });
+    if (isExpanded) return chips;
     if (t.d) {
       const due = dueInfo(t);
-      meta.append(h("span", { class: "due " + due.cls, title: dueTitle(t), dataset: { id: t.id } },
+      chips.append(h("span", { class: "due " + due.cls, title: dueTitle(t), dataset: { id: t.id } },
         t.r === "w" && icon("repeat"),
         h("span", { class: "due-label" }, due.label)));
     }
     const links = collectLinks(t.id);
     if (links.length) {
       const own = linksOf(t).length;
-      meta.append(h("button", {
+      chips.append(h("button", {
         class: "links-chip",
         type: "button",
         title: links.length === 1 ? "Öffnen: " + links[0].t + " – " + links[0].url
@@ -2282,7 +2284,13 @@
         },
       }, icon("link"), links.length > 1 && String(links.length)));
     }
-    if (t.n && t.n.trim()) {
+    return chips;
+  }
+
+  // Note preview below the title.
+  function buildMeta(t, isExpanded) {
+    const meta = h("div", { class: "meta" });
+    if (!isExpanded && t.n && t.n.trim()) {
       const preview = h("div", { class: "note-preview md-view" });
       renderNotePreview(t.n, preview);
       meta.append(preview);
@@ -2439,11 +2447,13 @@
         onclick: () => toggleDone(t.id),
       }, icon("check")),
       h("div", { class: "main" },
-        folded ? h("div", {
-          class: "title-line",
-          // The title is only as wide as its text here: a click next to it edits too.
-          onclick: (e) => e.target === e.currentTarget && title.startEdit("end"),
-        }, title, foldCount(t.id)) : title,
+        h("div", { class: "title-row" },
+          folded ? h("div", {
+            class: "title-line",
+            // The title is only as wide as its text here: a click next to it edits too.
+            onclick: (e) => e.target === e.currentTarget && title.startEdit("end"),
+          }, title, foldCount(t.id)) : title,
+          buildChips(t, isExp)),
         buildMeta(t, isExp)),
       // Only visible in edit mode (CSS).
       h("button", {

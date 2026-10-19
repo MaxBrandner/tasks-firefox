@@ -818,13 +818,55 @@ kbd {
   overflow-wrap: anywhere;
 }
 
+/* Title with time and links right-aligned; they drop below
+   only when the title's longest word no longer fits next to them. */
+.title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.title-row > .field,
+.title-row > .title-line {
+  flex: 1 1 0;
+  max-width: 100%;
+}
+
+/* "anywhere" would let the title shrink to one letter per line. */
+.title-row .title .md-view {
+  overflow-wrap: break-word;
+}
+
+.chips {
+  flex: 0 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px 6px;
+  min-height: 24px;
+  margin-left: auto;
+  padding-left: 8px;
+}
+
+.chips:empty {
+  display: none;
+}
+
+/* Use the space of the trash button, which only shows in edit mode
+   (gap 4px + button 22px). */
+.task:not(.expanded) > .row .chips {
+  margin-right: -26px;
+}
+
 .due {
   flex: none;
-  padding: 0 7px;
+  padding: 0 6px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  font-size: 11.5px;
-  line-height: 18px;
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
 }
 
 .due.today {
@@ -1435,13 +1477,13 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 0 7px;
+  padding: 0 6px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: transparent;
   color: var(--accent);
-  font-size: 11.5px;
-  line-height: 18px;
+  font-size: 11px;
+  line-height: 14px;
 }
 
 .links-chip:hover {
