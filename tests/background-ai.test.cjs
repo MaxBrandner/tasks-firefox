@@ -49,7 +49,7 @@ const capture = async (info, cap, tab = { id: 1, url: URL0, title: "Übung 2" })
   const PDF = "https://ilias.hhu.de/blatt2.pdf";
   let c = await capture({ selectionText: "Blatt 2 ist online" }, { selection: "Blatt 2 ist online\nAbgabe 26.10.", links: [{ text: "Blatt 2", href: PDF }], locator: "body > p" });
   ok(opened === 1 && c && c.label === "Blatt 2 ist online" && nativeCalls === 0, "Rechtsklick: Seitenleiste geht auf, Stelle landet als Karte im Chat – noch ohne KI-Anfrage");
-  ok(c.picking === true && scripts.some((s) => /pickerInPage/.test(s.code) && /unitOfInPage/.test(s.code)), "Rechtsklick startet gleich den Picker in diesem Tab");
+  ok(c.picking === true && scripts.some((s) => /pickerInPage/.test(s.code) && /unitOfInPage/.test(s.code) && /"anchor":"body > p"/.test(s.code)), "Rechtsklick startet gleich den Picker in diesem Tab – Umschalt+Klick geht ab der angeklickten Stelle");
   ok(/^Seite: Übung 2\nAdresse: https:\/\/ilias/.test(c.text) && /Markierter Text:\n<<<\nBlatt 2 ist online\nAbgabe 26\.10\.\n>>>/.test(c.text) && /Links in der Markierung:\n- Blatt 2 → https:\/\/ilias\.hhu\.de\/blatt2\.pdf/.test(c.text), "Karte enthält Seite, Adresse, Markierung mit Zeilenumbrüchen und Link-Zielen");
   ok(c.page && c.page.locator === "body > p" && c.page.tabId === 1 && scripts.some((o) => /marksInPage/.test(o.code) && /\.flash\(\{"locator":"body > p"\}/.test(o.code)), "Stelle leuchtet auf der Seite auf; Pfad für „Auf der Seite zeigen“ steht in der Karte");
   c = await capture({ linkUrl: PDF, linkText: "Blatt 3", targetElementId: 42 }, { selection: "", section: "Übungen\nBlatt 3 – Abgabe 26. Okt", heading: "Übungen" });

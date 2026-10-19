@@ -128,6 +128,10 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   $("chatPlus").click(); await H.tick();
   $("chatPlus").click(); await H.tick();
   ok($("chatPlusMenu").hidden && d.activeElement === $("chatInput"), "„+“ auf und wieder zu → zurück im Chat-Feld");
+  $("chatPlus").click(); await H.tick();
+  $("chatInput").blur();
+  $("chatLog").click(); await H.tick();
+  ok($("chatPlusMenu").hidden && d.activeElement === $("chatInput"), "„+“ auf, Klick daneben → zu und zurück im Chat-Feld");
   const dropEv = (type, files) => { const ev = new H.w.Event(type, { bubbles: true, cancelable: true }); Object.defineProperty(ev, "dataTransfer", { value: { types: ["Files"], files } }); return ev; };
   $("chatPanel").dispatchEvent(dropEv("dragenter", []));
   ok(!$("chatDrop").hidden, "Datei über den Chat ziehen → Ablage-Hinweis");

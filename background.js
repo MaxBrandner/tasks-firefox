@@ -325,7 +325,12 @@ function pickerInPage(args, cssPath, textSpot, unitOf) {
     if (items.length) browser.runtime.sendMessage({ type: "picker-pick", op, url: location.href, title: document.title, items }).catch(() => {});
   };
   const at = (e) => ({ x: e.clientX + scrollX, y: e.clientY + scrollY });
-  let anchor = null;
+  let anchor = null; // Shift+click goes from here; after a right-click: that place
+  try {
+    if (args.anchor) anchor = unitOf(document.querySelector(args.anchor));
+  } catch (_) {
+    // stale locator
+  }
   let drag = null;
   let marking = false;
 
@@ -394,8 +399,10 @@ function pickerInPage(args, cssPath, textSpot, unitOf) {
     const el = unitOf(e.target);
     if (!el) return;
     const all = leaves();
-    const a = all.indexOf(anchor);
-    const b = all.indexOf(el);
+    // a block with blocks inside (or text in one) counts as its first leaf
+    const at = (x) => (all.indexOf(x) >= 0 ? all.indexOf(x) : x ? all.findIndex((l) => x.contains(l) || l.contains(x)) : -1);
+    const a = at(anchor);
+    const b = at(el);
     if (e.shiftKey && a >= 0 && b >= 0) send("add", all.slice(Math.min(a, b), Math.max(a, b) + 1).slice(0, 200).map(item));
     else send("toggle", [item(el)]);
     anchor = el;
@@ -478,9 +485,9 @@ function pickerInPage(args, cssPath, textSpot, unitOf) {
 // The picker runs in one tab (frame) at a time.
 let pickerAt = null;
 
-async function startPicker(tabId, frameId) {
+async function startPicker(tabId, frameId, anchor = "") {
   await stopPicker();
-  const code = `(${pickerInPage})(${JSON.stringify({ style: PICK_STYLE })}, ${cssPathInPage}, ${textSpotInPage}, ${unitOfInPage})`;
+  const code = `(${pickerInPage})(${JSON.stringify({ style: PICK_STYLE, anchor })}, ${cssPathInPage}, ${textSpotInPage}, ${unitOfInPage})`;
   const [res] = await browser.tabs.executeScript(tabId, { frameId, code });
   pickerAt = { tabId, frameId };
   return res || { ok: true };
@@ -782,7 +789,7 @@ async function captureToChat(info, tab) {
   const image = info.srcUrl ? await captureImage(tab, info.frameId, cap.locator) : null;
   flashOnPage(tab.id, info.frameId, cap.spot || (cap.locator && { locator: cap.locator }));
   // Straight on with the picker: more places from the same page.
-  const picking = await startPicker(tab.id, info.frameId || 0).then((r) => !!(r && r.ok), () => false);
+  const picking = await startPicker(tab.id, info.frameId || 0, cap.locator).then((r) => !!(r && r.ok), () => false);
   const page = { tabId: tab.id, frameId: info.frameId || 0 };
   const item = {
     id: newId(),

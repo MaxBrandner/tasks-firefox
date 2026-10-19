@@ -3182,8 +3182,12 @@
     togglePlusMenu();
     if (plusMenuEl.hidden) chatInputEl.focus(); // closed again: back to typing
   });
+  // A click next to the menu closes it; back to typing unless the click
+  // went to something of its own (a field, a button, a task).
   document.addEventListener("click", (e) => {
-    if (!plusMenuEl.hidden && !plusMenuEl.contains(e.target)) togglePlusMenu(false);
+    if (plusMenuEl.hidden || plusMenuEl.contains(e.target)) return;
+    togglePlusMenu(false);
+    if (!(e.target instanceof Element && e.target.closest("input, textarea, select, button, a, [contenteditable], .task"))) chatInputEl.focus();
   });
   plusMenuEl.addEventListener("click", (e) => {
     const b = e.target.closest("button[data-add]");
