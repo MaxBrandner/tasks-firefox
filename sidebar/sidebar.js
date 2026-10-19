@@ -2880,10 +2880,10 @@
         onclick: (ev) => { ev.stopPropagation(); removeCtx(i); } }, icon("close"));
       if (e.type === "quote") return h("div", { class: "ctx-item ctx-quote" }, quoteChat(e, true), remove);
       n++;
-      return h("div", { class: "ctx-item ctx-web", title: (e.title || e.url || "") + " – klicken: auf der Seite zeigen", onclick: () => showOnPage(e) },
+      return h("div", { class: "ctx-item ctx-web" + (e.text ? " ctx-textsel" : ""), title: (e.title || e.url || "") + " – klicken: auf der Seite zeigen", onclick: () => showOnPage(e) },
         h("span", { class: "ctx-num" }, n + "."),
         e.preview && h("img", { class: "ctx-thumb", src: e.preview, alt: "" }),
-        h("span", { class: "ctx-text" }, e.excerpt),
+        h("span", { class: "ctx-text" }, e.text ? `„${e.excerpt}“` : e.excerpt),
         remove);
     });
   }
@@ -2891,14 +2891,14 @@
   function renderCtx() {
     ctxEl.hidden = !chatCtx.length && !pickerActive;
     ctxEl.replaceChildren(...ctxView(chatCtx, false),
-      ...(pickerActive ? [h("div", { class: "ctx-item ctx-hint" }, "⌖ Blöcke auf der Seite anklicken · Enter oder Esc beendet",
+      ...(pickerActive ? [h("div", { class: "ctx-item ctx-hint" }, "⌖ Klick: Block an/aus · Umschalt+Klick: alles dazwischen · Ziehen: Rahmen · Alt+Ziehen: Text · Strg+A: alle sichtbaren · Enter/Esc: fertig",
         h("button", { class: "icon-btn small ctx-x", type: "button", title: "Auswählen beenden", "aria-label": "Auswählen beenden", onclick: stopPicker }, icon("close")))] : []));
     syncMarks();
   }
 
   // The web entries stay outlined on their pages (numbered like the list)
-  // until removed or sent; the background draws them. While the picker runs,
-  // it draws its own blocks. Only changed tabs are sent.
+  // until removed or sent; the background draws them (also while the picker
+  // runs – it only adds the dashed outlines). Only changed tabs are sent.
   let marksPort = null;
   let marksSent = new Map(); // "tabId:frameId" → JSON of the items
   function syncMarks() {
@@ -2907,10 +2907,10 @@
     for (const e of chatCtx) {
       if (e.type !== "web") continue;
       n++;
-      if (!e.page || e.page.tabId == null || !e.page.locator || (pickerActive && e.pick === pickId)) continue;
+      if (!e.page || e.page.tabId == null || !e.page.locator) continue;
       const key = e.page.tabId + ":" + (e.page.frameId || 0);
       if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push({ locator: e.page.locator, n });
+      groups.get(key).push(e.page.start == null ? { locator: e.page.locator, n } : { locator: e.page.locator, n, start: e.page.start, end: e.page.end });
     }
     const next = new Map();
     for (const key of new Set([...marksSent.keys(), ...groups.keys()])) {
@@ -2933,8 +2933,7 @@
   }
 
   function removeCtx(i) {
-    const [e] = chatCtx.splice(i, 1);
-    if (e && e.pick && e.pick === pickId) pickRemoved.add(e.page.locator); // the next picker update must not bring it back
+    chatCtx.splice(i, 1);
     renderCtx();
   }
 
@@ -2955,8 +2954,9 @@
     const { [CAPTURE_KEY]: list } = await browser.storage.local.get(CAPTURE_KEY);
     if (!Array.isArray(list) || !list.length) return;
     await browser.storage.local.remove(CAPTURE_KEY);
+    if (list.some((c) => c.picking)) pickerActive = true; // the right-click started the picker
     for (const c of list) {
-      addCtx({ type: "web", excerpt: c.excerpt || c.label, prompt: c.text, title: c.title, url: c.url, page: c.page, image: c.image,
+      addCtx({ type: "web", text: !!(c.page && c.page.start != null), excerpt: c.excerpt || c.label, prompt: c.text, title: c.title, url: c.url, page: c.page, image: c.image,
         preview: c.image ? `data:${c.image.media_type};base64,${c.image.data}` : "" });
     }
     if (!isWide() && chatMode === "tasks") setChatMode("quick");
@@ -3006,11 +3006,12 @@
         h("button", { class: "warn-ghost", type: "button", onclick: () => { pendingSend = null; renderChat(); chatInputEl.focus(); } }, "Abbrechen")));
   }
 
-  // --- Element picker: the page reports every change (picker-update) and the
-  // end (picker-end); each run replaces only its own entries in the Bezug.
+  // --- Element picker: every pick on the page (picker-pick: add or toggle)
+  // goes straight into the Bezug; the page ends it with Enter/Esc
+  // (picker-end). A right-click starts it too (mailbox item with "picking").
   let pickerActive = false;
-  let pickId = 0;
-  let pickRemoved = new Set();
+  let myWindowId = null;
+  if (browser.windows) browser.windows.getCurrent().then((w) => { myWindowId = w.id; }, () => {});
 
   async function startPicker() {
     const granted = await browser.permissions.request({ origins: ["*://*/*"] }).catch(() => false);
@@ -3018,8 +3019,6 @@
     const r = await browser.runtime.sendMessage({ type: "picker-start" }).catch((err) => ({ ok: false, error: err.message }));
     if (!r || !r.ok) return flashNote((r && r.error) || "Auswählen geht hier nicht.");
     pickerActive = true;
-    pickId++;
-    pickRemoved = new Set();
     renderCtx();
   }
 
@@ -3030,18 +3029,32 @@
     renderCtx();
   }
 
+  const samePlace = (a, b) => a.tabId === b.tabId && (a.frameId || 0) === (b.frameId || 0) && a.locator === b.locator && a.start === b.start && a.end === b.end;
+
+  // A picked block, or text marked with Alt+drag (with the block it is in).
+  function pickEntry(msg, it, page) {
+    const head = `Seite: ${msg.title || ""}\nAdresse: ${msg.url}\n\n`;
+    if (it.start == null) return { type: "web", excerpt: it.text.slice(0, 500), title: msg.title, url: msg.url, page, prompt: head + "Gewählter Block:\n" + it.text };
+    return { type: "web", text: true, excerpt: it.text.slice(0, 500), title: msg.title, url: msg.url, page,
+      prompt: head + `Markierter Text:\n»${it.text}«` + (it.context ? `\n\nSteht in:\n»${it.context}«` : "") };
+  }
+
   browser.runtime.onMessage.addListener((msg, sender) => {
-    if (!msg || (msg.type !== "picker-update" && msg.type !== "picker-end")) return undefined;
-    const tabId = sender && sender.tab ? sender.tab.id : undefined;
-    chatCtx = chatCtx.filter((e) => e.pick !== pickId);
-    for (const b of Array.isArray(msg.items) ? msg.items : []) {
-      if (pickRemoved.has(b.locator)) continue;
-      chatCtx.push({ type: "web", pick: pickId, excerpt: b.text.slice(0, 500), title: msg.title, url: msg.url,
-        prompt: `Seite: ${msg.title || ""}\nAdresse: ${msg.url}\n\nGewählter Block:\n${b.text}`, page: { tabId, frameId: 0, locator: b.locator } });
-    }
+    if (!msg || (msg.type !== "picker-pick" && msg.type !== "picker-end")) return undefined;
+    if (myWindowId != null && sender && sender.tab && sender.tab.windowId !== myWindowId) return undefined; // another window's sidebar
     if (msg.type === "picker-end") {
       pickerActive = false;
       chatInputEl.focus();
+      renderCtx();
+      return undefined;
+    }
+    const tabId = sender && sender.tab ? sender.tab.id : undefined;
+    const frameId = (sender && sender.frameId) || 0;
+    for (const it of Array.isArray(msg.items) ? msg.items : []) {
+      const page = it.start == null ? { tabId, frameId, locator: it.locator } : { tabId, frameId, locator: it.locator, start: it.start, end: it.end };
+      const i = chatCtx.findIndex((e) => e.type === "web" && e.page && samePlace(e.page, page));
+      if (i < 0) chatCtx.push(pickEntry(msg, it, page));
+      else if (msg.op === "toggle") chatCtx.splice(i, 1);
     }
     renderCtx();
     return undefined;
@@ -3315,7 +3328,7 @@
     const files = [...atts.filter((a) => a.kind === "file").map(({ media_type, data, name }) => ({ media_type, data, name })),
       ...ctx.filter((e) => e.type === "web" && e.image).map((e) => e.image)];
     chat.push(compact({ role: "user", text, at: Date.now(),
-      context: ctx.map((e) => (e.type === "quote" ? { type: "quote", parts: e.parts } : compact({ type: "web", excerpt: e.excerpt.slice(0, 300), title: e.title, url: e.url, page: e.page }))),
+      context: ctx.map((e) => (e.type === "quote" ? { type: "quote", parts: e.parts } : compact({ type: "web", text: e.text, excerpt: e.excerpt.slice(0, 300), title: e.title, url: e.url, page: e.page }))),
       attachments: atts.map((a) => compact({ kind: a.kind, name: a.name, size: a.size, media_type: a.media_type, url: a.url })) }));
     chatBusy = true;
     chatInputEl.value = "";

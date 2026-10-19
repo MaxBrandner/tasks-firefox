@@ -49,6 +49,7 @@ const capture = async (info, cap, tab = { id: 1, url: URL0, title: "Übung 2" })
   const PDF = "https://ilias.hhu.de/blatt2.pdf";
   let c = await capture({ selectionText: "Blatt 2 ist online" }, { selection: "Blatt 2 ist online\nAbgabe 26.10.", links: [{ text: "Blatt 2", href: PDF }], locator: "body > p" });
   ok(opened === 1 && c && c.label === "Blatt 2 ist online" && nativeCalls === 0, "Rechtsklick: Seitenleiste geht auf, Stelle landet als Karte im Chat – noch ohne KI-Anfrage");
+  ok(c.picking === true && scripts.some((s) => /pickerInPage/.test(s.code) && /unitOfInPage/.test(s.code)), "Rechtsklick startet gleich den Picker in diesem Tab");
   ok(/^Seite: Übung 2\nAdresse: https:\/\/ilias/.test(c.text) && /Markierter Text:\n<<<\nBlatt 2 ist online\nAbgabe 26\.10\.\n>>>/.test(c.text) && /Links in der Markierung:\n- Blatt 2 → https:\/\/ilias\.hhu\.de\/blatt2\.pdf/.test(c.text), "Karte enthält Seite, Adresse, Markierung mit Zeilenumbrüchen und Link-Zielen");
   ok(c.page && c.page.locator === "body > p" && c.page.tabId === 1 && scripts.some((o) => /highlightInPage/.test(o.code) && /"locator":"body > p"/.test(o.code)), "Stelle leuchtet auf der Seite auf; Pfad für „Auf der Seite zeigen“ steht in der Karte");
   c = await capture({ linkUrl: PDF, linkText: "Blatt 3", targetElementId: 42 }, { selection: "", section: "Übungen\nBlatt 3 – Abgabe 26. Okt", heading: "Übungen" });
@@ -79,7 +80,13 @@ const capture = async (info, cap, tab = { id: 1, url: URL0, title: "Übung 2" })
   ok(scripts.length === 2 && /"items":\[\]/.test(scripts[1].code), "Seitenleiste zu → Markierungen verschwinden");
   scripts = [];
   const pk = await msgListeners.map((f) => f({ type: "picker-start" })).find(Boolean);
-  ok(pk && pk.ok && pk.title === "Termine 2026" && /pickerInPage/.test(scripts[0].code) && /cssPathInPage/.test(scripts[0].code), "Picker startet im aktiven Tab (mit CSS-Pfad-Helfer)");
+  ok(pk && pk.ok && pk.title === "Termine 2026" && /__tasksPicker\.stop\(false\)/.test(scripts[0].code) && /pickerInPage/.test(scripts[1].code) && /cssPathInPage/.test(scripts[1].code), "Picker startet im aktiven Tab (ein laufender anderer endet vorher)");
+  scripts = [];
+  const pst = await msgListeners.map((f) => f({ type: "picker-stop" })).find(Boolean);
+  ok(pst && pst.ok && scripts.length === 1 && /__tasksPicker\.stop\(false\)/.test(scripts[0].code), "Picker beenden: in dem Tab, in dem er läuft");
+  scripts = [];
+  await msgListeners.map((f) => f({ type: "picker-stop" })).find(Boolean);
+  ok(scripts.length === 0, "läuft keiner, passiert nichts");
 
   // --- chat requests through Claude Code
   const ans = { reply: "ok", actions: [], highlight: [] };

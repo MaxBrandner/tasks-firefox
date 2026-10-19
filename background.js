@@ -90,12 +90,63 @@ function cssPathInPage(node) {
   return ["body", ...parts].join(" > ");
 }
 
+// Runs inside the page: the block an element or text belongs to – the nearest
+// element that is not inline (a list line, a paragraph, a table cell).
+function unitOfInPage(node) {
+  for (let el = node && (node.nodeType === 1 ? node : node.parentElement); el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+    const d = getComputedStyle(el).display;
+    if (d !== "none" && d !== "contents" && !d.startsWith("inline")) return el;
+  }
+  return null;
+}
+
+// Runs inside the page: a text selection as "element + character offsets in
+// its text" – it travels as data and later finds the same text again.
+function textSpotInPage(range, cssPath) {
+  let host = range.commonAncestorContainer;
+  if (host.nodeType !== 1) host = host.parentElement;
+  const offset = (node, at) => {
+    const r = document.createRange();
+    r.selectNodeContents(host);
+    r.setEnd(node, at);
+    return r.toString().length;
+  };
+  return { locator: cssPath(host), start: offset(range.startContainer, range.startOffset), end: offset(range.endContainer, range.endOffset) };
+}
+
+function rangeFromSpotInPage(spot) {
+  let host = null;
+  try {
+    host = document.querySelector(spot.locator);
+  } catch (_) {
+    // stale locator
+  }
+  if (!host) return null;
+  const range = document.createRange();
+  const walk = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+  let pos = 0;
+  let started = false;
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    const end = pos + n.data.length;
+    if (!started && spot.start <= end) {
+      range.setStart(n, spot.start - pos);
+      started = true;
+    }
+    if (started && spot.end <= end) {
+      range.setEnd(n, spot.end - pos);
+      return range;
+    }
+    pos = end;
+  }
+  return null;
+}
+
 // Runs inside the page via tabs.executeScript (only data comes back): the
 // selection with the links in it, the section around the clicked element
 // (Firefox: menus.getTargetElement) and details of a clicked image.
-function captureInPage(args, cssPath) {
+function captureInPage(args, cssPath, textSpot, unitOf) {
   const clip = (s, n) => String(s || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, n);
-  const out = { selection: "", links: [], clicked: "", section: "", heading: "", description: "", image: null, locator: "" };
+  const out = { selection: "", links: [], clicked: "", section: "", heading: "", description: "", image: null, locator: "", spot: null };
   const sel = window.getSelection();
   out.selection = String(sel).slice(0, args.limits.selection);
   const seen = new Set();
@@ -118,10 +169,12 @@ function captureInPage(args, cssPath) {
     const inLink = (node.nodeType === 1 ? node : node.parentElement)?.closest("a[href]");
     if (inLink) addLink(inLink.href, inLink.textContent);
   }
-  // With a selection, the block around it is what gets highlighted.
+  // With a selection, the block around it is what gets highlighted; the
+  // selection itself is kept as a spot to mark it later.
   if (sel.rangeCount && String(sel).trim()) {
     const node = sel.getRangeAt(0).commonAncestorContainer;
     out.locator = cssPath(node.nodeType === 1 ? node : node.parentElement);
+    out.spot = textSpot(sel.getRangeAt(0), cssPath);
   }
   const meta = document.querySelector('meta[name="description"], meta[property="og:description"]');
   out.description = clip(meta && meta.content, 300);
@@ -141,7 +194,7 @@ function captureInPage(args, cssPath) {
   }
   // The clicked element itself (e.g. one line of a list of dates) – what is meant.
   out.clicked = clip(el.innerText || el.textContent, args.limits.clicked);
-  if (!out.locator) out.locator = cssPath(el);
+  if (!out.locator) out.locator = cssPath(unitOf(el) || el); // the same unit the picker uses
   // From the clicked element up to a block with some text; long blocks are cut
   // around the clicked element.
   let block = el;
@@ -219,113 +272,219 @@ browser.runtime.onMessage.addListener((msg) => {
 });
 
 // --- Element picker -----------------------------------------------------------
-// "+ → Element auf der Seite auswählen": in the active tab blocks light up on
-// hover, a click picks or unpicks one (numbered). Every change goes live to
-// the sidebar (picker-update); Enter or Esc ends it (picker-end). Overlays
-// only – the page itself is not changed; link clicks are caught.
+// "+ → Element auf der Seite auswählen" and right after a right-click: all
+// blocks of the page get a dashed outline; like in a file manager a click
+// switches a block on or off, Shift+click takes everything since the last
+// one, dragging spans a frame (each touched block counts, with Ctrl they
+// switch), Ctrl+A takes all visible ones and Alt+drag marks text. Each pick
+// goes to the sidebar (picker-pick); what is chosen is drawn by the marks.
+// Enter or Esc ends it (picker-end). Overlays only – the page is not changed,
+// link clicks are caught.
 const PICK_STYLE = {
+  all: "border:1px dashed rgba(47,111,94,.4);border-radius:3px",
   hover: "box-shadow:0 0 0 2px #2f6f5e;background:rgba(47,111,94,.06);border-radius:4px",
+  preview: "box-shadow:0 0 0 1.5px rgba(47,111,94,.8);background:rgba(47,111,94,.1);border-radius:4px",
+  lasso: "border:1.5px dashed #2f6f5e;background:rgba(47,111,94,.05);border-radius:2px",
   chosen: "box-shadow:0 0 0 2px #2f6f5e;background:rgba(47,111,94,.13);border-radius:4px",
+  text: "background:rgba(47,111,94,.27);border-radius:2px",
   badge: "background:#2f6f5e;color:#fff;font:600 11px/18px system-ui,sans-serif;width:18px;height:18px;border-radius:50%;text-align:center",
 };
 
-function pickerInPage(args, cssPath) {
+function pickerInPage(args, cssPath, textSpot, unitOf) {
   if (window.__tasksPicker) window.__tasksPicker.stop(false);
   const clip = (s, n) => String(s || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, n);
+  const plain = "all:initial;position:absolute;left:0;top:0;pointer-events:none;";
+  const add = (parent, style) => {
+    const d = document.createElement("div");
+    d.setAttribute("style", plain + style);
+    parent.append(d);
+    return d;
+  };
   const layer = document.createElement("div");
-  layer.setAttribute("style", "all:initial;position:absolute;left:0;top:0;width:0;height:0;z-index:2147483647;pointer-events:none");
-  document.documentElement.append(layer);
-  const makeBox = (style) => {
-    const b = document.createElement("div");
-    b.setAttribute("style", "all:initial;position:absolute;pointer-events:none;display:none;" + style);
-    layer.append(b);
-    return b;
+  layer.setAttribute("style", plain + "width:0;height:0;z-index:2147483647");
+  const allLayer = add(layer, "");
+  const previewLayer = add(layer, "");
+  const hoverBox = add(layer, "display:none;" + args.style.hover);
+  const lassoBox = add(layer, "display:none;" + args.style.lasso);
+  const cursor = document.createElement("style");
+  const setCursor = (c) => { cursor.textContent = `*{cursor:${c}!important}`; };
+  setCursor("crosshair");
+  document.documentElement.append(layer, cursor);
+  const docRect = (r) => ({ left: r.left + scrollX, top: r.top + scrollY, right: r.right + scrollX, bottom: r.bottom + scrollY });
+  const place = (box, r, pad = 3) => {
+    Object.assign(box.style, { display: "block", left: r.left - pad + "px", top: r.top - pad + "px", width: r.right - r.left + 2 * pad + "px", height: r.bottom - r.top + 2 * pad + "px" });
+    return box;
   };
-  const hoverBox = makeBox(args.style.hover);
-  const chosen = [];
+
+  // The units: blocks without blocks inside (a list line, a paragraph, a cell).
+  const SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "BR"]);
+  let leafCache = null;
+  const leaves = () => {
+    if (leafCache) return leafCache;
+    const blocks = [...document.body.querySelectorAll("*")].filter((el) => !SKIP.has(el.tagName) && unitOf(el) === el);
+    const outer = new Set();
+    for (const el of blocks) for (let p = el.parentElement; p && !outer.has(p); p = p.parentElement) outer.add(p);
+    leafCache = blocks.filter((el) => !outer.has(el));
+    return leafCache;
+  };
+  const visible = () => leaves().map((el) => [el, el.getBoundingClientRect()])
+    .filter(([, r]) => r.width >= 4 && r.height >= 4 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth);
+  const drawAll = () => {
+    allLayer.replaceChildren();
+    for (const [, r] of visible().slice(0, 800)) place(add(allLayer, args.style.all), docRect(r), 2);
+  };
+  let redrawTimer = 0;
+  let mutationTimer = 0;
+  const later = () => {
+    if (!redrawTimer) redrawTimer = setTimeout(() => { redrawTimer = 0; drawAll(); }, 60);
+  };
+  const observer = new MutationObserver(() => {
+    clearTimeout(mutationTimer);
+    mutationTimer = setTimeout(() => { leafCache = null; later(); }, 250);
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  const item = (el) => {
+    const img = el.querySelector("img[alt]");
+    return { locator: cssPath(el), text: clip(el.innerText || el.textContent, 2000) || (img && img.alt ? "Bild: " + clip(img.alt, 200) : "(ohne Text)") };
+  };
+  const send = (op, items) => {
+    if (items.length) browser.runtime.sendMessage({ type: "picker-pick", op, url: location.href, title: document.title, items }).catch(() => {});
+  };
+  const at = (e) => ({ x: e.clientX + scrollX, y: e.clientY + scrollY });
   let hovered = null;
-  // Inline bits (a link, a bold word) stand for the block around them.
-  const blockOf = (el) => {
-    while (el && el.parentElement && el !== document.body && el.tagName !== "IMG" && getComputedStyle(el).display.startsWith("inline")) el = el.parentElement;
-    return el === document.body || el === document.documentElement ? null : el;
+  let anchor = null;
+  let drag = null;
+  let marking = false;
+
+  const dragTo = (e) => {
+    const p = at(e);
+    if (!drag.moved && Math.hypot(p.x - drag.from.x, p.y - drag.from.y) < 5) return;
+    drag.moved = true;
+    const R = { left: Math.min(drag.from.x, p.x), top: Math.min(drag.from.y, p.y), right: Math.max(drag.from.x, p.x), bottom: Math.max(drag.from.y, p.y) };
+    hoverBox.style.display = "none";
+    place(lassoBox, R, 0);
+    drag.touched = drag.rects.filter(([, r]) => r.left < R.right && r.right > R.left && r.top < R.bottom && r.bottom > R.top);
+    previewLayer.replaceChildren();
+    for (const [, r] of drag.touched) place(add(previewLayer, args.style.preview), r);
   };
-  const place = (b, el) => {
-    const r = el.getBoundingClientRect();
-    b.style.left = r.left + scrollX - 3 + "px";
-    b.style.top = r.top + scrollY - 3 + "px";
-    b.style.width = r.width + 6 + "px";
-    b.style.height = r.height + 6 + "px";
-    b.style.display = "block";
-  };
-  const redraw = () => {
-    if (hovered) place(hoverBox, hovered);
-    chosen.forEach((c, i) => {
-      place(c.box, c.el);
-      c.badge.textContent = String(i + 1);
-    });
-  };
-  const send = (type) => browser.runtime.sendMessage({
-    type, url: location.href, title: document.title,
-    items: chosen.map((c) => ({ text: clip(c.el.innerText || c.el.textContent, 2000), locator: cssPath(c.el) })),
-  }).catch(() => {});
   const onMove = (e) => {
-    const el = blockOf(e.target);
+    if (drag) return dragTo(e);
+    if (e.buttons) return;
+    const el = unitOf(e.target);
     if (el === hovered) return;
     hovered = el;
-    if (el) place(hoverBox, el);
+    if (el) place(hoverBox, docRect(el.getBoundingClientRect()));
     else hoverBox.style.display = "none";
+  };
+  const onDown = (e) => {
+    if (e.button !== 0) return;
+    if (e.altKey) { // Alt+drag: the page marks text as usual
+      marking = true;
+      hoverBox.style.display = "none";
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    drag = { from: at(e), moved: false, touched: [], rects: visible().map(([el, r]) => [el, docRect(r)]) };
+  };
+  const onUp = (e) => {
+    if (e.button !== 0 || (!drag && !marking)) return;
+    if (marking) {
+      marking = false;
+      const sel = getSelection();
+      if (sel.rangeCount && String(sel).trim()) {
+        const range = sel.getRangeAt(0);
+        const host = unitOf(range.commonAncestorContainer);
+        send("add", [{ ...textSpot(range, cssPath), text: clip(String(sel), 20000), context: host ? clip(host.innerText || host.textContent, 600) : "" }]);
+        sel.removeAllRanges();
+        return;
+      }
+    }
+    const moved = drag && drag.moved;
+    const touched = drag ? drag.touched : [];
+    drag = null;
+    lassoBox.style.display = "none";
+    previewLayer.replaceChildren();
+    if (moved) return send(e.ctrlKey || e.metaKey ? "toggle" : "add", touched.map(([el]) => item(el)));
+    const el = unitOf(e.target);
+    if (!el) return;
+    const all = leaves();
+    const a = all.indexOf(anchor);
+    const b = all.indexOf(el);
+    if (e.shiftKey && a >= 0 && b >= 0) send("add", all.slice(Math.min(a, b), Math.max(a, b) + 1).slice(0, 200).map(item));
+    else send("toggle", [item(el)]);
+    anchor = el;
   };
   const onClick = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const el = blockOf(e.target);
-    if (!el) return;
-    const i = chosen.findIndex((c) => c.el === el);
-    if (i >= 0) chosen.splice(i, 1)[0].box.remove();
-    else {
-      const box = makeBox(args.style.chosen);
-      const badge = document.createElement("span");
-      badge.setAttribute("style", "all:initial;position:absolute;left:-9px;top:-9px;" + args.style.badge);
-      box.append(badge);
-      chosen.push({ el, box, badge });
-    }
-    redraw();
-    send("picker-update");
   };
   const onKey = (e) => {
-    if (e.key !== "Enter" && e.key !== "Escape") return;
+    if (e.key === "Alt") { // text cursor – and no menu bar
+      e.preventDefault();
+      setCursor("text");
+    } else if (e.key === "Enter" || e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      stop(true);
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+      e.preventDefault();
+      e.stopPropagation();
+      send("add", visible().slice(0, 200).map(([el]) => item(el)));
+    }
+  };
+  const onKeyUp = (e) => {
+    if (e.key !== "Alt") return;
     e.preventDefault();
-    e.stopPropagation();
-    stop(true);
+    setCursor("crosshair");
   };
+  const handlers = [["mousemove", onMove], ["mousedown", onDown], ["mouseup", onUp], ["click", onClick], ["keydown", onKey], ["keyup", onKeyUp],
+    ["scroll", later], ["resize", later], ["blur", () => setCursor("crosshair")]];
   const stop = (notify) => {
-    removeEventListener("mousemove", onMove, true);
-    removeEventListener("click", onClick, true);
-    removeEventListener("keydown", onKey, true);
-    removeEventListener("resize", redraw);
+    for (const [type, f] of handlers) removeEventListener(type, f, true);
+    observer.disconnect();
+    clearTimeout(redrawTimer);
+    clearTimeout(mutationTimer);
     layer.remove();
+    cursor.remove();
     delete window.__tasksPicker;
-    if (notify) send("picker-end");
+    if (notify) browser.runtime.sendMessage({ type: "picker-end" }).catch(() => {});
   };
-  addEventListener("mousemove", onMove, true);
-  addEventListener("click", onClick, true);
-  addEventListener("keydown", onKey, true);
-  addEventListener("resize", redraw);
+  for (const [type, f] of handlers) addEventListener(type, f, true);
+  drawAll();
   window.__tasksPicker = { stop };
   return { ok: true, title: document.title, url: location.href };
 }
 
+// The picker runs in one tab (frame) at a time.
+let pickerAt = null;
+
+async function startPicker(tabId, frameId) {
+  await stopPicker();
+  const code = `(${pickerInPage})(${JSON.stringify({ style: PICK_STYLE })}, ${cssPathInPage}, ${textSpotInPage}, ${unitOfInPage})`;
+  const [res] = await browser.tabs.executeScript(tabId, { frameId, code });
+  pickerAt = { tabId, frameId };
+  return res || { ok: true };
+}
+
+async function stopPicker() {
+  if (!pickerAt) return;
+  const { tabId, frameId } = pickerAt;
+  pickerAt = null;
+  await browser.tabs.executeScript(tabId, { frameId, code: "window.__tasksPicker && window.__tasksPicker.stop(false)" }).catch(() => {});
+}
+
 browser.runtime.onMessage.addListener((msg) => {
-  if (!msg || (msg.type !== "picker-start" && msg.type !== "picker-stop")) return undefined;
+  if (!msg) return undefined;
+  if (msg.type === "picker-end") pickerAt = null; // ended on the page; the sidebar answers nothing either
+  if (msg.type === "picker-stop") return stopPicker().then(() => ({ ok: true }));
+  if (msg.type !== "picker-start") return undefined;
   return (async () => {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     if (!tab || !/^(https?|file):/i.test(tab.url || "")) return { ok: false, error: "Auf dieser Seite geht das Auswählen nicht." };
-    const code = msg.type === "picker-start"
-      ? `(${pickerInPage})(${JSON.stringify({ style: PICK_STYLE })}, ${cssPathInPage})`
-      : "window.__tasksPicker && window.__tasksPicker.stop(false)";
     try {
-      const [res] = await browser.tabs.executeScript(tab.id, { code });
-      return res || { ok: true };
+      return await startPicker(tab.id, 0);
     } catch (err) {
       return { ok: false, error: "Seite nicht erreichbar: " + ((err && err.message) || err) };
     }
@@ -345,34 +504,48 @@ browser.runtime.onMessage.addListener((msg) => {
 // numbered like the list there, until it is removed or sent. The sidebar
 // reports the full list per tab over a port; when the sidebar closes, its
 // marks go too. Below the flash highlight and the picker.
-const MARK_STYLE = { box: PICK_STYLE.chosen, badge: PICK_STYLE.badge };
+const MARK_STYLE = { box: PICK_STYLE.chosen, text: PICK_STYLE.text, badge: PICK_STYLE.badge };
 
-function marksInPage(args) {
+function marksInPage(args, rangeFromSpot) {
   if (window.__tasksMarks) window.__tasksMarks.stop();
+  const plain = "all:initial;position:absolute;left:0;top:0;pointer-events:none;";
   const layer = document.createElement("div");
-  layer.setAttribute("style", "all:initial;position:absolute;left:0;top:0;width:0;height:0;z-index:2147483646;pointer-events:none");
+  layer.setAttribute("style", plain + "width:0;height:0;z-index:2147483646");
   const marks = [];
-  for (const { locator, n } of args.items) {
+  for (const it of args.items) {
     let el = null;
-    try { el = document.querySelector(locator); } catch (_) { /* stale locator */ }
-    if (!el) continue;
-    const box = document.createElement("div");
-    box.setAttribute("style", "all:initial;position:absolute;pointer-events:none;" + args.style.box);
-    const badge = document.createElement("span");
-    badge.textContent = String(n);
-    badge.setAttribute("style", "all:initial;position:absolute;left:-9px;top:-9px;" + args.style.badge);
-    box.append(badge);
-    layer.append(box);
-    marks.push({ el, box });
+    let range = null;
+    try {
+      if (it.start != null) range = rangeFromSpot(it);
+      else el = document.querySelector(it.locator);
+    } catch (_) {
+      // stale locator
+    }
+    if (!el && !range) continue;
+    const holder = document.createElement("div");
+    holder.setAttribute("style", plain);
+    layer.append(holder);
+    marks.push({ el, range, holder, n: it.n });
   }
   if (!marks.length) return 0;
+  // Blocks get a frame, text the marker look (one piece per line).
   const redraw = () => {
-    for (const { el, box } of marks) {
-      const r = el.getBoundingClientRect();
-      box.style.left = r.left + scrollX - 3 + "px";
-      box.style.top = r.top + scrollY - 3 + "px";
-      box.style.width = r.width + 6 + "px";
-      box.style.height = r.height + 6 + "px";
+    for (const m of marks) {
+      m.holder.replaceChildren();
+      const rects = m.el ? [m.el.getBoundingClientRect()] : [...m.range.getClientRects()].filter((r) => r.width > 1);
+      const pad = m.el ? 3 : 1;
+      rects.forEach((r, i) => {
+        const piece = document.createElement("div");
+        piece.setAttribute("style", plain + (m.el ? args.style.box : args.style.text));
+        Object.assign(piece.style, { left: r.left + scrollX - pad + "px", top: r.top + scrollY - pad + "px", width: r.width + 2 * pad + "px", height: r.height + 2 * pad + "px" });
+        if (!i) {
+          const badge = document.createElement("span");
+          badge.textContent = String(m.n);
+          badge.setAttribute("style", "all:initial;position:absolute;left:-9px;top:-9px;" + args.style.badge);
+          piece.append(badge);
+        }
+        m.holder.append(piece);
+      });
     }
   };
   redraw();
@@ -397,7 +570,7 @@ browser.runtime.onConnect.addListener((port) => {
   if (port.name !== "marks") return;
   const marked = new Set();
   const draw = (tabId, frameId, items) => browser.tabs.executeScript(tabId, { frameId,
-    code: `(${marksInPage})(${JSON.stringify({ style: MARK_STYLE, items })})` }).catch(() => {}); // tab gone or no access
+    code: `(${marksInPage})(${JSON.stringify({ style: MARK_STYLE, items })}, ${rangeFromSpotInPage})` }).catch(() => {}); // tab gone or no access
   port.onMessage.addListener((msg) => {
     if (!msg || msg.type !== "marks-set") return;
     const key = msg.tabId + ":" + msg.frameId;
@@ -419,11 +592,11 @@ async function capturePage(info, tab) {
   let cap = null;
   try {
     const args = { targetId: info.targetElementId ?? null, srcUrl: info.srcUrl || "", limits: CAPTURE_LIMITS };
-    [cap] = await browser.tabs.executeScript(tab.id, { frameId: info.frameId || 0, code: `(${captureInPage})(${JSON.stringify(args)}, ${cssPathInPage})` });
+    [cap] = await browser.tabs.executeScript(tab.id, { frameId: info.frameId || 0, code: `(${captureInPage})(${JSON.stringify(args)}, ${cssPathInPage}, ${textSpotInPage}, ${unitOfInPage})` });
   } catch (_) {
     // e.g. about: pages – the menu data has to do
   }
-  cap = { selection: "", links: [], clicked: "", section: "", heading: "", description: "", image: null, locator: "", ...(cap || {}) };
+  cap = { selection: "", links: [], clicked: "", section: "", heading: "", description: "", image: null, locator: "", spot: null, ...(cap || {}) };
   if (!cap.selection.trim()) cap.selection = info.selectionText || "";
   cap.link = info.linkUrl ? { href: info.linkUrl, text: info.linkText || "" } : null;
   cap.image = info.srcUrl ? { src: info.srcUrl, ...(cap.image || {}) } : null;
@@ -435,6 +608,9 @@ async function captureToChat(info, tab) {
   // Image first: the highlight must not end up in the cut-out.
   const image = info.srcUrl ? await captureImage(tab, info.frameId, cap.locator) : null;
   highlightOnPage(tab.id, info.frameId, cap.locator);
+  // Straight on with the picker: more places from the same page.
+  const picking = await startPicker(tab.id, info.frameId || 0).then((r) => !!(r && r.ok), () => false);
+  const page = { tabId: tab.id, frameId: info.frameId || 0 };
   const item = {
     id: newId(),
     at: Date.now(),
@@ -444,7 +620,8 @@ async function captureToChat(info, tab) {
     excerpt: captureExcerpt(cap, tab),
     text: [`Seite: ${tab.title || ""}`, `Adresse: ${tab.url || ""}`, ...(cap.description ? [`Beschreibung: ${cap.description}`] : []), ...describeCapture(cap)].join("\n"),
     ...(image ? { image } : {}),
-    ...(cap.locator ? { page: { tabId: tab.id, frameId: info.frameId || 0, locator: cap.locator } } : {}),
+    ...(cap.spot ? { page: { ...page, ...cap.spot } } : cap.locator ? { page: { ...page, locator: cap.locator } } : {}),
+    ...(picking ? { picking } : {}),
   };
   const { [CAPTURE_KEY]: queue } = await browser.storage.local.get(CAPTURE_KEY);
   await browser.storage.local.set({ [CAPTURE_KEY]: [...(Array.isArray(queue) ? queue : []), item].slice(-10) });
@@ -743,7 +920,7 @@ Aktionen (jedes Feld ist Text; nicht benutzte Felder leer lassen; target/list/pa
 
 So funktioniert Tasks – für Fragen zur Erweiterung selbst; antworte danach, nicht nach Vermutungen:
 - Speicher: Aufgaben und Listen über Firefox Sync (auf allen Rechnern mit demselben Firefox-Konto). Verlauf, dieser Chat und die KI-Einstellungen bleiben auf diesem Rechner.
-- „Zu Tasks hinzufügen" (Rechtsklick auf markierten Text, einen Link, ein Bild oder irgendwo auf der Seite) legt die Stelle in die Liste „Bezug" über dem Chat-Eingabefeld; sie leuchtet auf der Seite kurz auf, ein Klick auf den Eintrag holt den Tab nach vorn und zeigt sie wieder, × entfernt einen einzelnen Eintrag. Mehrere Rechtsklicks sammeln sich. Erst beim Senden bekommst du sie: Titel, Adresse und Beschreibung der Seite, den markierten Text samt den Link-Zielen darin, einen angeklickten Link, bei Bildern das Bild selbst, die angeklickte Stelle und den Abschnitt drumherum. Den ganzen Seitentext bekommst du nur über „+ → Ganze Seite schicken". Vor dem Senden prüft Tasks die Anhänge auf IBAN, Kreditkarten, Schlüssel und Passwörter und fragt dann nach.
+- „Zu Tasks hinzufügen" (Rechtsklick auf markierten Text, einen Link, ein Bild oder irgendwo auf der Seite) legt die Stelle in die Liste „Bezug" über dem Chat-Eingabefeld; sie bleibt auf der Seite markiert, und gleich danach ist die Auswahl (wie bei „+") an, um weitere Stellen dazuzunehmen; ein Klick auf den Eintrag holt den Tab nach vorn und zeigt sie wieder, × entfernt einen einzelnen Eintrag. Mehrere Rechtsklicks sammeln sich. Erst beim Senden bekommst du sie: Titel, Adresse und Beschreibung der Seite, den markierten Text samt den Link-Zielen darin, einen angeklickten Link, bei Bildern das Bild selbst, die angeklickte Stelle und den Abschnitt drumherum. Den ganzen Seitentext bekommst du nur über „+ → Ganze Seite schicken". Vor dem Senden prüft Tasks die Anhänge auf IBAN, Kreditkarten, Schlüssel und Passwörter und fragt dann nach.
 - Dieser Chat sieht nur, was oben unter „Du bekommst" steht – keine Webseiten, keine offenen Tabs.
 - KI-Verbindung (⋯ → „KI einrichten …"): Standard ist Claude Code über das Claude-Abo (Hilfsprogramm aus native/); alternativ ein eigenes Modell per API (auch lokal, z. B. Ollama) oder „Keine KI" (dann gibt es den Rechtsklick-Eintrag nicht und der Chat kann nicht antworten).
 - Links: eigenes Feld, beliebig viele, auch obsidian://, Dateien (file:///… oder einfach ein Pfad) und mailto:. Nicht-Web-Links öffnet das Hilfsprogramm mit dem passenden Programm, ausführbare Dateien nie. 🔗 zählt die Links inklusive Unteraufgaben; ein Klick öffnet sie als Firefox-Tab-Gruppe.
@@ -754,7 +931,7 @@ So funktioniert Tasks – für Fragen zur Erweiterung selbst; antworte danach, n
 - Markdown in Titel und Notiz (fett, kursiv, durchgestrichen, Code, Links; in Notizen auch Listen, Überschriften, Zitate).
 - Tastatur: Strg+Alt+A Seitenleiste auf/zu, / Chat, Enter neue Aufgabe, Tab / Shift+Tab ein-/ausrücken, Strg+Enter abhaken, Alt+↑/↓ verschieben, Esc schließt. Alles unter ⋯ → „Tastenkürzel & Markdown".
 - Einstellungen: Design (System/hell/dunkel), Bereich „Erledigt" auf/zu und die KI-Verbindung lassen sich auch hier im Chat ändern (set_setting); alles andere über ⋯ und den Knopf oben rechts.
-- „+" im Chat: Element auf der Seite auswählen (Blöcke anklicken, sie erscheinen nummeriert im „Bezug"; Enter oder Esc beendet), Datei hinzufügen (PDF, Bild, Text; auch per Drag & Drop auf den Chat) und ganze Seite schicken (Text der aktuellen Seite, Firefox fragt einmal nach der Erlaubnis). Anhänge gehen mit der nächsten Nachricht an dich. Markierter Chat-Text kommt über „↩ Antworten" als Zitat in den „Bezug"; mehrere Zitate werden angehängt.
+- „+" im Chat: Element auf der Seite auswählen (alle Blöcke sind gestrichelt umrandet; Klick wählt einen Block an oder ab, Umschalt+Klick alles dazwischen, Ziehen einen Rahmen, Strg+A alle sichtbaren, Alt+Ziehen markiert Text; jedes Stück wird ein eigener nummerierter Eintrag im „Bezug"; Enter oder Esc beendet), Datei hinzufügen (PDF, Bild, Text; auch per Drag & Drop auf den Chat) und ganze Seite schicken (Text der aktuellen Seite, Firefox fragt einmal nach der Erlaubnis). Anhänge gehen mit der nächsten Nachricht an dich. Markierter Chat-Text kommt über „↩ Antworten" als Zitat in den „Bezug"; mehrere Zitate werden angehängt.
 - Layout: Ist die Seitenleiste breit, stehen Liste und Chat nebeneinander; schmal gibt es die Reiter „Aufgaben | Chat" und mit / eine Schnell-Karte.
 
 Was es NICHT gibt: Tags, Prioritäten, Farben, Erinnerungen/Benachrichtigungen, Suche/Filter, Anhänge, Teilen, Zugriff auf Webseiten oder das Internet. Listen löschen kannst du nicht – das macht der Nutzer selbst über ⋯ → „Liste löschen". Wird danach gefragt, sag ehrlich, dass es das (noch) nicht gibt, und biete – wenn sinnvoll – eine Lösung mit vorhandenen Mitteln an (z. B. „#klausur" als Konvention im Titel; markieren oder öffnen kannst du dann alles mit #klausur). Täusche nie vor, etwas getan zu haben, das keine Aktion ist.

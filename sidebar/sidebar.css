@@ -2010,6 +2010,10 @@ button.qb:hover {
   white-space: pre-wrap;
 }
 
+.ctx-textsel .ctx-text {
+  font-style: italic;
+}
+
 .ctx-x {
   position: absolute;
   top: 2px;
