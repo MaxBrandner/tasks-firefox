@@ -9,12 +9,12 @@ function area() { const data = {}; return { data,
   async set(o) { Object.assign(data, structuredClone(o)); }, async remove(k) { for (const x of [].concat(k)) delete data[x]; } }; }
 const sync = area(), local = area();
 const storageListeners = [], msgListeners = [];
-let clickHandler, opened = 0, lastMsg, reply, nativeCalls = 0, permGranted = true, lastReq, apiReply, reqs = [], scripts = [], capReply = () => ({}), activated = [];
+let clickHandler, opened = 0, lastMsg, reply, nativeCalls = 0, permGranted = true, lastReq, apiReply, reqs = [], scripts = [], capReply = () => ({}), activated = [], connectHandler;
 const URL0 = "https://ilias.hhu.de/ilias.php?baseClass=ilexercisehandlergui&ref_id=2209395&ass_id=74843";
 const ctx = { console, crypto: globalThis.crypto, structuredClone, URL: globalThis.URL, TextDecoder, atob, btoa,
   fetch: async (url, init) => { const r = { url, init, body: JSON.parse(init.body) }; reqs.push(r); lastReq = r; return apiReply(r); },
   browser: { storage: { sync, local, onChanged: { addListener(f) { storageListeners.push(f); } } },
-    runtime: { id: "tasks@brandner.name", onMessageExternal: { addListener() {} }, onMessage: { addListener(f) { msgListeners.push(f); } },
+    runtime: { id: "tasks@brandner.name", onMessageExternal: { addListener() {} }, onConnect: { addListener(f) { connectHandler = f; } }, onMessage: { addListener(f) { msgListeners.push(f); } },
       sendNativeMessage: async (name, msg) => { lastMsg = { name, msg }; nativeCalls++; return reply(); } },
     permissions: { async contains() { return permGranted; } },
     browserAction: { onClicked: { addListener() {} } },
@@ -69,6 +69,14 @@ const capture = async (info, cap, tab = { id: 1, url: URL0, title: "Übung 2" })
   scripts = [];
   const shown = await msgListeners.map((f) => f({ type: "show-on-page", tabId: 1, frameId: 0, locator: "body > p" })).find(Boolean);
   ok(shown && shown.ok && /"scroll":true/.test(scripts[0].code) && activated.join() === "1,true", "„Auf der Seite zeigen“: holt den Tab nach vorn, scrollt hin und hebt hervor");
+  // marks of the Bezug: drawn per tab, gone when the sidebar closes
+  scripts = [];
+  const port = { name: "marks", onMessage: { addListener(f) { port.send = f; } }, onDisconnect: { addListener(f) { port.close = f; } } };
+  connectHandler(port);
+  port.send({ type: "marks-set", tabId: 4, frameId: 0, items: [{ locator: "li", n: 2 }] }); await tick();
+  ok(scripts.length === 1 && /marksInPage/.test(scripts[0].code) && /"items":\[\{"locator":"li","n":2\}\]/.test(scripts[0].code), "Bezug: Stellen bleiben auf der Seite markiert (mit Nummer aus der Liste)");
+  port.close(); await tick();
+  ok(scripts.length === 2 && /"items":\[\]/.test(scripts[1].code), "Seitenleiste zu → Markierungen verschwinden");
   scripts = [];
   const pk = await msgListeners.map((f) => f({ type: "picker-start" })).find(Boolean);
   ok(pk && pk.ok && pk.title === "Termine 2026" && /pickerInPage/.test(scripts[0].code) && /cssPathInPage/.test(scripts[0].code), "Picker startet im aktiven Tab (mit CSS-Pfad-Helfer)");

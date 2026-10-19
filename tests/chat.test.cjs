@@ -152,18 +152,22 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   const toSidebar = (m) => H.msgListeners.forEach((f) => f(m, { tab: { id: 7 } }));
   const TERMINE = { title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine" };
   const BLOCKS = [{ text: "21.04.2026 - 100. Geburtstag Elisabeth II.", locator: "li:nth-of-type(1)" }, { text: "30.04.2026 - Walpurgisnacht", locator: "li:nth-of-type(3)" }];
+  const marksFor = (tab) => (H.marks || []).filter((m) => m.tabId === tab).pop();
   toSidebar({ type: "picker-update", ...TERMINE, items: BLOCKS }); await H.tick();
+  ok(!marksFor(7), "während des Pickers zeichnet nur der Picker (keine doppelten Rahmen)");
   ok(webRows().map((r) => r.querySelector(".ctx-num").textContent + r.querySelector(".ctx-text").textContent).join("|") === "1.21.04.2026 - 100. Geburtstag Elisabeth II.|2.30.04.2026 - Walpurgisnacht", "gewählte Blöcke erscheinen live als nummerierte Liste mit ihrem Text");
   webRows()[0].querySelector(".ctx-x").click(); await H.tick();
   toSidebar({ type: "picker-update", ...TERMINE, items: BLOCKS }); await H.tick();
   ok(webRows().length === 1 && /Walpurgisnacht/.test(webRows()[0].textContent) && webRows()[0].querySelector(".ctx-num").textContent === "1.", "× entfernt einen Block – auch das nächste Update bringt ihn nicht zurück");
   toSidebar({ type: "picker-end", ...TERMINE, items: BLOCKS }); await H.tick();
   ok(!hint() && webRows().length === 1, "Enter/Esc auf der Seite beendet den Picker, der Eintrag bleibt");
+  ok(JSON.stringify(marksFor(7)) === '{"type":"marks-set","tabId":7,"frameId":0,"items":[{"locator":"li:nth-of-type(3)","n":1}]}', "danach bleibt der Block auf der Seite markiert, mit seiner Nummer");
   H.shown = [];
   webRows()[0].click(); await H.tick();
   ok(H.shown.length === 1 && H.shown[0].tabId === 7 && H.shown[0].locator === "li:nth-of-type(3)", "Klick auf einen Eintrag zeigt ihn auf der Seite (im richtigen Tab)");
   await say("Leg das an", { reply: "Ok.", actions: [], highlight: [] });
   ok(/Von der Webseite \(1\):\n<<<\nSeite: Termine 2026\nAdresse: https:\/\/www\.sonntagsblatt\.de\/termine\n\nGewählter Block:\n30\.04\.2026 - Walpurgisnacht\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]) && !/Elisabeth/.test(H.chatPrompts[H.chatPrompts.length - 1]) && $("chatCtx").hidden, "gesendet: nur der verbliebene Block steht im Prompt, Bezug leer");
+  ok(marksFor(7).items.length === 0, "gesendet → Markierung auf der Seite weg");
   const sentPick = [...$("chatLog").querySelectorAll(".chat-msg.user")].pop();
   ok(/Walpurgisnacht/.test(sentPick.querySelector(".chat-quote-ref .ctx-web").textContent) && !sentPick.querySelector(".chat-quote-ref .ctx-x"), "gesendete Nachricht zeigt den Bezug (ohne ×)");
   H.shown = [];
@@ -180,6 +184,7 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   H.shown = [];
   capCard().click(); await H.tick();
   ok(H.shown.length === 1 && H.shown[0].locator === "li:nth-of-type(1)" && H.shown[0].tabId === 3, "Klick auf den Eintrag zeigt die Stelle auf der Seite");
+  ok(marksFor(3).items.map((i) => i.locator + "#" + i.n).join() === "li:nth-of-type(1)#1", "Rechtsklick-Stelle bleibt auf der Seite markiert");
   await say("", { reply: "„100. Geburtstag Elisabeth II.“ angelegt.", actions: [], highlight: [] });
   ok(/Von der Webseite \(1\):\n<<<\nSeite: Termine 2026[\s\S]*Angeklickte Stelle: »21\.04\.2026[\s\S]*>>>\n+Neue Nachricht des Nutzers:\n<<<\nZu Tasks hinzufügen\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]) && !capCard(), "leer gesendet: „Zu Tasks hinzufügen“ mit dem Eintrag als Bezug");
   ok(/Bezug: Webseite „Termine 2026“: »21\.04\.2026/.test((await say("Und noch?", { reply: "Nichts.", actions: [], highlight: [] }), H.chatPrompts[H.chatPrompts.length - 1])), "im Verlauf an die KI steht der Bezug der früheren Nachricht");
@@ -200,8 +205,9 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   const before = H.chatPrompts.length;
   await say("", { reply: "ok", actions: [], highlight: [] });
   [...warn().querySelectorAll("button")].find((b) => /Abbrechen/.test(b.textContent)).click(); await H.tick();
-  ok(H.chatPrompts.length === before && !warn() && capCard(), "„Abbrechen“: nichts gesendet, Eintrag bleibt");
+  ok(H.chatPrompts.length === before && !warn() && capCard() && marksFor(3).items.length === 1, "„Abbrechen“: nichts gesendet, Eintrag und Markierung bleiben");
   capCard().querySelector(".ctx-x").click(); await H.tick();
+  ok(marksFor(3).items.length === 0, "× entfernt auch die Markierung auf der Seite");
   // references to things created in the same answer ([[T:ref:x]]) become real chips
   await say("Leg Gruppe Test mit Unterpunkt an", { reply: "[[T:ref:g]] mit [[T:ref:u]] angelegt.", highlight: [], actions: [A({ op: "create_task", title: "Gruppe Test", ref: "g" }), A({ op: "create_task", parent: "ref:g", title: "Unterpunkt", ref: "u" })] });
   const refChips = [...last().querySelectorAll(".chat-text .ref-chip")].map((c) => c.textContent);

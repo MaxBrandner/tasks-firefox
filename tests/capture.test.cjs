@@ -12,6 +12,7 @@ const stub = new Proxy(function () {}, { get: (t, k) => (k === "then" ? undefine
 const bg = vm.createContext({ browser: stub, console, URL, setTimeout, clearTimeout, crypto: globalThis.crypto });
 vm.runInContext(fs.readFileSync(path.join(ROOT, "background.js"), "utf8"), bg);
 const STYLE = vm.runInContext("HIGHLIGHT_STYLE", bg); // const: not a property of the context
+const MARKS = vm.runInContext("MARK_STYLE", bg);
 
 const page = new JSDOM(`<!DOCTYPE html><html><head><meta name="description" content="Jahrestage 2026"><style>a, b, span { display: inline; }</style></head><body>
   <header><h1>Termine 2026</h1></header>
@@ -48,6 +49,16 @@ const box = w.document.getElementById("tasks-ext-highlight");
 ok(found === true && box && /→ Tasks/.test(box.textContent) && /pointer-events:\s*none/.test(box.getAttribute("style")), "Overlay „→ Tasks“ liegt über der Stelle, ohne Klicks abzufangen");
 ok(w.document.querySelectorAll("li")[1].getAttribute("style") === null, "die Seite selbst bleibt unverändert");
 ok(run("highlightInPage", { locator: "body > nav > li", style: STYLE, ms: 50, scroll: false }) === false, "Stelle nicht (mehr) da → false, kein Fehler");
+
+// marks of the Bezug: stay until the list changes
+const marks = (items) => w.eval(`(${bg.marksInPage})(${JSON.stringify({ style: MARKS, items })})`);
+const badges = () => (w.__tasksMarks ? [...w.document.documentElement.querySelectorAll(":scope > div span")].map((b) => b.textContent).join() : "");
+ok(marks([{ locator: "body > main > ul > li:nth-of-type(1)", n: 2 }, { locator: "body > nav", n: 3 }, { locator: "::kaputt", n: 4 }]) === 1 && badges() === "2", "Markierung bleibt mit der Nummer aus dem Chat; fehlende oder kaputte Stelle wird übersprungen");
+marks([{ locator: "body > main > ul > li:nth-of-type(2)", n: 1 }]);
+ok(badges() === "1" && w.document.documentElement.querySelectorAll(":scope > div").length === 1, "neue Liste ersetzt die alten Markierungen");
+w.__tasksMarks.hide();
+ok(w.document.documentElement.querySelector(":scope > div").style.display === "none", "fürs Bild ausblendbar");
+ok(marks([]) === 0 && !w.__tasksMarks && !w.document.documentElement.querySelector(":scope > div"), "leere Liste entfernt alle Markierungen");
 
 // element picker
 const sent = [];

@@ -2893,6 +2893,38 @@
     ctxEl.replaceChildren(...ctxView(chatCtx, false),
       ...(pickerActive ? [h("div", { class: "ctx-item ctx-hint" }, "⌖ Blöcke auf der Seite anklicken · Enter oder Esc beendet",
         h("button", { class: "icon-btn small ctx-x", type: "button", title: "Auswählen beenden", "aria-label": "Auswählen beenden", onclick: stopPicker }, icon("close")))] : []));
+    syncMarks();
+  }
+
+  // The web entries stay outlined on their pages (numbered like the list)
+  // until removed or sent; the background draws them. While the picker runs,
+  // it draws its own blocks. Only changed tabs are sent.
+  let marksPort = null;
+  let marksSent = new Map(); // "tabId:frameId" → JSON of the items
+  function syncMarks() {
+    const groups = new Map();
+    let n = 0;
+    for (const e of chatCtx) {
+      if (e.type !== "web") continue;
+      n++;
+      if (!e.page || e.page.tabId == null || !e.page.locator || (pickerActive && e.pick === pickId)) continue;
+      const key = e.page.tabId + ":" + (e.page.frameId || 0);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ locator: e.page.locator, n });
+    }
+    const next = new Map();
+    for (const key of new Set([...marksSent.keys(), ...groups.keys()])) {
+      const items = groups.get(key) || [];
+      const json = JSON.stringify(items);
+      if (items.length) next.set(key, json);
+      if (marksSent.get(key) === json) continue;
+      const [tabId, frameId] = key.split(":").map(Number);
+      try {
+        marksPort = marksPort || browser.runtime.connect({ name: "marks" });
+        marksPort.postMessage({ type: "marks-set", tabId, frameId, items });
+      } catch (_) { /* background not there */ }
+    }
+    marksSent = next;
   }
 
   function addCtx(e) {

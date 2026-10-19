@@ -17,7 +17,7 @@ const listeners = [];
 const area = () => ({ async get() { return {}; }, async set() {} });
 const ctx = { console, crypto: globalThis.crypto, structuredClone, URL, browser: {
   storage: { sync: area(), local: area(), onChanged: { addListener() {} } },
-  runtime: { id: "tasks@brandner.name", onMessageExternal: { addListener() {} }, onMessage: { addListener(f) { listeners.push(f); } }, sendNativeMessage: native },
+  runtime: { id: "tasks@brandner.name", onMessageExternal: { addListener() {} }, onConnect: { addListener() {} }, onMessage: { addListener(f) { listeners.push(f); } }, sendNativeMessage: native },
   browserAction: { onClicked: { addListener() {} } }, sidebarAction: {},
   contextMenus: { create() {}, async removeAll() {}, onClicked: { addListener() {} } } } };
 vm.createContext(ctx);

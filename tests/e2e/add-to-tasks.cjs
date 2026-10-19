@@ -29,7 +29,7 @@ let click, sel = "";
 const listeners = [];
 const ctx = { console, crypto: globalThis.crypto, structuredClone, URL, TextDecoder, atob, btoa, browser: {
   storage: { sync: H.sync, local: H.local, onChanged: { addListener() {} } },
-  runtime: { id: "tasks@brandner.name", onMessageExternal: { addListener() {} }, onMessage: { addListener(f) { listeners.push(f); } }, sendNativeMessage: native },
+  runtime: { id: "tasks@brandner.name", onMessageExternal: { addListener() {} }, onConnect: { addListener() {} }, onMessage: { addListener(f) { listeners.push(f); } }, sendNativeMessage: native },
   permissions: { async contains() { return true; } },
   browserAction: { onClicked: { addListener() {} } }, sidebarAction: { open() {} },
   contextMenus: { create() {}, async removeAll() {}, onClicked: { addListener(f) { click = f; } } },

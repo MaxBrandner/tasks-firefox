@@ -341,6 +341,78 @@ browser.runtime.onMessage.addListener((msg) => {
   })();
 });
 
+// --- Marks: what sits in the chat's "Bezug" stays outlined on its page,
+// numbered like the list there, until it is removed or sent. The sidebar
+// reports the full list per tab over a port; when the sidebar closes, its
+// marks go too. Below the flash highlight and the picker.
+const MARK_STYLE = { box: PICK_STYLE.chosen, badge: PICK_STYLE.badge };
+
+function marksInPage(args) {
+  if (window.__tasksMarks) window.__tasksMarks.stop();
+  const layer = document.createElement("div");
+  layer.setAttribute("style", "all:initial;position:absolute;left:0;top:0;width:0;height:0;z-index:2147483646;pointer-events:none");
+  const marks = [];
+  for (const { locator, n } of args.items) {
+    let el = null;
+    try { el = document.querySelector(locator); } catch (_) { /* stale locator */ }
+    if (!el) continue;
+    const box = document.createElement("div");
+    box.setAttribute("style", "all:initial;position:absolute;pointer-events:none;" + args.style.box);
+    const badge = document.createElement("span");
+    badge.textContent = String(n);
+    badge.setAttribute("style", "all:initial;position:absolute;left:-9px;top:-9px;" + args.style.badge);
+    box.append(badge);
+    layer.append(box);
+    marks.push({ el, box });
+  }
+  if (!marks.length) return 0;
+  const redraw = () => {
+    for (const { el, box } of marks) {
+      const r = el.getBoundingClientRect();
+      box.style.left = r.left + scrollX - 3 + "px";
+      box.style.top = r.top + scrollY - 3 + "px";
+      box.style.width = r.width + 6 + "px";
+      box.style.height = r.height + 6 + "px";
+    }
+  };
+  redraw();
+  document.documentElement.append(layer);
+  const ro = typeof ResizeObserver === "function" ? new ResizeObserver(redraw) : null;
+  if (ro) ro.observe(document.body);
+  addEventListener("resize", redraw);
+  window.__tasksMarks = {
+    hide: () => { layer.style.display = "none"; },
+    show: () => { layer.style.display = ""; },
+    stop: () => {
+      removeEventListener("resize", redraw);
+      if (ro) ro.disconnect();
+      layer.remove();
+      delete window.__tasksMarks;
+    },
+  };
+  return marks.length;
+}
+
+browser.runtime.onConnect.addListener((port) => {
+  if (port.name !== "marks") return;
+  const marked = new Set();
+  const draw = (tabId, frameId, items) => browser.tabs.executeScript(tabId, { frameId,
+    code: `(${marksInPage})(${JSON.stringify({ style: MARK_STYLE, items })})` }).catch(() => {}); // tab gone or no access
+  port.onMessage.addListener((msg) => {
+    if (!msg || msg.type !== "marks-set") return;
+    const key = msg.tabId + ":" + msg.frameId;
+    if (msg.items.length) marked.add(key);
+    else marked.delete(key);
+    draw(msg.tabId, msg.frameId, msg.items);
+  });
+  port.onDisconnect.addListener(() => {
+    for (const key of marked) {
+      const [tabId, frameId] = key.split(":").map(Number);
+      draw(tabId, frameId, []);
+    }
+  });
+});
+
 // What the right-click points at. activeTab allows the page script for
 // exactly this tab after the context menu click.
 async function capturePage(info, tab) {
@@ -398,11 +470,14 @@ function captureExcerpt(cap, tab) {
 async function captureImage(tab, frameId, locator) {
   if (!locator || frameId || typeof OffscreenCanvas === "undefined" || !browser.tabs.captureVisibleTab) return null;
   try {
-    const code = `(() => { const el = document.querySelector(${JSON.stringify(locator)}); if (!el) return null;
+    // The marks of the Bezug must not end up in the cut-out either.
+    const code = `(() => { if (window.__tasksMarks) window.__tasksMarks.hide();
+      const el = document.querySelector(${JSON.stringify(locator)}); if (!el) return null;
       const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height, dpr: devicePixelRatio }; })()`;
     const [box] = await browser.tabs.executeScript(tab.id, { code });
-    if (!box || box.w < 8 || box.h < 8) return null;
-    const shot = await browser.tabs.captureVisibleTab(tab.windowId, { format: "png" });
+    const shot = box && box.w >= 8 && box.h >= 8 ? await browser.tabs.captureVisibleTab(tab.windowId, { format: "png" }).catch(() => null) : null;
+    browser.tabs.executeScript(tab.id, { code: "window.__tasksMarks && window.__tasksMarks.show()" }).catch(() => {});
+    if (!shot) return null;
     const bmp = await createImageBitmap(await (await fetch(shot)).blob());
     const sx = Math.max(0, box.x * box.dpr);
     const sy = Math.max(0, box.y * box.dpr);

@@ -28,7 +28,7 @@ const tick = () => new Promise((r) => setTimeout(r, 30));
     const area = () => ({ data: {}, async get() { return {}; }, async set() {} });
     const ctx = { console, crypto: globalThis.crypto, structuredClone, URL, browser: {
       storage: { sync: area(), local: area(), onChanged: { addListener() {} } },
-      runtime: { id, onMessageExternal: { addListener(f) { ext = f; } }, onMessage: { addListener() {} } },
+      runtime: { id, onMessageExternal: { addListener(f) { ext = f; } }, onConnect: { addListener() {} }, onMessage: { addListener() {} } },
       browserAction: { onClicked: { addListener() {} } }, sidebarAction: {},
       contextMenus: { create(o) { menu = o; }, async removeAll() {}, onClicked: { addListener() {} } } } };
     vm.createContext(ctx); vm.runInContext(fs.readFileSync(P + "/background.js", "utf8"), ctx);
