@@ -19,7 +19,8 @@ Google, kein eigener Server.
   Abgehakte Unteraufgaben bleiben an ihrem Platz.
 - **Fälligkeit** – Schnellknöpfe Heute / Morgen / +1 Woche oder Datum, dazu
   optional eine **Uhrzeit** (tippen wie „14:30“, „1430“ oder „2pm“). Anzeige
-  „Heute", „Morgen", Wochentag; unter 48 h ein **Countdown** („noch 1 T 18 Std"), danach „überfällig" in Rot.
+  „Heute", „Morgen", Wochentag; unter 48 h ein **Countdown** („noch 1 T 18 Std"),
+  danach „überfällig" in Rot.
 - **↻ Wöchentlich** – ist eine Abgabe fällig oder abgehakt, entsteht die nächste
   eine Woche später (Zahl am Titelende zählt mit: „Blatt 3" → „Blatt 4"). Die
   Vorwoche bleibt als eigene Aufgabe stehen und wird nicht überschrieben.
@@ -217,7 +218,7 @@ Fälligkeit", „Öffne alle Links zu DL".
   Neuladen erscheinen die Markierungen wieder; baut eine Seite ihren Inhalt
   um, finden sie ihren Block über den Text wieder. Die Tasten erklärt der
   Bezug beim ersten Mal; danach weiß der Chat sie. Außerdem: Datei hinzufügen (PDF, Bild, Text – auch per Drag & Drop
-  irgendwohin auf Tasks, der Chat geht dann auf) oder die ganze aktuelle Seite
+  irgendwohin auf Tasks oder per Strg+V, der Chat geht dann auf) oder die ganze aktuelle Seite
   schicken (Firefox fragt einmal nach der Erlaubnis). Firefox-eigene Seiten und
   lokale Dateien (file://) sperrt Firefox für Add-ons – eine lokale Datei
   ziehst du einfach in Tasks. Dateien und ganze Seiten erscheinen als Karten über dem

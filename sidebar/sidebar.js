@@ -3887,6 +3887,21 @@
     chatInputEl.focus();
   });
 
+  // Ctrl+V with an image or file on the clipboard (screenshot, "Grafik kopieren"):
+  // attachment in the chat, like a drop. In a task's fields, text on the
+  // clipboard still goes into the field.
+  document.addEventListener("paste", (e) => {
+    const files = [...((e.clipboardData && e.clipboardData.files) || [])];
+    if (!files.length || modalOpen()) return;
+    const a = document.activeElement;
+    if (a && a.closest && a.closest("li.task") && e.clipboardData.getData("text/plain")) return;
+    e.preventDefault();
+    if (!isWide() && chatMode === "tasks") setChatMode("quick");
+    // Firefox calls every pasted image "image.png".
+    addFiles(files.map((f) => f.name === "image.png" ? new File([f], "Bild aus der Zwischenablage.png", { type: f.type }) : f));
+    chatInputEl.focus();
+  });
+
   // Plain text of a chat message: references become names.
   function chatPlainText(text) {
     return (text || "").replace(/\[\[([TL]):([A-Za-z0-9_-]{1,64})\]\]/g, (_, kind, id) => {
