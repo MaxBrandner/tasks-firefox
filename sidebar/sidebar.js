@@ -2891,7 +2891,7 @@
   function renderCtx() {
     ctxEl.hidden = !chatCtx.length && !pickerActive;
     ctxEl.replaceChildren(...ctxView(chatCtx, false),
-      ...(pickerActive ? [h("div", { class: "ctx-item ctx-hint" }, "⌖ Klick: Block an/aus · Umschalt+Klick: alles dazwischen · Ziehen: Rahmen · Alt+Ziehen: Text · Strg+A: alle sichtbaren · Enter/Esc: fertig",
+      ...(pickerActive ? [h("div", { class: "ctx-item ctx-hint" }, "⌖ Klick: an/aus · Umschalt+Klick: alles dazwischen · Ziehen: Rahmen · Alt+Ziehen: Text · Strg+A: alle sichtbaren · Strg+Z: zurück · Esc: fertig, 2× Esc: alle weg",
         h("button", { class: "icon-btn small ctx-x", type: "button", title: "Auswählen beenden", "aria-label": "Auswählen beenden", onclick: stopPicker }, icon("close")))] : []));
     syncMarks();
   }
@@ -2933,9 +2933,45 @@
   }
 
   function removeCtx(i) {
+    ctxStep();
     chatCtx.splice(i, 1);
     renderCtx();
   }
+
+  // Undo for the Bezug (Ctrl+Z / Ctrl+Y on the marked page): every pick,
+  // removal and clearing is a step; sending starts afresh.
+  let ctxUndo = [];
+  let ctxRedo = [];
+  function ctxStep() {
+    ctxUndo.push(chatCtx.slice());
+    if (ctxUndo.length > 100) ctxUndo.shift();
+    ctxRedo = [];
+  }
+
+  function ctxBack(from, to) {
+    if (!from.length) return;
+    to.push(chatCtx);
+    chatCtx = from.pop();
+    renderCtx();
+  }
+
+  // Esc on a page (picker already off): all its places leave the Bezug.
+  function clearPageCtx(tabId, frameId) {
+    const keep = chatCtx.filter((e) => !(e.type === "web" && e.page && e.page.tabId === tabId && (e.page.frameId || 0) === frameId));
+    if (keep.length === chatCtx.length) return;
+    ctxStep();
+    chatCtx = keep;
+    renderCtx();
+  }
+
+  browser.runtime.onMessage.addListener((msg, sender) => {
+    if (!msg || !/^marks-(clear|undo|redo)$/.test(msg.type) || !sender || !sender.tab) return undefined;
+    if (myWindowId != null && sender.tab.windowId !== myWindowId) return undefined; // another window's sidebar
+    if (msg.type === "marks-clear") clearPageCtx(sender.tab.id, sender.frameId || 0);
+    else if (msg.type === "marks-undo") ctxBack(ctxUndo, ctxRedo);
+    else ctxBack(ctxRedo, ctxUndo);
+    return undefined;
+  });
 
   // Back to the place: bring its tab to the front and light it up; if the page
   // is gone, open the address.
@@ -2955,6 +2991,7 @@
     if (!Array.isArray(list) || !list.length) return;
     await browser.storage.local.remove(CAPTURE_KEY);
     if (list.some((c) => c.picking)) pickerActive = true; // the right-click started the picker
+    ctxStep();
     for (const c of list) {
       addCtx({ type: "web", text: !!(c.page && c.page.start != null), excerpt: c.excerpt || c.label, prompt: c.text, title: c.title, url: c.url, page: c.page, image: c.image,
         preview: c.image ? `data:${c.image.media_type};base64,${c.image.data}` : "" });
@@ -3050,12 +3087,16 @@
     }
     const tabId = sender && sender.tab ? sender.tab.id : undefined;
     const frameId = (sender && sender.frameId) || 0;
+    const next = chatCtx.slice();
     for (const it of Array.isArray(msg.items) ? msg.items : []) {
       const page = it.start == null ? { tabId, frameId, locator: it.locator } : { tabId, frameId, locator: it.locator, start: it.start, end: it.end };
-      const i = chatCtx.findIndex((e) => e.type === "web" && e.page && samePlace(e.page, page));
-      if (i < 0) chatCtx.push(pickEntry(msg, it, page));
-      else if (msg.op === "toggle") chatCtx.splice(i, 1);
+      const i = next.findIndex((e) => e.type === "web" && e.page && samePlace(e.page, page));
+      if (i < 0) next.push(pickEntry(msg, it, page));
+      else if (msg.op === "toggle") next.splice(i, 1);
     }
+    if (next.length === chatCtx.length && next.every((e, i) => e === chatCtx[i])) return undefined;
+    ctxStep();
+    chatCtx = next;
     renderCtx();
     return undefined;
   });
@@ -3318,6 +3359,8 @@
     stopPicker();
     const ctx = chatCtx;
     chatCtx = [];
+    ctxUndo = [];
+    ctxRedo = [];
     renderCtx();
     const atts = chatAttachments;
     chatAttachments = [];

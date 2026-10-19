@@ -25,6 +25,7 @@ const w = page.window;
 w.CSS = { escape: (s) => String(s).replace(/[^\w-]/g, (c) => "\\" + c) }; // Firefox has CSS.escape, jsdom not
 const run = (fn, args) => w.eval(`(${bg[fn]})(${JSON.stringify(args)}, ${bg.cssPathInPage}, ${bg.textSpotInPage}, ${bg.unitOfInPage})`);
 w.Range.prototype.getClientRects = () => [{ left: 1, top: 1, right: 40, bottom: 12, width: 39, height: 11 }]; // jsdom has no layout
+w.Range.prototype.getBoundingClientRect = () => ({ left: 1, top: 1, right: 40, bottom: 12, width: 39, height: 11 });
 const limits = { selection: 20000, section: 4000, clicked: 600, links: 50 };
 const li = w.document.querySelectorAll("li")[0];
 
@@ -59,14 +60,25 @@ ok(w.document.querySelectorAll("li")[1].getAttribute("style") === null, "die Sei
 ok(run("highlightInPage", { locator: "body > nav > li", style: STYLE, ms: 50, scroll: false }) === false, "Stelle nicht (mehr) da → false, kein Fehler");
 
 // marks of the Bezug: stay until the list changes
-const marks = (items) => w.eval(`(${bg.marksInPage})(${JSON.stringify({ style: MARKS, items })}, ${bg.rangeFromSpotInPage})`);
+const marks = (items, off = false) => w.eval(`(${bg.marksInPage})(${JSON.stringify({ style: MARKS, items, off })}, ${bg.rangeFromSpotInPage})`);
 const badges = () => (w.__tasksMarks ? [...w.document.documentElement.querySelectorAll(":scope > div span")].map((b) => b.textContent).join() : "");
 ok(marks([{ locator: "body > main > ul > li:nth-of-type(1)", n: 2 }, { locator: "body > nav", n: 3 }, { locator: "::kaputt", n: 4 }]) === 1 && badges() === "2", "Markierung bleibt mit der Nummer aus dem Chat; fehlende oder kaputte Stelle wird übersprungen");
 marks([{ locator: "body > main > ul > li:nth-of-type(2)", n: 1 }]);
 ok(badges() === "1" && w.document.documentElement.querySelectorAll(":scope > div").length === 1, "neue Liste ersetzt die alten Markierungen");
 w.__tasksMarks.hide();
 ok(w.document.documentElement.querySelector(":scope > div").style.display === "none", "fürs Bild ausblendbar");
-ok(marks([]) === 0 && !w.__tasksMarks && !w.document.documentElement.querySelector(":scope > div"), "leere Liste entfernt alle Markierungen");
+ok(marks([]) === 0 && w.__tasksMarks && !w.document.documentElement.querySelector(":scope > div"), "leere Liste entfernt alle Markierungen (die Tasten bleiben für Strg+Z)");
+ok(marks([], true) === 0 && !w.__tasksMarks, "Seitenleiste zu → auch die Tasten sind weg");
+const li3 = w.document.querySelectorAll("li")[1];
+let liTop = 100;
+li3.getBoundingClientRect = () => ({ left: 10, top: liTop, right: 200, bottom: liTop + 20, width: 190, height: 20 });
+marks([{ locator: "body > main > ul > li:nth-of-type(2)", n: 1 }]);
+const piece = () => w.document.documentElement.querySelector(":scope > div div div");
+const topBefore = piece().style.top;
+liTop = 40; // a scrolling box inside the page moved it
+w.document.querySelector("main").dispatchEvent(new w.Event("scroll"));
+ok(topBefore === "97px" && piece().style.top === "37px", "Scrollen (auch in einem Kasten der Seite) zieht die Markierung mit");
+delete li3.getBoundingClientRect;
 ok(marks([{ locator: "#intro", start: 5, end: 18, n: 4 }]) === 1 && badges() === "4" && new RegExp("rgba\\(47, ?111, ?94, ?0?\\.27\\)").test(w.document.documentElement.querySelector(":scope > div div div").getAttribute("style")), "markierter Text: Textmarker-Look mit Nummer");
 marks([]);
 
@@ -99,6 +111,34 @@ w.getSelection().removeAllRanges(); w.getSelection().addRange(words);
 mouse("mouseup", intro, { altKey: true });
 const tp = lastPick().items[0];
 ok(!down.defaultPrevented && lastPick().op === "add" && tp.text === "Mehr unter" && tp.start === 0 && tp.end === 10 && w.document.querySelector(tp.locator) === intro && /Termine Mai/.test(tp.context) && !w.getSelection().rangeCount, "Alt+Ziehen: markierter Text geht als eigene Stelle mit seinem Absatz");
+marks([{ locator: "#intro", start: 0, end: 10, n: 1 }]);
+mouse("mousemove", intro, { clientX: 5, clientY: 5 });
+click(intro, { clientX: 5, clientY: 5 });
+const un = lastPick();
+ok(un.op === "toggle" && un.items.length === 1 && un.items[0].locator === "#intro" && un.items[0].start === 0 && un.items[0].end === 10 && un.items[0].text === "Mehr unter", "Klick auf markierten Text nimmt genau diesen Text wieder raus (nicht den Absatz)");
+const key = (k, o = {}, el = w.document.body) => el.dispatchEvent(new w.KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...o }));
+const types = () => sent.slice(-1)[0].type;
+key("z", { ctrlKey: true });
+ok(types() === "marks-undo", "Strg+Z im Picker → ein Schritt zurück");
+let n0 = sent.length;
+key("Escape");
+ok(sent.length === n0 + 1 && types() === "picker-end", "erstes Esc beendet nur den Picker");
+key("Escape");
+ok(sent.length === n0 + 2 && types() === "marks-clear", "zweites Esc nimmt alle Markierungen der Seite raus");
+key("y", { ctrlKey: true });
+ok(types() === "marks-redo", "Strg+Y → wieder");
+const field = w.document.createElement("input");
+w.document.body.append(field);
+n0 = sent.length;
+key("z", { ctrlKey: true }, field);
+key("Escape", {}, field);
+ok(sent.length === n0, "in Eingabefeldern bleiben Strg+Z und Esc bei der Seite");
+field.remove();
+marks([]);
+n0 = sent.length;
+key("Escape");
+ok(sent.length === n0, "ohne Markierungen gehört Esc der Seite");
+ok(run("pickerInPage", { style: PICK }).ok === true, "Picker wieder an");
 const before = sent.length;
 w.document.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
 ok(sent.length === before + 1 && sent[sent.length - 1].type === "picker-end" && !w.__tasksPicker && !top().some((c) => c.tagName === "STYLE" || c.tagName === "DIV"), "Enter beendet den Picker, Overlays und Zeiger weg");

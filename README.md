@@ -164,9 +164,12 @@ Fälligkeit", „Öffne alle Links zu DL".
   Blöcke sind gestrichelt umrandet, Klick wählt einen an oder ab,
   Umschalt+Klick alles dazwischen, Ziehen spannt einen Rahmen auf (jeder
   berührte Block zählt, mit Strg wird umgeschaltet), Strg+A nimmt alle
-  sichtbaren, Alt+Ziehen markiert Text. Jedes Stück wird ein eigener
-  nummerierter Eintrag im „Bezug“ (Text kursiv; die KI bekommt den Absatz drum
-  herum mit); Enter oder Esc beendet. Außerdem: Datei hinzufügen (PDF, Bild, Text – auch per Drag & Drop auf
+  sichtbaren, Alt+Ziehen markiert Text (ein Klick auf markierten Text nimmt
+  ihn wieder raus). Jedes Stück wird ein eigener nummerierter Eintrag im
+  „Bezug“ (Text kursiv; die KI bekommt den Absatz drum herum mit). Strg+Z /
+  Strg+Y auf der Seite machen Auswahl-Schritte rückgängig bzw. wieder; Enter
+  oder Esc beendet, ein zweites Esc nimmt alle Markierungen dieser Seite
+  wieder aus dem Bezug. Außerdem: Datei hinzufügen (PDF, Bild, Text – auch per Drag & Drop auf
   den Chat) oder die ganze aktuelle Seite schicken (Firefox fragt einmal nach der
   Erlaubnis). Dateien und ganze Seiten erscheinen als Karten über dem
   Eingabefeld und gehen mit
