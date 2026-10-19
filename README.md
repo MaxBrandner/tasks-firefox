@@ -18,8 +18,8 @@ Google, kein eigener Server.
   erledigt → alle darunter auch; Unteraufgabe wieder offen → alle darüber auch.
   Abgehakte Unteraufgaben bleiben an ihrem Platz.
 - **Fälligkeit** – Schnellknöpfe Heute / Morgen / +1 Woche oder Datum, dazu
-  optional eine **Uhrzeit**. Anzeige „Heute", „Morgen", Wochentag; unter 48 h
-  ein **Countdown** („noch 1 T 18 Std"), danach „überfällig" in Rot.
+  optional eine **Uhrzeit** (tippen wie „14:30“, „1430“ oder „2pm“). Anzeige
+  „Heute", „Morgen", Wochentag; unter 48 h ein **Countdown** („noch 1 T 18 Std"), danach „überfällig" in Rot.
 - **↻ Wöchentlich** – ist eine Abgabe fällig oder abgehakt, entsteht die nächste
   eine Woche später (Zahl am Titelende zählt mit: „Blatt 3" → „Blatt 4"). Die
   Vorwoche bleibt als eigene Aufgabe stehen und wird nicht überschrieben.
@@ -59,6 +59,8 @@ Google, kein eigener Server.
   ein Bild oder irgendwo auf der Seite als Aufgabe einsortieren lassen, siehe unten.
 - **Design** – System / Hell / Dunkel (Knopf oben rechts). Einstellungen und
   Hilfe öffnen sich als Popup.
+- **Uhrzeit-Format** – 24 Std. (Standard) oder 12 Std. mit AM/PM, umstellbar
+  unter ⋯ → „Uhrzeit: …“ (pro Gerät).
 
 ### Tastatur
 

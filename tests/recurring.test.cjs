@@ -22,7 +22,7 @@ const chipText = (t) => li(t).querySelector(":scope>.row .due .due-label")?.text
   ok(/^noch 1 T [12] Std$/.test(chipText("Bald")) && li("Bald").querySelector(".due").classList.contains("soon"), "Countdown < 48 h: " + chipText("Bald"));
   ok(!chipText("Blatt 2").startsWith("noch") && chipText("Blatt 2").endsWith(", 08:30") && !!li("Blatt 2").querySelector(".due .ico"), "Blatt 2 (6 Tage): " + chipText("Blatt 2") + " mit ↻");
   edit("Bald"); await tick();
-  const timeIn = li("Bald").querySelector('.details input[type="time"]');
+  const timeIn = li("Bald").querySelector('.details .time-input');
   timeIn.value = "23:45"; timeIn.dispatchEvent(new H.w.Event("change")); await tick();
   ok(T("Bald").h === "23:45", "Uhrzeit-Feld speichert");
   li("Bald").querySelector('.details .chip[aria-label="Wöchentlich wiederholen"]').click(); await tick();

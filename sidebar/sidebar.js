@@ -22,6 +22,7 @@
   // Fixed ID: if two devices start for the first time, both create the same list.
   const DEFAULT_LIST_ID = "default";
   const THEME_KEY = "tk:themeMode";
+  const TIME_FORMAT_KEY = "tk:timeFormat"; // "24h" (default) or "12h" – display only, stored always as "HH:MM"
   const CURRENT_KEY = "tk:currentList";
   const DONE_OPEN_KEY = "tk:doneOpen";
   const COLLAPSED_KEY = "tk:collapsed"; // folded tasks – per device, keeps the sync quota free
@@ -991,6 +992,11 @@
       exportBackup();
     } else if (action === "import") {
       $("importFile").click();
+    } else if (action === "timeFormat") {
+      const next = hour12 ? "24h" : "12h";
+      applyTimeFormat(next);
+      browser.storage.local.set({ [TIME_FORMAT_KEY]: next });
+      render();
     } else if (action === "ai") {
       openAiPanel();
     } else if (action === "help") {
@@ -2029,6 +2035,35 @@
 
   // --- Rendering ------------------------------------------------------------
 
+  let hour12 = false;
+  const pad2 = (n) => String(n).padStart(2, "0");
+
+  // "14:30" → "14:30" or "2:30 PM", depending on the setting.
+  function formatTime(h) {
+    if (!hour12) return h;
+    const [hh, mm] = h.split(":").map(Number);
+    return `${hh % 12 || 12}:${pad2(mm)} ${hh < 12 ? "AM" : "PM"}`;
+  }
+
+  const clock = (date) => formatTime(pad2(date.getHours()) + ":" + pad2(date.getMinutes()));
+
+  // Typed time → "HH:MM"; "" when empty, null when unreadable.
+  // Accepts 14:30, 14.30, 1430, 930, 14, 14 Uhr, 2:30 pm, 2pm, 12 am.
+  function parseTime(s) {
+    const v = s.trim().toLowerCase().replace(/\s+/g, "");
+    if (!v) return "";
+    const m = v.match(/^(\d{1,2})(?:[:.]?(\d{2}))?(am|pm|a|p)?(?:uhr)?$/);
+    if (!m) return null;
+    let hh = Number(m[1]);
+    const mm = Number(m[2] || 0);
+    if (m[3]) {
+      if (hh < 1 || hh > 12) return null;
+      hh = (hh % 12) + (m[3][0] === "p" ? 12 : 0);
+    }
+    if (hh > 23 || mm > 59) return null;
+    return pad2(hh) + ":" + pad2(mm);
+  }
+
   function formatLeft(ms) {
     const min = Math.floor(ms / 60000);
     const d = Math.floor(min / 1440);
@@ -2060,7 +2095,7 @@
         year: due.getFullYear() !== today.getFullYear() ? "numeric" : undefined,
       });
     }
-    if (t.h) label += ", " + t.h;
+    if (t.h) label += ", " + formatTime(t.h);
     let cls = diff < 0 ? "overdue" : diff === 0 ? "today" : "";
     if (!t.x) {
       const left = dueAt(t) - Date.now();
@@ -2080,7 +2115,7 @@
     const full = new Date(y, m - 1, day).toLocaleDateString("de-DE", {
       weekday: "short", day: "numeric", month: "short", year: "numeric",
     });
-    return "Fällig: " + full + (t.h ? ", " + t.h + " Uhr" : "") + (t.r === "w" ? " · wöchentlich" : "");
+    return "Fällig: " + full + (t.h ? ", " + formatTime(t.h) + (hour12 ? "" : " Uhr") : "") + (t.r === "w" ? " · wöchentlich" : "");
   }
 
   // Keep the countdown live and create weekly instances that became due.
@@ -2382,12 +2417,26 @@
           "aria-label": "Fälligkeitsdatum",
           onchange: (e) => setDue(id, e.target.value),
         }),
+        // Text instead of type="time": Firefox would show the browser's format (e.g. "02:30 PM").
         h("input", {
-          class: "date-input",
-          type: "time",
-          value: t.h || "",
+          class: "date-input time-input" + (hour12 ? " h12" : ""),
+          type: "text",
+          value: t.h ? formatTime(t.h) : "",
+          placeholder: hour12 ? "--:-- AM" : "--:--",
+          title: hour12 ? "Uhrzeit, z. B. 2:30 PM oder 2pm" : "Uhrzeit, z. B. 14:30 oder 1430",
           "aria-label": "Uhrzeit",
-          onchange: (e) => setTime(id, e.target.value),
+          onkeydown: (e) => {
+            if (e.key !== "Enter") return;
+            e.preventDefault();
+            e.target.blur();
+          },
+          oninput: (e) => e.target.classList.remove("invalid"),
+          onchange: (e) => {
+            const v = parseTime(e.target.value);
+            if (v === null) return e.target.classList.add("invalid");
+            if (v === (t.h || "")) e.target.value = v ? formatTime(v) : "";
+            else setTime(id, v);
+          },
         }),
         t.d && h("button", {
           class: "icon-btn small",
@@ -2763,6 +2812,14 @@
     themeToggleEl.setAttribute("aria-label", THEME_META[m].label);
   }
 
+  // --- Time format (⋯ menu): 24 h or 12 h with AM/PM ---------------------------
+  function applyTimeFormat(fmt) {
+    hour12 = fmt === "12h";
+    const item = $("timeFormatItem");
+    item.textContent = "Uhrzeit: " + (hour12 ? "12 Std. (AM/PM)" : "24 Std.");
+    item.title = "Klicken für " + (hour12 ? "24 Stunden (14:30)" : "12 Stunden (2:30 PM)");
+  }
+
   themeToggleEl.addEventListener("click", async () => {
     const current = document.documentElement.dataset.theme || "system";
     const next = THEME_ORDER[(THEME_ORDER.indexOf(current) + 1) % THEME_ORDER.length];
@@ -2781,7 +2838,7 @@
     if (s < 60) return "gerade eben";
     if (s < 3600) return "vor " + Math.round(s / 60) + " Min";
     const d = new Date(ms);
-    const time = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    const time = clock(d);
     return d.toDateString() === new Date().toDateString() ? time
       : d.toLocaleDateString("de-DE", { day: "numeric", month: "numeric" }) + " " + time;
   }
@@ -3022,7 +3079,7 @@
     return lines.join("\n");
   }
 
-  const hhmm = (at) => new Date(at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  const hhmm = (at) => clock(new Date(at));
   // A quote is a piece of the chat: parts [{ role, at, text }], one per message
   // the selection touched. Older quotes were a single { role, at, text }.
   const quoteParts = (q) => (q.parts || [q]).filter((p) => p && p.text);
@@ -3279,7 +3336,7 @@
       tail.append(h("time", {
         class: "msg-time",
         datetime: new Date(m.at).toISOString(),
-        title: new Date(m.at).toLocaleString("de-DE", { weekday: "short", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }),
+        title: new Date(m.at).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "long" }) + ", " + hhmm(m.at),
       }, hhmm(m.at)));
     }
     const el = h("div", { class: "chat-msg " + m.role + (m.error ? " error" : ""), "data-at": m.at }, body);
@@ -4209,9 +4266,10 @@
     $("chatSend").append(icon("send"));
     for (const b of document.querySelectorAll(".modal-close")) b.append(icon("close"));
     setupEnvBanner();
-    const local = await browser.storage.local.get([THEME_KEY, CURRENT_KEY, DONE_OPEN_KEY, COLLAPSED_KEY]);
+    const local = await browser.storage.local.get([THEME_KEY, CURRENT_KEY, DONE_OPEN_KEY, COLLAPSED_KEY, TIME_FORMAT_KEY]);
     for (const id of local[COLLAPSED_KEY] || []) collapsed.add(id);
     applyTheme(local[THEME_KEY]);
+    applyTimeFormat(local[TIME_FORMAT_KEY]);
     refreshAiSettings();
     doneOpen = !!local[DONE_OPEN_KEY];
     currentList = local[CURRENT_KEY] || null;

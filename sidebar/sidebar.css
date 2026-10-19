@@ -975,6 +975,24 @@ kbd {
   font-size: 12px;
 }
 
+.time-input {
+  width: 4.6em;
+  text-align: center;
+}
+
+.time-input.h12 {
+  width: 6.6em;
+}
+
+.time-input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.time-input.invalid {
+  border-color: var(--danger);
+}
+
 .link-btn {
   display: inline-flex;
   align-items: center;
