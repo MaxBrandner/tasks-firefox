@@ -1,6 +1,6 @@
 {
   "name": "tasks-firefox",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "description": "Firefox-Erweiterung: Aufgabenlisten in der Seitenleiste, synchronisiert über Firefox Sync.",
   "scripts": {
