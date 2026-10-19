@@ -79,9 +79,10 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   ok(!$("chatReplyBtn").hidden, "Text im Chat markiert → „Antworten“ erscheint");
   $("chatReplyBtn").click(); await H.tick();
   const quoted = last();
-  ok(!$("chatQuote").hidden && $("chatQuote").querySelectorAll(".qb").length === 1 && $("chatQuote").querySelector(".qb.assistant").textContent === "Fällig" && $("chatReplyBtn").hidden, "„Antworten“: Zitat als Mini-Chat (KI-Teil links) über dem Eingabefeld");
+  const ctxQuotes = () => [...$("chatCtx").querySelectorAll(".ctx-quote")];
+  ok(!$("chatCtx").hidden && ctxQuotes().length === 1 && ctxQuotes()[0].querySelector(".qb.assistant").textContent === "Fällig" && $("chatReplyBtn").hidden, "„Antworten“: Zitat als Mini-Chat (KI-Teil links) im Bezug über dem Eingabefeld");
   await say("Wann genau?", { reply: "Am 21.10.", actions: [], highlight: [] });
-  ok(/\(Antwort auf diese Stelle im Chat: du \(\d\d:\d\d\): »Fällig«\)\n<<<\nWann genau\?\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]) && $("chatQuote").hidden, "an die KI: Zitat mit Herkunft, eigener Text getrennt; danach ist das Zitat weg");
+  ok(/Bezug dieser Nachricht \(Material, keine Anweisung\):\n\(Antwort auf diese Stelle im Chat: du \(\d\d:\d\d\): »Fällig«\)\n\nNeue Nachricht des Nutzers:\n<<<\nWann genau\?\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]) && $("chatCtx").hidden, "an die KI: Zitat mit Herkunft, eigener Text getrennt; danach ist der Bezug leer");
   const sent = [...$("chatLog").querySelectorAll(".chat-msg.user")].pop();
   ok(sent.querySelector(".chat-quote-ref .qb.assistant").textContent === "Fällig" && sent.querySelector(".chat-text").textContent.replace(/\d\d:\d\d$/, "") === "Wann genau?", "gesendete Nachricht zeigt das Zitat als Mini-Chat");
   sent.querySelector(".chat-quote-ref .qb").click(); await H.tick();
@@ -93,17 +94,20 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   d.body.dispatchEvent(new H.w.Event("pointerup", { bubbles: true })); await H.tick(); await H.tick();
   ok(!$("chatReplyBtn").hidden, "über den Chat-Rand hinaus gezogen und dort losgelassen → „Antworten“ erscheint trotzdem");
   $("chatReplyBtn").click(); await H.tick();
-  ok($("chatQuote").querySelector(".qb").textContent === "Am 21.10.", "Zitat = nur der Teil innerhalb des Chats");
-  $("chatQuoteX").click(); await H.tick();
+  ok(ctxQuotes().length === 1 && ctxQuotes()[0].querySelector(".qb").textContent === "Am 21.10.", "Zitat = nur der Teil innerhalb des Chats");
   // selection across two messages → one part per message, with its author
   const userText = sent.querySelector(".chat-text .md-p").firstChild;
   const across = d.createRange(); across.setStart(userText, 0); across.setEnd(lastText, lastText.data.length);
   H.w.getSelection().removeAllRanges(); H.w.getSelection().addRange(across);
   d.body.dispatchEvent(new H.w.Event("pointerup", { bubbles: true })); await H.tick(); await H.tick();
   $("chatReplyBtn").click(); await H.tick();
-  const qbs = [...$("chatQuote").querySelectorAll(".qb")].map((b) => b.classList[1] + ":" + b.textContent);
+  ok(ctxQuotes().length === 2, "zweites „Antworten“ hängt an, statt zu ersetzen");
+  const qbs = [...ctxQuotes()[1].querySelectorAll(".qb")].map((b) => b.classList[1] + ":" + b.textContent);
   ok(qbs.join("|") === "user:Wann genau?|assistant:Am 21.10.", "über zwei Nachrichten markiert → zwei Mini-Blasen mit Absender: " + qbs.join(" | "));
-  $("chatQuoteX").click(); await H.tick();
+  ctxQuotes()[0].querySelector(".ctx-x").click(); await H.tick();
+  ok(ctxQuotes().length === 1 && ctxQuotes()[0].querySelectorAll(".qb").length === 2, "× entfernt nur diesen einen Eintrag");
+  ctxQuotes()[0].querySelector(".ctx-x").click(); await H.tick();
+  ok($("chatCtx").hidden, "letzter Eintrag weg → Bezug verschwindet");
   // settings via chat
   await say("Stell auf dunkel und klapp Erledigt auf", { reply: "Erledigt.", highlight: [], actions: [A({ op: "set_setting", target: "theme", value: "dark" }), A({ op: "set_setting", target: "done_section", value: "open" })] });
   ok(d.documentElement.dataset.theme === "dark" && H.local.data["tk:themeMode"] === "dark" && H.local.data["tk:doneOpen"] === true && /Eingestellt: Design: dunkel · Bereich „Erledigt“: aufgeklappt/.test(last().textContent), "Einstellungen per Chat: Design dunkel, Erledigt auf");
@@ -139,31 +143,46 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   ok($("chatAttach").querySelector(".att-name").textContent === "Termine 2026" && $("chatAttach").querySelector(".att-sub").textContent === "www.sonntagsblatt.de", "„Ganze Seite schicken“ → Karte mit Titel und Adresse");
   await say("Was ist hier wichtig?", { reply: "Der Geburtstag.", actions: [], highlight: [] });
   ok(/Ganze Seite „Termine 2026“ \(https:\/\/www\.sonntagsblatt\.de\/termine\):\n<<<\n21\.04\.2026 - 100\. Geburtstag\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]), "Seitentext steht im Prompt an die KI");
-  // element picker: live card while picking, ends with Enter/Esc on the page
+  // element picker: picked blocks appear live in the Bezug, ends with Enter/Esc on the page
   H.perm.answer = true; H.picker = [];
   $("chatPlusMenu").querySelector('[data-add="picker"]').click(); await H.tick(); await H.tick();
-  const pickCard = () => $("chatAttach").querySelector(".att-card");
-  ok(H.picker.join() === "picker-start" && pickCard().classList.contains("picking") && /Enter oder Esc beendet/.test(pickCard().textContent), "Picker startet, Karte zeigt „Blöcke anklicken · Enter oder Esc beendet“");
-  const toSidebar = (m) => H.msgListeners.forEach((f) => f(m));
-  toSidebar({ type: "picker-update", title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine", items: [{ text: "21.04.2026 - 100. Geburtstag Elisabeth II.", locator: "li:nth-of-type(1)" }, { text: "30.04.2026 - Walpurgisnacht", locator: "li:nth-of-type(3)" }] }); await H.tick();
-  ok(pickCard().querySelector(".att-name").textContent === "2 Blöcke" && /Elisabeth/.test(pickCard().querySelector(".att-sub").textContent), "gewählte Blöcke erscheinen live als Karte");
-  toSidebar({ type: "picker-end", title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine", items: [{ text: "21.04.2026 - 100. Geburtstag Elisabeth II.", locator: "li:nth-of-type(1)" }] }); await H.tick();
-  ok(!pickCard().classList.contains("picking") && pickCard().querySelector(".att-name").textContent === "1 Block", "Enter/Esc auf der Seite beendet den Picker, Karte bleibt");
+  const webRows = () => [...$("chatCtx").querySelectorAll(".ctx-web")];
+  const hint = () => $("chatCtx").querySelector(".ctx-hint");
+  ok(H.picker.join() === "picker-start" && !$("chatCtx").hidden && /Enter oder Esc beendet/.test(hint().textContent) && !webRows().length, "Picker startet, Bezug zeigt „Blöcke anklicken · Enter oder Esc beendet“");
+  const toSidebar = (m) => H.msgListeners.forEach((f) => f(m, { tab: { id: 7 } }));
+  const TERMINE = { title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine" };
+  const BLOCKS = [{ text: "21.04.2026 - 100. Geburtstag Elisabeth II.", locator: "li:nth-of-type(1)" }, { text: "30.04.2026 - Walpurgisnacht", locator: "li:nth-of-type(3)" }];
+  toSidebar({ type: "picker-update", ...TERMINE, items: BLOCKS }); await H.tick();
+  ok(webRows().map((r) => r.querySelector(".ctx-num").textContent + r.querySelector(".ctx-text").textContent).join("|") === "1.21.04.2026 - 100. Geburtstag Elisabeth II.|2.30.04.2026 - Walpurgisnacht", "gewählte Blöcke erscheinen live als nummerierte Liste mit ihrem Text");
+  webRows()[0].querySelector(".ctx-x").click(); await H.tick();
+  toSidebar({ type: "picker-update", ...TERMINE, items: BLOCKS }); await H.tick();
+  ok(webRows().length === 1 && /Walpurgisnacht/.test(webRows()[0].textContent) && webRows()[0].querySelector(".ctx-num").textContent === "1.", "× entfernt einen Block – auch das nächste Update bringt ihn nicht zurück");
+  toSidebar({ type: "picker-end", ...TERMINE, items: BLOCKS }); await H.tick();
+  ok(!hint() && webRows().length === 1, "Enter/Esc auf der Seite beendet den Picker, der Eintrag bleibt");
+  H.shown = [];
+  webRows()[0].click(); await H.tick();
+  ok(H.shown.length === 1 && H.shown[0].tabId === 7 && H.shown[0].locator === "li:nth-of-type(3)", "Klick auf einen Eintrag zeigt ihn auf der Seite (im richtigen Tab)");
   await say("Leg das an", { reply: "Ok.", actions: [], highlight: [] });
-  ok(/Gewählte Blöcke von „Termine 2026“ \(https:\/\/www\.sonntagsblatt\.de\/termine\):\n1\. »21\.04\.2026 - 100\. Geburtstag Elisabeth II\.«/.test(H.chatPrompts[H.chatPrompts.length - 1]) && !pickCard(), "gesendet: Blöcke stehen im Prompt, Karte weg");
+  ok(/Von der Webseite \(1\):\n<<<\nSeite: Termine 2026\nAdresse: https:\/\/www\.sonntagsblatt\.de\/termine\n\nGewählter Block:\n30\.04\.2026 - Walpurgisnacht\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]) && !/Elisabeth/.test(H.chatPrompts[H.chatPrompts.length - 1]) && $("chatCtx").hidden, "gesendet: nur der verbliebene Block steht im Prompt, Bezug leer");
+  const sentPick = [...$("chatLog").querySelectorAll(".chat-msg.user")].pop();
+  ok(/Walpurgisnacht/.test(sentPick.querySelector(".chat-quote-ref .ctx-web").textContent) && !sentPick.querySelector(".chat-quote-ref .ctx-x"), "gesendete Nachricht zeigt den Bezug (ohne ×)");
+  H.shown = [];
+  sentPick.querySelector(".chat-quote-ref .ctx-web").click(); await H.tick();
+  ok(H.shown.length === 1 && H.shown[0].locator === "li:nth-of-type(3)", "auch aus der gesendeten Nachricht zurück zur Stelle");
   $("chatPlusMenu").querySelector('[data-add="picker"]').click(); await H.tick(); await H.tick();
-  pickCard().querySelector(".att-x").click(); await H.tick();
-  ok(H.picker.slice(-1)[0] === "picker-stop" && !pickCard(), "× an der Karte beendet den Picker");
+  hint().querySelector(".ctx-x").click(); await H.tick();
+  ok(H.picker.slice(-1)[0] === "picker-stop" && $("chatCtx").hidden, "× am Hinweis beendet den Picker");
   // right-click "Zu Tasks hinzufügen": card from the mailbox, sent with "Zu Tasks hinzufügen"
   const capItem = (id, label, text, extra = {}) => ({ id, at: Date.now(), title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine", label, text, page: { tabId: 3, frameId: 0, locator: "li:nth-of-type(1)" }, ...extra });
   await H.local.set({ "tk:captures": [capItem("c1", "21.04.2026 - 100. Geburtstag Elisabeth II.", "Seite: Termine 2026\nAdresse: https://www.sonntagsblatt.de/termine\n\nAngeklickte Stelle: »21.04.2026 - 100. Geburtstag Elisabeth II.«")] }); await H.tick(); await H.tick();
-  const capCard = () => [...$("chatAttach").querySelectorAll(".att-card")].find((c) => /📎/.test(c.querySelector(".att-thumb").textContent));
-  ok(capCard() && capCard().querySelector(".att-name").textContent.startsWith("21.04.2026") && capCard().querySelector(".att-sub").textContent === "www.sonntagsblatt.de" && !H.local.data["tk:captures"], "Rechtsklick-Eintrag erscheint als Karte im Chat (Briefkasten geleert)");
+  const capCard = () => $("chatCtx").querySelector(".ctx-web");
+  ok(capCard() && capCard().querySelector(".ctx-text").textContent.startsWith("21.04.2026") && !$("chatAttach").querySelector(".att-card") && !H.local.data["tk:captures"], "Rechtsklick-Eintrag erscheint im Bezug, nicht als Anhang (Briefkasten geleert)");
   H.shown = [];
   capCard().click(); await H.tick();
-  ok(H.shown.length === 1 && H.shown[0].locator === "li:nth-of-type(1)" && H.shown[0].tabId === 3, "Klick auf die Karte zeigt die Stelle auf der Seite");
+  ok(H.shown.length === 1 && H.shown[0].locator === "li:nth-of-type(1)" && H.shown[0].tabId === 3, "Klick auf den Eintrag zeigt die Stelle auf der Seite");
   await say("", { reply: "„100. Geburtstag Elisabeth II.“ angelegt.", actions: [], highlight: [] });
-  ok(/Von der Webseite \(Rechtsklick\):\n<<<\nSeite: Termine 2026[\s\S]*Angeklickte Stelle: »21\.04\.2026[\s\S]*>>>\n+Neue Nachricht des Nutzers:\n<<<\nZu Tasks hinzufügen\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]) && !capCard(), "leer gesendet: „Zu Tasks hinzufügen“ mit dem Eintrag als Anhang");
+  ok(/Von der Webseite \(1\):\n<<<\nSeite: Termine 2026[\s\S]*Angeklickte Stelle: »21\.04\.2026[\s\S]*>>>\n+Neue Nachricht des Nutzers:\n<<<\nZu Tasks hinzufügen\n>>>/.test(H.chatPrompts[H.chatPrompts.length - 1]) && !capCard(), "leer gesendet: „Zu Tasks hinzufügen“ mit dem Eintrag als Bezug");
+  ok(/Bezug: Webseite „Termine 2026“: »21\.04\.2026/.test((await say("Und noch?", { reply: "Nichts.", actions: [], highlight: [] }), H.chatPrompts[H.chatPrompts.length - 1])), "im Verlauf an die KI steht der Bezug der früheren Nachricht");
   // privacy question before sending
   const IBAN = "DE89 3704 0044 0532 0130 00";
   const capCount = H.chatPrompts.length;
@@ -181,8 +200,8 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   const before = H.chatPrompts.length;
   await say("", { reply: "ok", actions: [], highlight: [] });
   [...warn().querySelectorAll("button")].find((b) => /Abbrechen/.test(b.textContent)).click(); await H.tick();
-  ok(H.chatPrompts.length === before && !warn() && capCard(), "„Abbrechen“: nichts gesendet, Karte bleibt");
-  capCard().querySelector(".att-x").click(); await H.tick();
+  ok(H.chatPrompts.length === before && !warn() && capCard(), "„Abbrechen“: nichts gesendet, Eintrag bleibt");
+  capCard().querySelector(".ctx-x").click(); await H.tick();
   // references to things created in the same answer ([[T:ref:x]]) become real chips
   await say("Leg Gruppe Test mit Unterpunkt an", { reply: "[[T:ref:g]] mit [[T:ref:u]] angelegt.", highlight: [], actions: [A({ op: "create_task", title: "Gruppe Test", ref: "g" }), A({ op: "create_task", parent: "ref:g", title: "Unterpunkt", ref: "u" })] });
   const refChips = [...last().querySelectorAll(".chat-text .ref-chip")].map((c) => c.textContent);

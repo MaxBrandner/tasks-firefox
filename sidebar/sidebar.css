@@ -1771,13 +1771,6 @@ kbd {
   background: var(--surface);
 }
 
-.att-card.clickable {
-  cursor: pointer;
-}
-
-.att-card.clickable:hover {
-  border-color: var(--accent);
-}
 
 /* "Kurz nachgefragt": privacy question before sending. */
 .chat-warn {
@@ -1820,11 +1813,6 @@ kbd {
   color: var(--muted);
 }
 
-/* The picked-blocks card while the picker runs on the page. */
-.att-card.picking {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
-}
 
 .attach-note {
   align-self: center;
@@ -1905,35 +1893,8 @@ kbd {
   font-weight: 600;
 }
 
-/* Quote above the input, sent with the next message. */
-.chat-quote {
-  flex: none;
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin: 0 10px 4px;
-  padding: 5px 4px 6px 9px;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--accent);
-  border-radius: 6px;
-  background: var(--bg);
-  color: var(--muted);
-  font-size: 12px;
-}
 
-#chatQuoteText {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
 
-.quote-src {
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 600;
-}
 
 /* A quote as a small chat: own parts right/green, AI parts left/white. */
 .quote-chat {
@@ -1984,8 +1945,88 @@ button.qb:hover {
   font-size: 11px;
 }
 
-/* The quote inside a sent message. */
+/* Bezug: quotes and places from web pages above the input (and inside a
+   sent message, .chat-quote-ref). */
+.chat-ctx {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 40%;
+  margin: 0 10px 4px;
+  padding: 5px 6px 6px 8px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.ctx-item {
+  position: relative;
+}
+
+.ctx-quote {
+  padding-right: 24px;
+}
+
+.ctx-web {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 26px 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ctx-web:hover {
+  border-color: var(--accent);
+}
+
+.ctx-num {
+  flex: none;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ctx-thumb {
+  flex: none;
+  width: 36px;
+  height: 28px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.ctx-text {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.ctx-x {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+}
+
+.ctx-hint {
+  padding: 2px 26px 2px 0;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+/* The Bezug inside a sent message. */
 .chat-quote-ref {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin: 0 0 5px;
   padding: 4px 6px;
   border-left: 3px solid var(--accent);

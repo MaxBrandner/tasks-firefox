@@ -9,7 +9,7 @@ function area() { const data = {}; return { data,
   async set(o) { Object.assign(data, structuredClone(o)); }, async remove(k) { for (const x of [].concat(k)) delete data[x]; } }; }
 const sync = area(), local = area();
 const storageListeners = [], msgListeners = [];
-let clickHandler, opened = 0, lastMsg, reply, nativeCalls = 0, permGranted = true, lastReq, apiReply, reqs = [], scripts = [], capReply = () => ({});
+let clickHandler, opened = 0, lastMsg, reply, nativeCalls = 0, permGranted = true, lastReq, apiReply, reqs = [], scripts = [], capReply = () => ({}), activated = [];
 const URL0 = "https://ilias.hhu.de/ilias.php?baseClass=ilexercisehandlergui&ref_id=2209395&ass_id=74843";
 const ctx = { console, crypto: globalThis.crypto, structuredClone, URL: globalThis.URL, TextDecoder, atob, btoa,
   fetch: async (url, init) => { const r = { url, init, body: JSON.parse(init.body) }; reqs.push(r); lastReq = r; return apiReply(r); },
@@ -20,7 +20,8 @@ const ctx = { console, crypto: globalThis.crypto, structuredClone, URL: globalTh
     browserAction: { onClicked: { addListener() {} } },
     sidebarAction: { open() { opened++; }, toggle() {} },
     contextMenus: { create(o) { ctx.menu = o; }, async removeAll() { ctx.menu = null; }, onClicked: { addListener(f) { clickHandler = f; } } },
-    tabs: { async query() { return [{ id: 5, url: "https://www.sonntagsblatt.de/termine", title: "Termine 2026" }]; },
+    tabs: { async update(id, o) { activated.push([id, o.active]); },
+      async query() { return [{ id: 5, url: "https://www.sonntagsblatt.de/termine", title: "Termine 2026" }]; },
       async executeScript(id, o) { scripts.push(o);
         if (/highlightInPage/.test(o.code)) return [true];
         if (/pickerInPage/.test(o.code)) return [{ ok: true, title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine" }];
@@ -51,7 +52,7 @@ const capture = async (info, cap, tab = { id: 1, url: URL0, title: "Übung 2" })
   ok(/^Seite: Übung 2\nAdresse: https:\/\/ilias/.test(c.text) && /Markierter Text:\n<<<\nBlatt 2 ist online\nAbgabe 26\.10\.\n>>>/.test(c.text) && /Links in der Markierung:\n- Blatt 2 → https:\/\/ilias\.hhu\.de\/blatt2\.pdf/.test(c.text), "Karte enthält Seite, Adresse, Markierung mit Zeilenumbrüchen und Link-Zielen");
   ok(c.page && c.page.locator === "body > p" && c.page.tabId === 1 && scripts.some((o) => /highlightInPage/.test(o.code) && /"locator":"body > p"/.test(o.code)), "Stelle leuchtet auf der Seite auf; Pfad für „Auf der Seite zeigen“ steht in der Karte");
   c = await capture({ linkUrl: PDF, linkText: "Blatt 3", targetElementId: 42 }, { selection: "", section: "Übungen\nBlatt 3 – Abgabe 26. Okt", heading: "Übungen" });
-  ok(/Angeklickt: Link „Blatt 3" → https:\/\/ilias\.hhu\.de\/blatt2\.pdf/.test(c.text) && /Abschnitt um die angeklickte Stelle \(Überschrift: „Übungen"\)/.test(c.text) && !/Markierter Text/.test(c.text) && c.label === "Blatt 3", "Rechtsklick auf Link: Linktext, Ziel und Abschnitt");
+  ok(/Angeklickt: Link „Blatt 3" → https:\/\/ilias\.hhu\.de\/blatt2\.pdf/.test(c.text) && /Abschnitt um die angeklickte Stelle \(Überschrift: „Übungen"\)/.test(c.text) && !/Markierter Text/.test(c.text) && c.label === "Blatt 3" && /Blatt 3/.test(c.excerpt), "Rechtsklick auf Link: Linktext, Ziel und Abschnitt");
   ok(scripts.some((o) => /"targetId":42/.test(o.code) && /cssPathInPage/.test(o.code)), "angeklicktes Element geht an das Seiten-Skript");
   c = await capture({ srcUrl: "https://x.de/flyer.jpg", mediaType: "image", targetElementId: 7 }, { image: { alt: "Flyer Sommerfest", caption: "Sommerfest 12.7." }, locator: "img" });
   ok(/Angeklickt: Bild https:\/\/x\.de\/flyer\.jpg – Alternativtext: „Flyer Sommerfest" – Bildunterschrift: „Sommerfest 12\.7\."/.test(c.text) && c.label === "Flyer Sommerfest" && !c.image, "Rechtsklick auf Bild: Angaben im Text (Bild-Ausschnitt nur im echten Firefox)");
@@ -59,7 +60,7 @@ const capture = async (info, cap, tab = { id: 1, url: URL0, title: "Übung 2" })
   ok(/gemeint ist die Seite selbst/.test(c.text) && c.label === "Übung 2", "Rechtsklick irgendwo: die Seite ist gemeint, Karte heißt wie die Seite");
   const ELI = "21.04.2026 - 100. Geburtstag Elisabeth II.";
   c = await capture({ targetElementId: 9 }, { section: "Termine April 2026\n" + ELI + "\n29.04.2026 - 75. Todestag Ludwig Wittgenstein", heading: "Termine April 2026", clicked: ELI });
-  ok(/Angeklickte Stelle: »21\.04\.2026 - 100\. Geburtstag Elisabeth II\.«\n\nAbschnitt um die angeklickte Stelle/.test(c.text) && c.label === ELI, "Rechtsklick auf eine Zeile: die Zeile selbst getrennt vor dem Abschnitt");
+  ok(/Angeklickte Stelle: »21\.04\.2026 - 100\. Geburtstag Elisabeth II\.«\n\nAbschnitt um die angeklickte Stelle/.test(c.text) && c.label === ELI && c.excerpt === ELI, "Rechtsklick auf eine Zeile: die Zeile selbst getrennt vor dem Abschnitt (und als Text für die Liste im Chat)");
   ok(local.data["tk:captures"].length === 5 && nativeCalls === 0, "mehrere Rechtsklicks sammeln sich im Briefkasten");
   for (let i = 0; i < 8; i++) await capture({}, {});
   ok(local.data["tk:captures"].length === 10, "höchstens 10 Einträge im Briefkasten");
@@ -67,7 +68,7 @@ const capture = async (info, cap, tab = { id: 1, url: URL0, title: "Übung 2" })
   // --- page scripts plumbing
   scripts = [];
   const shown = await msgListeners.map((f) => f({ type: "show-on-page", tabId: 1, frameId: 0, locator: "body > p" })).find(Boolean);
-  ok(shown && shown.ok && /"scroll":true/.test(scripts[0].code), "„Auf der Seite zeigen“: scrollt hin und hebt hervor");
+  ok(shown && shown.ok && /"scroll":true/.test(scripts[0].code) && activated.join() === "1,true", "„Auf der Seite zeigen“: holt den Tab nach vorn, scrollt hin und hebt hervor");
   scripts = [];
   const pk = await msgListeners.map((f) => f({ type: "picker-start" })).find(Boolean);
   ok(pk && pk.ok && pk.title === "Termine 2026" && /pickerInPage/.test(scripts[0].code) && /cssPathInPage/.test(scripts[0].code), "Picker startet im aktiven Tab (mit CSS-Pfad-Helfer)");

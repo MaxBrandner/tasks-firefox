@@ -75,7 +75,9 @@ Seitenleiste unter `⋯` → „Tastenkürzel & Markdown".
 
 Rechtsklick → **Zu Tasks hinzufügen** – auf markierten Text, einen Link, ein
 Bild oder einfach irgendwo auf der Seite. Die Stelle leuchtet auf der Seite kurz
-auf und landet als **Karte im Chat** (ein Klick auf die Karte zeigt sie wieder).
+auf und landet im Chat in der Liste **„Bezug“** über dem Eingabefeld – mit
+ihrem Text, bei Bildern mit Vorschau. Ein Klick holt den Tab nach vorn und hebt
+die Stelle noch einmal hervor; mit × fliegt ein einzelner Eintrag raus.
 Mehrere Rechtsklicks sammeln sich; erst wenn du sendest, arbeitet die KI – mit
 einer Anweisung („unter DS 2“, „nur den ersten Termin“) oder einfach mit Enter
 im leeren Feld („Zu Tasks hinzufügen“).
@@ -152,14 +154,17 @@ Fälligkeit", „Öffne alle Links zu DL".
   Antworten lässt sich normal markieren und kopieren.
 - **Kopieren und Antworten:** Unter jeder Antwort steht „Kopieren“ (Verweise
   werden zu Namen). Markierst du Text im Chat, erscheint „↩ Antworten“: Der Text
-  steht dann als Zitat über dem Eingabefeld (mit Herkunft, z. B. „KI-Antwort ·
-  18:44“) und geht mit deiner nächsten Nachricht mit – die KI erfährt, worauf
-  du antwortest. Ein Klick auf das Zitat springt zur Stelle und hebt sie hervor.
+  kommt als Zitat in den „Bezug“ über dem Eingabefeld (als kleiner Chat mit
+  Absender und Uhrzeit) und geht mit deiner nächsten Nachricht mit – die KI
+  erfährt, worauf du antwortest. Weitere Zitate werden angehängt, jedes lässt
+  sich mit × einzeln entfernen. Ein Klick auf ein Zitat springt zur Stelle.
 - **„+“ im Chat:** Element auf der Seite auswählen (Blöcke leuchten beim
-  Darüberfahren auf, Klick wählt sie, sie erscheinen sofort als Anhang; Enter
+  Darüberfahren auf, Klick wählt sie, sie erscheinen sofort nummeriert im
+  „Bezug“, wie Rechtsklick-Einträge; Enter
   oder Esc beendet), Datei hinzufügen (PDF, Bild, Text – auch per Drag & Drop auf
   den Chat) oder die ganze aktuelle Seite schicken (Firefox fragt einmal nach der
-  Erlaubnis). Anhänge erscheinen als Karten über dem Eingabefeld und gehen mit
+  Erlaubnis). Dateien und ganze Seiten erscheinen als Karten über dem
+  Eingabefeld und gehen mit
   der nächsten Nachricht an die KI, die daraus Aufgaben zieht.
 - **Einstellungen per Chat:** „Stell auf dunkel“, „klapp Erledigt zu“ oder
   „schalte die KI aus“ (fragt vorher nach) gehen auch im Chat. API-Schlüssel,

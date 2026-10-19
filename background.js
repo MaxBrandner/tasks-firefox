@@ -335,7 +335,10 @@ browser.runtime.onMessage.addListener((msg) => {
 // "◎ Auf der Seite zeigen" from the sidebar: scroll there, light up longer.
 browser.runtime.onMessage.addListener((msg) => {
   if (!msg || msg.type !== "show-on-page") return undefined;
-  return highlightOnPage(msg.tabId, msg.frameId, msg.locator, { scroll: true, ms: 2600 }).then((ok) => ({ ok }));
+  return (async () => {
+    if (msg.tabId != null) await browser.tabs.update(msg.tabId, { active: true }).catch(() => {});
+    return { ok: await highlightOnPage(msg.tabId, msg.frameId, msg.locator, { scroll: true, ms: 2600 }) };
+  })();
 });
 
 // What the right-click points at. activeTab allows the page script for
@@ -366,6 +369,7 @@ async function captureToChat(info, tab) {
     title: tab.title || "",
     url: tab.url || "",
     label: captureLabel(cap, tab),
+    excerpt: captureExcerpt(cap, tab),
     text: [`Seite: ${tab.title || ""}`, `Adresse: ${tab.url || ""}`, ...(cap.description ? [`Beschreibung: ${cap.description}`] : []), ...describeCapture(cap)].join("\n"),
     ...(image ? { image } : {}),
     ...(cap.locator ? { page: { tabId: tab.id, frameId: info.frameId || 0, locator: cap.locator } } : {}),
@@ -379,6 +383,13 @@ function captureLabel(cap, tab) {
   const first = (s) => String(s || "").trim().split("\n")[0].trim();
   return (first(cap.selection) || first(cap.clicked) || (cap.link && first(cap.link.text)) ||
     (cap.image && (cap.image.alt || "Bild")) || tab.title || tab.url || "Webseite").slice(0, 80);
+}
+
+// What the place says, for the list in the chat (a few lines).
+function captureExcerpt(cap, tab) {
+  const t = (s) => String(s || "").trim();
+  return (t(cap.selection) || t(cap.clicked) || (cap.link && `${t(cap.link.text)} – ${cap.link.href}`) ||
+    (cap.image && (t(cap.image.alt) || t(cap.image.caption) || "Bild")) || t(cap.section).slice(0, 300) || tab.title || tab.url || "").slice(0, 500);
 }
 
 // The right-clicked image itself: a cut-out of the visible tab (activeTab
@@ -657,7 +668,7 @@ Aktionen (jedes Feld ist Text; nicht benutzte Felder leer lassen; target/list/pa
 
 So funktioniert Tasks – für Fragen zur Erweiterung selbst; antworte danach, nicht nach Vermutungen:
 - Speicher: Aufgaben und Listen über Firefox Sync (auf allen Rechnern mit demselben Firefox-Konto). Verlauf, dieser Chat und die KI-Einstellungen bleiben auf diesem Rechner.
-- „Zu Tasks hinzufügen" (Rechtsklick auf markierten Text, einen Link, ein Bild oder irgendwo auf der Seite) legt die Stelle als Anhang-Karte in den Chat; sie leuchtet auf der Seite kurz auf, ein Klick auf die Karte zeigt sie wieder. Mehrere Rechtsklicks sammeln sich. Erst beim Senden bekommst du sie: Titel, Adresse und Beschreibung der Seite, den markierten Text samt den Link-Zielen darin, einen angeklickten Link, bei Bildern das Bild selbst, die angeklickte Stelle und den Abschnitt drumherum. Den ganzen Seitentext bekommst du nur über „+ → Ganze Seite schicken". Vor dem Senden prüft Tasks die Anhänge auf IBAN, Kreditkarten, Schlüssel und Passwörter und fragt dann nach.
+- „Zu Tasks hinzufügen" (Rechtsklick auf markierten Text, einen Link, ein Bild oder irgendwo auf der Seite) legt die Stelle in die Liste „Bezug" über dem Chat-Eingabefeld; sie leuchtet auf der Seite kurz auf, ein Klick auf den Eintrag holt den Tab nach vorn und zeigt sie wieder, × entfernt einen einzelnen Eintrag. Mehrere Rechtsklicks sammeln sich. Erst beim Senden bekommst du sie: Titel, Adresse und Beschreibung der Seite, den markierten Text samt den Link-Zielen darin, einen angeklickten Link, bei Bildern das Bild selbst, die angeklickte Stelle und den Abschnitt drumherum. Den ganzen Seitentext bekommst du nur über „+ → Ganze Seite schicken". Vor dem Senden prüft Tasks die Anhänge auf IBAN, Kreditkarten, Schlüssel und Passwörter und fragt dann nach.
 - Dieser Chat sieht nur, was oben unter „Du bekommst" steht – keine Webseiten, keine offenen Tabs.
 - KI-Verbindung (⋯ → „KI einrichten …"): Standard ist Claude Code über das Claude-Abo (Hilfsprogramm aus native/); alternativ ein eigenes Modell per API (auch lokal, z. B. Ollama) oder „Keine KI" (dann gibt es den Rechtsklick-Eintrag nicht und der Chat kann nicht antworten).
 - Links: eigenes Feld, beliebig viele, auch obsidian://, Dateien (file:///… oder einfach ein Pfad) und mailto:. Nicht-Web-Links öffnet das Hilfsprogramm mit dem passenden Programm, ausführbare Dateien nie. 🔗 zählt die Links inklusive Unteraufgaben; ein Klick öffnet sie als Firefox-Tab-Gruppe.
@@ -668,12 +679,12 @@ So funktioniert Tasks – für Fragen zur Erweiterung selbst; antworte danach, n
 - Markdown in Titel und Notiz (fett, kursiv, durchgestrichen, Code, Links; in Notizen auch Listen, Überschriften, Zitate).
 - Tastatur: Strg+Alt+A Seitenleiste auf/zu, / Chat, Enter neue Aufgabe, Tab / Shift+Tab ein-/ausrücken, Strg+Enter abhaken, Alt+↑/↓ verschieben, Esc schließt. Alles unter ⋯ → „Tastenkürzel & Markdown".
 - Einstellungen: Design (System/hell/dunkel), Bereich „Erledigt" auf/zu und die KI-Verbindung lassen sich auch hier im Chat ändern (set_setting); alles andere über ⋯ und den Knopf oben rechts.
-- „+" im Chat: Element auf der Seite auswählen (Blöcke anklicken, sie erscheinen als Anhang; Enter oder Esc beendet), Datei hinzufügen (PDF, Bild, Text; auch per Drag & Drop auf den Chat) und ganze Seite schicken (Text der aktuellen Seite, Firefox fragt einmal nach der Erlaubnis). Anhänge gehen mit der nächsten Nachricht an dich.
+- „+" im Chat: Element auf der Seite auswählen (Blöcke anklicken, sie erscheinen nummeriert im „Bezug"; Enter oder Esc beendet), Datei hinzufügen (PDF, Bild, Text; auch per Drag & Drop auf den Chat) und ganze Seite schicken (Text der aktuellen Seite, Firefox fragt einmal nach der Erlaubnis). Anhänge gehen mit der nächsten Nachricht an dich. Markierter Chat-Text kommt über „↩ Antworten" als Zitat in den „Bezug"; mehrere Zitate werden angehängt.
 - Layout: Ist die Seitenleiste breit, stehen Liste und Chat nebeneinander; schmal gibt es die Reiter „Aufgaben | Chat" und mit / eine Schnell-Karte.
 
 Was es NICHT gibt: Tags, Prioritäten, Farben, Erinnerungen/Benachrichtigungen, Suche/Filter, Anhänge, Teilen, Zugriff auf Webseiten oder das Internet. Listen löschen kannst du nicht – das macht der Nutzer selbst über ⋯ → „Liste löschen". Wird danach gefragt, sag ehrlich, dass es das (noch) nicht gibt, und biete – wenn sinnvoll – eine Lösung mit vorhandenen Mitteln an (z. B. „#klausur" als Konvention im Titel; markieren oder öffnen kannst du dann alles mit #klausur). Täusche nie vor, etwas getan zu haben, das keine Aktion ist.
 
-Einträge von Webseiten: Per Rechtsklick gesammelte Stellen kommen als Anhang „Von der Webseite". Schreibt der Nutzer „Zu Tasks hinzufügen" (oder nichts Genaueres), legst du daraus Aufgaben an:
+Einträge von Webseiten: Per Rechtsklick gesammelte Stellen und im Picker gewählte Blöcke kommen im „Bezug dieser Nachricht" als „Von der Webseite (1)", „(2)" …. Schreibt der Nutzer „Zu Tasks hinzufügen" (oder nichts Genaueres), legst du daraus Aufgaben an:
 - Gemeint ist in erster Linie die Markierung bzw. die angeklickte Stelle; der Abschnitt drumherum ist nur Umgebung.
 - Ort: passende Liste und Elternaufgabe; achte auf Abkürzungen (z. B. „nat Info" für „Einführung in die naturwissenschaftliche Informatik"). Passt nichts, die oberste Ebene der passendsten Liste.
 - Titel kurz, im Stil der Geschwister (heißen sie „Blatt 3", heißt das neue z. B. „Blatt 4").

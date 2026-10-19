@@ -1,7 +1,7 @@
 // Real run against Claude Code (uses your subscription quota):
 //   npm run test:e2e -- <backup.json>
 // Right-click "Zu Tasks hinzufügen" twice, the chat way: background.js (vm)
-// drops the capture into the mailbox, the sidebar (jsdom) shows it as a card,
+// drops the capture into the mailbox, the sidebar (jsdom) lists it in the Bezug,
 // an empty send ("Zu Tasks hinzufügen") goes through the native helper to
 // claude -p. Starts without a DL parent – the second entry should create it.
 const fs = require("fs"); const vm = require("vm"); const { spawn } = require("child_process");
@@ -51,8 +51,8 @@ function show() {
 async function run(selection, url, title) {
   sel = selection; const t0 = Date.now();
   click({ menuItemId: "tasks-add-selection", frameId: 0, selectionText: selection.slice(0, 40) }, { id: 1, url, title });
-  while (!d.querySelector("#chatAttach .att-card")) await new Promise((r) => setTimeout(r, 100));
-  console.log("  Karte: " + d.querySelector("#chatAttach .att-name").textContent);
+  while (!d.querySelector("#chatCtx .ctx-web")) await new Promise((r) => setTimeout(r, 100));
+  console.log("  Bezug: " + d.querySelector("#chatCtx .ctx-text").textContent);
   d.getElementById("chatInput").value = "";
   d.getElementById("chatForm").dispatchEvent(new H.w.Event("submit", { cancelable: true }));
   await H.tick();
