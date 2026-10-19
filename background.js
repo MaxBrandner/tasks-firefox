@@ -1088,6 +1088,8 @@ Antwortformat: reply (Text, einfaches Markdown), actions (Liste von Aktionen, le
 
 In reply verweist du auf Aufgaben mit [[T:<id>]] und auf Listen mit [[L:<id>]] (auf etwas, das du in derselben Antwort mit ref anlegst: [[T:ref:<name>]]) – das wird als anklickbarer Name angezeigt; schreib den Namen nicht zusätzlich daneben. Nutze highlight, wenn du über bestimmte Aufgaben sprichst (z. B. „was ist diese Woche fällig?"), damit der Nutzer sie in der Liste sieht.
 
+Tasten schreibst du in reply wie im Fenster „Tastenkürzel & Markdown": jede Taste einzeln als <kbd>Strg</kbd>+<kbd>Z</kbd> (Namen wie dort: Strg, Shift, Alt, Enter, Esc, Entf, Backspace, Leertaste, Tab, ↑ ↓ ← →), Mausaktionen wie Klick oder ziehen als normales Wort. Das ist ein Angebot, kein Zwang: Kommt der Nutzer mit der Schreibweise nicht zurecht oder fragt anders, erklär es in einfachen Worten.
+
 Aktionen (jedes Feld ist Text; nicht benutzte Felder leer lassen; target/list/parent sind IDs oder „ref:<name>" für etwas, das du in derselben Antwort mit ref angelegt hast):
 - create_task: title, optional parent (Elternaufgabe), list (ohne parent; Standard: geöffnete Liste), notes, due_date, due_time, weekly, url+link_title (ein Link), position („first"/„last"), ref.
 - update_task: target; title, notes („none" = Notiz leeren), due_date (JJJJ-MM-TT, „none" = entfernen), due_time (HH:MM, „none" = entfernen), done („true"/„false"), weekly („true"/„false"). Nur gesetzte Felder werden geändert.
@@ -1113,7 +1115,7 @@ So funktioniert Tasks – für Fragen zur Erweiterung selbst; antworte danach, n
 - Auswählen wie im Explorer: Klick wählt eine Aufgabe aus (Shift/Strg+Klick oder Shift+↑/↓ mehrere), nochmal auf den Titel, Doppelklick oder Enter bearbeitet. In der Auswahl: ↑/↓ wandern, ←/→ ein-/aufklappen, Alt+↑/↓ verschieben, Tab/Shift+Tab ein-/ausrücken, Leertaste abhaken, Entf löschen, Buchstabe tippen bearbeitet, Esc hebt auf. Esc beim Bearbeiten führt zurück in die Auswahl.
 - Tastatur beim Bearbeiten: Strg+Alt+A Seitenleiste auf/zu, / Chat, Enter neue Aufgabe, Tab / Shift+Tab ein-/ausrücken, Strg+Enter abhaken, Alt+↑/↓ verschieben, Strg+↑/↓ ein-/ausklappen. Alles unter ⋯ → „Tastenkürzel & Markdown".
 - Einstellungen: Design (System/hell/dunkel), Bereich „Erledigt" auf/zu und die KI-Verbindung lassen sich auch hier im Chat ändern (set_setting); alles andere über ⋯ und den Knopf oben rechts.
-- „+" im Chat: Element auf der Seite auswählen (alle Blöcke sind gestrichelt umrandet; Klick wählt einen Block an oder ab, Umschalt+Klick alles dazwischen, Ziehen einen Rahmen, Strg+A alle sichtbaren, Alt+Ziehen markiert Text, Klick auf markierten Text nimmt ihn raus; jedes Stück wird ein eigener nummerierter Eintrag im „Bezug"; Strg+Z/Strg+Y auf der Seite: rückgängig/wieder; Enter oder Esc beendet das Auswählen – danach geht, was man auf der Seite tippt, direkt ins Chat-Feld (Klick auf die Seite beendet das); Esc im Chat-Feld nimmt alle Markierungen raus, Strg+Z holt sie zurück; zeigt man auf der Seite auf eine Markierung, leuchtet ihr Eintrag im „Bezug" auf; nach einem Neuladen der Seite erscheinen die Markierungen wieder. Die Tasten erklärt der Bezug einmal beim ersten Auswählen; fragt der Nutzer nach den Tasten, erkläre sie ihm), Datei hinzufügen (PDF, Bild, Text; auch per Drag & Drop irgendwohin auf die Seitenleiste) und ganze Seite schicken (Text der aktuellen Seite, Firefox fragt einmal nach der Erlaubnis; Firefox-eigene Seiten und lokale Dateien file:// sperrt Firefox für Add-ons – lokale Dateien einfach in die Seitenleiste ziehen). Anhänge gehen mit der nächsten Nachricht an dich. Markierter Chat-Text kommt über „↩ Antworten" als Zitat in den „Bezug"; mehrere Zitate werden angehängt.
+- „+" im Chat: Element auf der Seite auswählen (alle Blöcke sind gestrichelt umrandet; Klick wählt einen Block an oder ab, Shift+Klick alles dazwischen, Ziehen einen Rahmen, Strg+A alle sichtbaren, Alt+Ziehen markiert Text, Klick auf markierten Text nimmt ihn raus; jedes Stück wird ein eigener nummerierter Eintrag im „Bezug"; Strg+Z/Strg+Y auf der Seite: rückgängig/wieder; Enter oder Esc beendet das Auswählen – danach geht, was man auf der Seite tippt, direkt ins Chat-Feld (Klick auf die Seite beendet das); Esc im Chat-Feld nimmt alle Markierungen raus, Strg+Z holt sie zurück; zeigt man auf der Seite auf eine Markierung, leuchtet ihr Eintrag im „Bezug" auf; nach einem Neuladen der Seite erscheinen die Markierungen wieder. Die Tasten erklärt der Bezug einmal beim ersten Auswählen; fragt der Nutzer nach den Tasten, erkläre sie ihm), Datei hinzufügen (PDF, Bild, Text; auch per Drag & Drop irgendwohin auf die Seitenleiste) und ganze Seite schicken (Text der aktuellen Seite, Firefox fragt einmal nach der Erlaubnis; Firefox-eigene Seiten und lokale Dateien file:// sperrt Firefox für Add-ons – lokale Dateien einfach in die Seitenleiste ziehen). Anhänge gehen mit der nächsten Nachricht an dich. Markierter Chat-Text kommt über „↩ Antworten" als Zitat in den „Bezug"; mehrere Zitate werden angehängt.
 - Layout: Ist die Seitenleiste breit, stehen Liste und Chat nebeneinander; schmal gibt es die Reiter „Aufgaben | Chat" und mit / eine Schnell-Karte.
 
 Was es NICHT gibt: Tags, Prioritäten, Farben, Erinnerungen/Benachrichtigungen, Suche/Filter, Anhänge, Teilen, Zugriff auf Webseiten oder das Internet. Listen löschen kannst du nicht – das macht der Nutzer selbst über ⋯ → „Liste löschen". Wird danach gefragt, sag ehrlich, dass es das (noch) nicht gibt, und biete – wenn sinnvoll – eine Lösung mit vorhandenen Mitteln an (z. B. „#klausur" als Konvention im Titel; markieren oder öffnen kannst du dann alles mit #klausur). Täusche nie vor, etwas getan zu haben, das keine Aktion ist.
@@ -1136,6 +1138,35 @@ Anhänge: Hängt der Nutzer Dateien (PDF, Bilder, Text), gewählte Blöcke einer
 const CHAT_HINT = "\n\nAntworte ausschließlich mit einem JSON-Objekt: {\"reply\": Text, \"actions\": [ {\"op\", \"target\", \"list\", \"parent\", \"ref\", \"title\", \"notes\", \"due_date\", \"due_time\", \"done\", \"weekly\", \"url\", \"link_title\", \"position\", \"value\"} … ], \"highlight\": [IDs]} – alle Aktionsfelder als Text, leer wenn unbenutzt.";
 
 const CHAT_JOB = { system: CHAT_SYSTEM_PROMPT, schema: CHAT_SCHEMA, hint: CHAT_HINT, name: "chat", effort: "medium", maxTokens: 8000 };
+
+// Search in the shortcuts popup: which rows fit what the user describes.
+// Gets only the rows of the popup and the question – no tasks.
+const HELP_SCHEMA = {
+  type: "object",
+  properties: {
+    rows: { type: "array", items: { type: "integer" } },
+    answer: { type: "string" },
+  },
+  required: ["rows", "answer"],
+  additionalProperties: false,
+};
+
+const HELP_SYSTEM_PROMPT = `Du hilfst im Fenster „Tastenkürzel & Markdown" der Aufgaben-Erweiterung „Tasks" (Firefox-Seitenleiste). Du bekommst die nummerierten Zeilen des Fensters (Nummer | Abschnitt | Tasten | Wirkung) und eine Suche, in der der Nutzer in eigenen Worten beschreibt, was er tun möchte.
+
+rows: die Nummern der passenden Zeilen, beste zuerst, höchstens fünf; leer, wenn keine passt.
+answer: ein kurzer Satz auf Deutsch, der die Suche direkt beantwortet. Tasten schreibst du wie im Fenster: jede Taste einzeln als <kbd>Strg</kbd>+<kbd>Z</kbd>, Mausaktionen (Klick, ziehen) als normales Wort, Markdown-Schreibweisen in Backticks (\`**fett**\`), damit sie nicht formatiert werden. Passt keine Zeile, sag ehrlich, dass es dafür kein Kürzel gibt. Erfinde keine Kürzel.`;
+
+const HELP_HINT = "\n\nAntworte ausschließlich mit einem JSON-Objekt: {\"rows\": [Nummern], \"answer\": Text}.";
+
+const HELP_JOB = { system: HELP_SYSTEM_PROMPT, schema: HELP_SCHEMA, hint: HELP_HINT, name: "help_search", effort: "low", maxTokens: 1000 };
+
+browser.runtime.onMessage.addListener((msg) => {
+  if (!msg || msg.type !== "help-search") return undefined;
+  const prompt = `Zeilen:\n${String(msg.rows || "")}\n\nSuche: ${String(msg.question || "").slice(0, 300)}`;
+  return askModel(HELP_JOB, prompt)
+    .then((data) => ({ ok: true, data }))
+    .catch((err) => ({ ok: false, error: (err && err.message) || String(err) }));
+});
 
 // Chat requests from the sidebar.
 browser.runtime.onMessage.addListener((msg) => {

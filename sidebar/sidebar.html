@@ -40,48 +40,103 @@
         <h2 id="helpTitle">Tastenkürzel &amp; Markdown</h2>
         <button class="icon-btn modal-close" type="button" data-close aria-label="Schließen" title="Schließen"></button>
       </header>
-      <div class="help-grid">
-        <h3>Ausgewählte Aufgaben (Klick auf eine Aufgabe)</h3>
-        <kbd>Klick</kbd><span>auswählen; nochmal auf den Titel, Doppelklick oder Enter = bearbeiten</span>
-        <kbd>Shift / Strg+Klick</kbd><span>Bereich / einzelne dazu (auch Shift+↑/↓)</span>
-        <kbd>↑ / ↓</kbd><span>Auswahl wandern; ohne Auswahl: unterste/oberste</span>
-        <kbd>← / →</kbd><span>einklappen / aufklappen; sonst zur Überkategorie / ersten Unteraufgabe</span>
-        <kbd>Alt+↑ / ↓</kbd><span>verschieben</span>
-        <kbd>Tab / Shift+Tab</kbd><span>einrücken / ausrücken</span>
-        <kbd>Leertaste</kbd><span>abhaken (auch Strg+Enter)</span>
-        <kbd>Entf</kbd><span>löschen (Strg+Z holt zurück)</span>
-        <kbd>Buchstabe</kbd><span>losschreiben: bearbeitet den Titel, Text ans Ende</span>
-        <kbd>Esc</kbd><span>Auswahl aufheben</span>
-        <h3>Beim Bearbeiten (Cursor im Titel)</h3>
-        <kbd>Enter</kbd><span>neue Aufgabe darunter (Text rechts vom Cursor wandert mit)</span>
-        <kbd>Tab / Shift+Tab</kbd><span>einrücken / ausrücken</span>
-        <kbd>Strg+Enter</kbd><span>abhaken</span>
-        <kbd>Backspace</kbd><span>am Zeilenanfang ausrücken, in leerer Zeile löschen</span>
-        <kbd>↑ / ↓</kbd><span>zum Titel darüber/darunter</span>
-        <kbd>Alt+↑ / ↓</kbd><span>verschieben</span>
-        <kbd>Strg+↑ / ↓</kbd><span>einklappen / aufklappen (auch in der Auswahl)</span>
-        <kbd>Strg+Z / Strg+Y</kbd><span>rückgängig / wiederholen (alle Schritte: ⋯ → Verlauf …)</span>
-        <kbd>Esc</kbd><span>zurück zur Auswahl</span>
-        <h3>Maus</h3>
-        <kbd>⋮⋮ ziehen</kbd><span>verschieben; weiter rechts = Unteraufgabe, unter allem = ganz unten; über eingeklapptem Block kurz warten = aufklappen</span>
-        <kbd>Leiste links</kbd><span>Block ein-/aufklappen; die Zahl dahinter = offene Unteraufgaben (alle: ⋯-Menü)</span>
-        <kbd>Dateien ziehen</kbd><span>irgendwohin auf Tasks: Anhang im Chat</span>
-        <h3>KI-Chat</h3>
-        <kbd>/</kbd><span>in den Chat schreiben (schmale Seitenleiste: Schnell-Chat über den Aufgaben)</span>
-        <kbd>Enter / Shift+Enter</kbd><span>senden / neue Zeile</span>
-        <kbd>Esc</kbd><span>Markierungen auf der Webseite entfernen (Strg+Z holt sie zurück), sonst Chat schließen</span>
-        <kbd>Rechtsklick</kbd><span>auf einer Webseite „Zu Tasks hinzufügen“: die Stelle landet im Bezug</span>
-        <h3>Auf der Webseite (+ → Element auswählen)</h3>
-        <kbd>Klick</kbd><span>Block oder markierten Text an/aus</span>
-        <kbd>Umschalt+Klick</kbd><span>alles dazwischen</span>
-        <kbd>Ziehen / Alt+Ziehen</kbd><span>Rahmen aufziehen / Text markieren</span>
-        <kbd>Strg+A</kbd><span>alle sichtbaren Blöcke</span>
-        <kbd>Strg+Z / Strg+Y</kbd><span>zurück / wieder</span>
-        <kbd>Enter / Esc</kbd><span>fertig – danach landet, was man tippt, im Chat; zweites Esc: Markierungen dieser Seite weg</span>
-        <h3>Überall in Firefox</h3>
-        <kbd>Strg+Alt+A</kbd><span>Tasks öffnen/schließen</span>
+      <!-- Search + jump chips stay on top; sections are <details> (sidebar.js: setupHelp). -->
+      <div class="help-tools">
+        <input id="helpSearch" class="help-search" type="search" placeholder="Kürzel suchen …" aria-label="Kürzel suchen" autocomplete="off" autofocus />
+        <nav class="help-jump" aria-label="Springen zu">
+          <button type="button" data-jump="sel edit both">Liste</button>
+          <button type="button" data-jump="mouse">Maus</button>
+          <button type="button" data-jump="chat web ff">Chat &amp; Web</button>
+          <button type="button" data-jump="md">Markdown</button>
+        </nav>
       </div>
-      <p>Markdown: <code>**fett**</code> <code>*kursiv*</code> <code>~~durch~~</code> <code>`code`</code> <code>[Text](https://…)</code>, Links werden automatisch erkannt. In Notizen zusätzlich <code>- Liste</code>, <code>1. Liste</code>, <code># Überschrift</code>, <code>&gt; Zitat</code>.</p>
+      <!-- AI search: answer + the rows it picked; Enter or the button asks. -->
+      <div id="helpAi" class="help-ai" role="status" hidden></div>
+      <p id="helpEmpty" class="help-empty" hidden>Nichts gefunden.</p>
+      <button id="helpAsk" class="help-ask" type="button" hidden></button>
+      <details class="help-sec" data-sec="sel" open>
+        <summary>Aufgabe ausgewählt <span class="help-hint">Klick auf eine Aufgabe</span></summary>
+        <div class="help-grid">
+          <div class="help-row"><span class="help-keys"><span class="help-act">Klick</span></span><span>auswählen; nochmal auf den Titel, Doppelklick oder Enter = bearbeiten</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Shift</kbd> / <kbd>Strg</kbd>+<span class="help-act">Klick</span></span><span>Bereich / einzelne dazu (auch Shift+↑/↓)</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>↑</kbd> / <kbd>↓</kbd></span><span>Auswahl wandern; ohne Auswahl: unterste/oberste</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>←</kbd> / <kbd>→</kbd></span><span>einklappen / aufklappen; sonst zur Überkategorie / ersten Unteraufgabe</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Leertaste</kbd></span><span>abhaken</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Entf</kbd></span><span>löschen</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Buchstabe</kbd></span><span>losschreiben: bearbeitet den Titel, Text ans Ende</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Esc</kbd></span><span>Auswahl aufheben</span></div>
+        </div>
+      </details>
+      <details class="help-sec" data-sec="edit">
+        <summary>Beim Bearbeiten <span class="help-hint">Cursor im Titel</span></summary>
+        <div class="help-grid">
+          <div class="help-row"><span class="help-keys"><kbd>Enter</kbd></span><span>neue Aufgabe darunter (Text rechts vom Cursor wandert mit)</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Backspace</kbd></span><span>am Zeilenanfang ausrücken, in leerer Zeile löschen</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>↑</kbd> / <kbd>↓</kbd></span><span>zum Titel darüber/darunter</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Esc</kbd></span><span>zurück zur Auswahl</span></div>
+        </div>
+      </details>
+      <details class="help-sec" data-sec="both">
+        <summary>Ausgewählt und beim Bearbeiten</summary>
+        <div class="help-grid">
+          <div class="help-row"><span class="help-keys"><kbd>Strg</kbd>+<kbd>Enter</kbd></span><span>abhaken</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd></span><span>einrücken / ausrücken</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Alt</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd></span><span>verschieben</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Strg</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd></span><span>einklappen / aufklappen</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Strg</kbd>+<kbd>Z</kbd> / <kbd>Strg</kbd>+<kbd>Y</kbd></span><span>rückgängig / wiederholen (alle Schritte: ⋯ → Verlauf …)</span></div>
+        </div>
+      </details>
+      <details class="help-sec" data-sec="mouse">
+        <summary>Maus</summary>
+        <div class="help-grid">
+          <div class="help-row"><span class="help-keys"><span class="help-act">⋮⋮ ziehen</span></span><span>verschieben; weiter rechts = Unteraufgabe, unter allem = ganz unten; über eingeklapptem Block kurz warten = aufklappen</span></div>
+          <div class="help-row"><span class="help-keys"><span class="help-act">Leiste links</span></span><span>Block ein-/aufklappen; die Zahl dahinter = offene Unteraufgaben (alle: ⋯-Menü)</span></div>
+          <div class="help-row"><span class="help-keys"><span class="help-act">Dateien ziehen</span></span><span>irgendwohin auf Tasks: Anhang im Chat</span></div>
+        </div>
+      </details>
+      <details class="help-sec" data-sec="chat">
+        <summary>KI-Chat</summary>
+        <div class="help-grid">
+          <div class="help-row"><span class="help-keys"><kbd>/</kbd></span><span>in den Chat schreiben (schmale Seitenleiste: Schnell-Chat über den Aufgaben)</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Enter</kbd> / <kbd>Shift</kbd>+<kbd>Enter</kbd></span><span>senden / neue Zeile</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Esc</kbd></span><span>Markierungen auf der Webseite entfernen (Strg+Z holt sie zurück), sonst Chat schließen</span></div>
+          <div class="help-row"><span class="help-keys"><span class="help-act">Rechtsklick</span></span><span>auf einer Webseite „Zu Tasks hinzufügen“: die Stelle landet im Bezug</span></div>
+        </div>
+      </details>
+      <details class="help-sec" data-sec="web">
+        <summary>Auf der Webseite <span class="help-hint">+ → Element auswählen</span></summary>
+        <div class="help-grid">
+          <div class="help-row"><span class="help-keys"><span class="help-act">Klick</span></span><span>Block oder markierten Text an/aus</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Shift</kbd>+<span class="help-act">Klick</span></span><span>alles dazwischen</span></div>
+          <div class="help-row"><span class="help-keys"><span class="help-act">Ziehen</span> / <kbd>Alt</kbd>+<span class="help-act">Ziehen</span></span><span>Rahmen aufziehen / Text markieren</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Strg</kbd>+<kbd>A</kbd></span><span>alle sichtbaren Blöcke</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Strg</kbd>+<kbd>Z</kbd> / <kbd>Strg</kbd>+<kbd>Y</kbd></span><span>zurück / wieder</span></div>
+          <div class="help-row"><span class="help-keys"><kbd>Enter</kbd> / <kbd>Esc</kbd></span><span>fertig – danach landet, was man tippt, im Chat; zweites Esc: Markierungen dieser Seite weg</span></div>
+        </div>
+      </details>
+      <details class="help-sec" data-sec="ff">
+        <summary>Überall in Firefox</summary>
+        <div class="help-grid">
+          <div class="help-row"><span class="help-keys"><kbd>Strg</kbd>+<kbd>Alt</kbd>+<kbd>A</kbd></span><span>Tasks öffnen/schließen</span></div>
+        </div>
+      </details>
+      <details class="help-sec" data-sec="md">
+        <summary>Markdown <span class="help-hint">Formatierung</span></summary>
+        <div class="help-grid help-md">
+          <span class="help-sub">in Titeln und Notizen</span>
+          <div class="help-row"><code>**fett**</code><span><b>fett</b></span></div>
+          <div class="help-row"><code>*kursiv*</code><span><i>kursiv</i></span></div>
+          <div class="help-row"><code>~~durch~~</code><span><s>durch</s></span></div>
+          <div class="help-row"><code>`code`</code><span><code>code</code></span></div>
+          <div class="help-row"><code>[Text](url)</code><span><u>Text</u></span></div>
+          <div class="help-row"><code>https://…</code><span><u>https://…</u> <span class="help-hint">automatisch</span></span></div>
+          <span class="help-sub">nur in Notizen</span>
+          <div class="help-row"><code>- Liste</code><span>• Liste</span></div>
+          <div class="help-row"><code>1. Liste</code><span>1. Liste</span></div>
+          <div class="help-row"><code># Überschrift</code><span class="help-h">Überschrift</span></div>
+          <div class="help-row"><code>&gt; Zitat</code><span class="help-q">Zitat</span></div>
+        </div>
+      </details>
       </div>
     </dialog>
 

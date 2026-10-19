@@ -271,27 +271,243 @@ kbd {
   font-size: 12.5px;
 }
 
-.help-grid {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 10px;
-  align-items: baseline;
+/* Shortcuts popup: search + jump chips on top, sections fold (<details>).
+   Narrow sidebar: key above its explanation instead of beside it. */
+#help .modal-body {
+  container: help / inline-size;
+  padding-top: 0;
 }
 
-.help-grid kbd {
-  justify-self: start;
+#help .modal-head {
+  margin: 0;
+  padding-top: 12px;
 }
 
-.help-grid h3 {
-  grid-column: 1 / -1;
-  margin: 10px 0 0;
+.help-tools {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 -14px 4px -16px;
+  padding: 10px 14px 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.help-search {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.help-search:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.help-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.help-jump button {
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
   color: var(--muted);
-  font-size: 11.5px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.help-jump button:hover {
+  background: var(--hover);
+}
+
+.help-jump button.on {
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--text);
   font-weight: 600;
 }
 
-.help-grid h3:first-child {
+#help.searching .help-jump {
+  display: none;
+}
+
+.help-sec {
+  border-bottom: 1px solid var(--line);
+}
+
+/* Block, not flex: a long hint wraps under the title in a narrow sidebar. */
+.help-sec > summary {
+  position: relative;
+  padding: 7px 2px 7px 16px;
+  list-style: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.help-sec > summary::before {
+  content: "›";
+  position: absolute;
+  left: 3px;
+  color: var(--faint);
+  transition: transform 0.12s;
+}
+
+.help-sec[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.help-hint {
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.help-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 5px 12px;
+  align-items: baseline;
+  padding: 0 0 10px 16px;
+}
+
+.help-row {
+  display: contents;
+}
+
+.help-row[hidden] {
+  display: none;
+}
+
+.help-row > span:last-child {
+  color: var(--muted);
+}
+
+/* Keys one by one; the "+" and "/" between them are faint, mouse actions
+   are plain words. */
+.help-keys {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.help-keys kbd,
+.help-act {
+  color: var(--text);
+}
+
+.help-act {
+  font-size: 12.5px;
+}
+
+.help-md .help-row > span:last-child {
+  color: var(--text);
+}
+
+.help-md code {
+  justify-self: start;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--hover);
+  font: 11.5px ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+.help-md u {
+  color: var(--accent);
+}
+
+.help-sub {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.help-sub:first-child {
   margin-top: 0;
+}
+
+#help.searching .help-sub {
+  display: none;
+}
+
+.help-h {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.help-q {
+  padding-left: 7px;
+  border-left: 3px solid var(--line);
+}
+
+.help-empty {
+  text-align: center;
+}
+
+.help-ask {
+  display: block;
+  width: 100%;
+  margin: 8px 0 4px;
+  padding: 5px 8px;
+  border: 1px dashed var(--line);
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.help-ask:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.help-ai {
+  margin: 8px 0 4px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  line-height: 1.6;
+}
+
+.help-ai.busy {
+  color: var(--muted);
+}
+
+.help-ai.error {
+  background: none;
+  color: var(--danger);
+}
+
+.help-row.help-ai-hit > span:last-child {
+  color: var(--text);
+}
+
+@container help (max-width: 300px) {
+  .help-grid:not(.help-md) {
+    grid-template-columns: 1fr;
+    gap: 1px;
+  }
+
+  .help-grid:not(.help-md) .help-row > span:last-child {
+    margin: 0 0 5px 8px;
+  }
+
+  .help-md {
+    gap: 4px 8px;
+    padding-left: 4px;
+  }
 }
 
 .modal p {

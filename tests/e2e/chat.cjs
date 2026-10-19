@@ -32,6 +32,7 @@ const title = (id) => (H.sync.data["T:" + id] || H.sync.data["L:" + id] || {}).t
     "Was ist diese Woche fällig?",
     "Lege unter DS 2 eine Unteraufgabe „Klausur anmelden“ an, fällig nächsten Freitag",
     "Gib allen nat-Info-Aufgaben den Tag #mathe",
+    "Wie schiebe ich eine Aufgabe mit der Tastatur nach oben?",
   ]) {
     const before = JSON.stringify(H.sync.data); const t0 = Date.now();
     d.getElementById("chatInput").value = text;
@@ -41,6 +42,8 @@ const title = (id) => (H.sync.data["T:" + id] || H.sync.data["L:" + id] || {}).t
     const m = [...d.querySelectorAll("#chatLog .chat-msg")].pop();
     console.log(`\n» ${text}   (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
     console.log("  Antwort: " + m.querySelector(".chat-text").textContent.replace(/\s+/g, " ").trim());
+    const keys = [...m.querySelectorAll(".chat-text kbd")].map((k) => k.textContent);
+    if (keys.length) console.log("  Tasten: " + keys.join(" "));
     const marks = [...d.querySelectorAll(".task.chat-mark")].map((li) => title(li.dataset.id));
     if (marks.length) console.log("  markiert: " + marks.join(", "));
     const changed = Object.entries(H.sync.data).filter(([k, v]) => JSON.stringify(v) !== JSON.stringify(JSON.parse(before)[k]));

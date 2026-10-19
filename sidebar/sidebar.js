@@ -192,6 +192,7 @@
     "\\*(?![\\s*])(.+?)(?<![\\s*])\\*", // 6 italic
     "((?:[a-z][a-z0-9+.-]{1,30}:\\/\\/|mailto:|www\\.)[^\\s<>]*[^\\s<>.,;:!?'\")\\]])", // 7 bare URL (also obsidian://, file:///)
     "\\[\\[([TL]):([A-Za-z0-9_-]{1,64})\\]\\]", // 8,9 reference to a task/list (chat)
+    "<kbd>([^<>\\n]{1,40})</kbd>", // 10 key, as the AI writes shortcuts
   ].join("|"), "g");
 
   function safeHref(url) {
@@ -226,6 +227,8 @@
         parent.append(el);
       } else if (m[8] != null) {
         parent.append(refChip(m[8], m[9]));
+      } else if (m[10] != null) {
+        parent.append(h("kbd", null, m[10]));
       } else if (m[7] != null) {
         const href = safeHref(m[7]);
         if (!href) {
@@ -991,6 +994,7 @@
     } else if (action === "ai") {
       openAiPanel();
     } else if (action === "help") {
+      if (helpSearchEl.value) clearHelpSearch();
       openModal(helpEl);
     }
   });
@@ -1019,6 +1023,151 @@
       if (!mayClose(dlg)) e.preventDefault(); // Esc
     });
   }
+
+  // Shortcuts popup: the search filters every section (and opens the hits),
+  // the chips on top open just their sections and jump there. Enter asks the
+  // AI which rows fit a description ("wie schiebe ich was nach oben").
+  const helpSearchEl = $("helpSearch");
+  const helpAiEl = $("helpAi");
+  const helpAskEl = $("helpAsk");
+  const helpSecs = [...helpEl.querySelectorAll(".help-sec")];
+  const helpRows = [...helpEl.querySelectorAll(".help-row")];
+  // "Strg+Z" and "strg z" are the same search.
+  const helpNorm = (s) => " " + s.toLowerCase().replace(/[+/()[\];,:]/g, " ").replace(/\s+/g, " ") + " ";
+  for (const row of helpRows) row.dataset.t = helpNorm([...row.children].map((c) => c.textContent).join(" "));
+  let helpOpenBefore = null; // which sections were open before searching
+  const helpAiCache = new Map(); // question -> { rows, answer }
+  let helpAiShown = null; // { q, rows: Set } while an AI answer filters the list
+
+  function markHelpJump() {
+    for (const b of helpEl.querySelectorAll("[data-jump]")) {
+      const ids = b.dataset.jump.split(" ");
+      b.classList.toggle("on", helpSecs.some((s) => s.open && ids.includes(s.dataset.sec)));
+    }
+  }
+
+  function filterHelp() {
+    const q = helpSearchEl.value.trim();
+    const words = helpNorm(q).split(" ").filter(Boolean);
+    const searching = words.length > 0;
+    const ai = helpAiShown && helpAiShown.q === q ? helpAiShown.rows : null;
+    // A single letter matches the start of a word ("z" → Z, zurück), longer
+    // words anywhere – so the first keystroke never empties the list.
+    const hits = (text) => words.every((w) => text.includes(w.length > 1 ? w : " " + w));
+    if (searching && !helpOpenBefore) {
+      helpOpenBefore = helpSecs.map((s) => s.open);
+      // Keep the popup's height while searching: no jumping around per keystroke.
+      helpEl.style.minHeight = helpEl.offsetHeight + "px";
+    }
+    helpEl.classList.toggle("searching", searching);
+    let found = false;
+    for (const sec of helpSecs) {
+      // A hit in the section title shows the whole section.
+      const whole = !ai && (!searching || hits(helpNorm(sec.querySelector("summary").textContent)));
+      let any = whole;
+      for (const row of sec.querySelectorAll(".help-row")) {
+        row.hidden = !whole && !(ai ? ai.has(row) : hits(row.dataset.t));
+        row.classList.toggle("help-ai-hit", !!ai && !row.hidden);
+        any ||= !row.hidden;
+      }
+      sec.hidden = !any;
+      if (searching && any) sec.open = true;
+      found ||= any;
+    }
+    if (!searching && helpOpenBefore) {
+      helpSecs.forEach((s, i) => (s.open = helpOpenBefore[i]));
+      helpOpenBefore = null;
+      helpEl.style.minHeight = "";
+    }
+    $("helpEmpty").hidden = found || !!ai;
+    helpAskEl.hidden = !searching || !!ai || aiSettings.mode === "none";
+    if (!helpAskEl.hidden) helpAskEl.replaceChildren("✦ KI fragen: „" + q + "“ ", h("kbd", null, "Enter"));
+    if (!ai && !helpAiEl.classList.contains("busy")) helpAiEl.hidden = true;
+    markHelpJump();
+  }
+
+  function clearHelpSearch() {
+    helpSearchEl.value = "";
+    helpAiShown = null;
+    helpAiEl.classList.remove("busy");
+    filterHelp();
+  }
+
+  // Shows an AI result (or that it's still thinking / failed) for question q.
+  function showHelpAi(q, res) {
+    helpAiEl.hidden = false;
+    helpAiEl.classList.toggle("busy", !!res.busy);
+    helpAiEl.classList.toggle("error", !!res.error);
+    helpAiEl.replaceChildren();
+    if (res.busy) helpAiEl.append("KI sucht", h("span", { class: "dots" }));
+    else if (res.error) helpAiEl.append(res.error);
+    else renderInline(res.answer || "Keine passende Zeile gefunden.", helpAiEl);
+    helpAiShown = res.rows ? { q, rows: new Set(res.rows.map((n) => helpRows[n - 1])) } : null;
+    filterHelp();
+  }
+
+  async function askHelpAi() {
+    const q = helpSearchEl.value.trim();
+    if (!q || aiSettings.mode === "none" || helpAiEl.classList.contains("busy")) return;
+    if (helpAiCache.has(q)) return showHelpAi(q, helpAiCache.get(q));
+    showHelpAi(q, { busy: true });
+    // Only the rows of this popup and the question go out – no tasks.
+    const rows = helpRows.map((r, i) => {
+      const sum = r.closest(".help-sec").querySelector("summary");
+      const hint = sum.querySelector(".help-hint");
+      const sec = sum.firstChild.textContent.trim() + (hint ? ` (${hint.textContent})` : "");
+      return `${i + 1} | ${sec} | ${r.firstElementChild.textContent.trim()} | ${r.lastElementChild.textContent.trim()}`;
+    }).join("\n");
+    let reply;
+    try {
+      reply = await browser.runtime.sendMessage({ type: "help-search", question: q, rows });
+    } catch (err) {
+      reply = { ok: false, error: (err && err.message) || String(err) };
+    }
+    helpAiEl.classList.remove("busy");
+    let res;
+    if (reply && reply.ok && reply.data) {
+      const nums = Array.isArray(reply.data.rows) ? reply.data.rows : [];
+      res = {
+        rows: [...new Set(nums.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= helpRows.length))].slice(0, 5),
+        answer: String(reply.data.answer || ""),
+      };
+      helpAiCache.set(q, res);
+    } else {
+      res = { error: (reply && reply.error) || "Keine Antwort." };
+    }
+    // Typed on in the meantime: the answer waits in the cache for Enter.
+    if (helpSearchEl.value.trim() === q) showHelpAi(q, res);
+    else filterHelp();
+  }
+
+  helpEl.querySelector(".help-jump").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-jump]");
+    if (!b) return;
+    const ids = b.dataset.jump.split(" ");
+    for (const s of helpSecs) s.open = ids.includes(s.dataset.sec);
+    const first = helpSecs.find((s) => s.open);
+    first.style.scrollMarginTop = helpEl.querySelector(".help-tools").offsetHeight + "px";
+    first.scrollIntoView?.({ block: "start" });
+    markHelpJump();
+  });
+  for (const s of helpSecs) s.addEventListener("toggle", markHelpJump);
+  helpSearchEl.addEventListener("input", () => {
+    helpAiShown = null;
+    filterHelp();
+  });
+  helpSearchEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.isComposing) {
+      e.preventDefault();
+      askHelpAi();
+    } else if (e.key === "Escape" && helpSearchEl.value) {
+      // Esc first empties the search, the next one closes the popup.
+      e.preventDefault();
+      clearHelpSearch();
+    }
+  });
+  helpAskEl.addEventListener("click", askHelpAi);
+  markHelpJump();
 
   function deleteList(id) {
     if (lists.size <= 1) return;

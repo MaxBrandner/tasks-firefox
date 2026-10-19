@@ -105,7 +105,10 @@ bei „+ im Chat“.
 
 `Strg+Alt+A` lässt sich ändern unter `about:addons` → Zahnrad →
 „Erweiterungs-Tastenkombinationen verwalten". Alle Kürzel stehen auch in der
-Seitenleiste unter `⋯` → „Tastenkürzel & Markdown".
+Seitenleiste unter `⋯` → „Tastenkürzel & Markdown": oben ein Suchfeld (z. B.
+„strg z“ oder „verschieben“) und Knöpfe, die zu den Abschnitten springen. Findet
+die Suche nichts Passendes, fragt `Enter` die KI („wie schiebe ich eine Aufgabe
+nach oben?“) – sie bekommt nur die Zeilen dieses Fensters, keine Aufgaben.
 
 ## Zu Tasks hinzufügen (KI)
 

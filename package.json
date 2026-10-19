@@ -9,6 +9,7 @@
     "test": "node tests/run.cjs",
     "test:e2e": "node tests/e2e/add-to-tasks.cjs",
     "test:e2e:chat": "node tests/e2e/chat.cjs",
+    "test:e2e:help": "node tests/e2e/help-search.cjs",
     "lint": "web-ext lint --self-hosted",
     "build": "web-ext build --overwrite-dest",
     "sign": "bash scripts/sign.sh"

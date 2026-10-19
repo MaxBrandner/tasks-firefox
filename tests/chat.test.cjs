@@ -37,6 +37,8 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   key("Escape"); await H.tick();
   ok(d.body.dataset.chat === "tasks", "… nächstes Esc schließt die Karte");
   key("/"); await H.tick();
+  await say("Wie verschiebe ich?", { reply: "Mit <kbd>Alt</kbd>+<kbd>↑</kbd>, aber <kbd><b>x</b></kbd> bleibt Text.", actions: [], highlight: [] });
+  ok([...last().querySelectorAll(".chat-text kbd")].map((k) => k.textContent).join() === "Alt,↑" && last().querySelector(".chat-text").textContent.includes("<kbd><b>x</b></kbd>"), "Tasten in der Antwort wie im Tastenkürzel-Fenster; sonst kein HTML");
   await say("Was ist bei DL dran?", { reply: "[[T:b1]].", actions: [], highlight: ["b1"] });
   ok(!$("tabMarks").hidden && $("tabMarks").textContent === "1 markiert", "Reiter „Aufgaben“ zählt Markierungen");
   key("Escape", $("chatInput")); await H.tick();
