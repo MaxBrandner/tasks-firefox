@@ -24,9 +24,10 @@ Google, kein eigener Server.
   optional eine **Uhrzeit** (tippen wie „14:30“, „1430“ oder „2pm“). Anzeige
   „Heute", „Morgen", Wochentag; unter 48 h ein **Countdown** („noch 1 T 18 Std"),
   danach „überfällig" in Rot.
-- **↻ Wöchentlich** – ist eine Abgabe fällig oder abgehakt, entsteht die nächste
-  eine Woche später (Zahl am Titelende zählt mit: „Blatt 3" → „Blatt 4"). Die
-  Vorwoche bleibt als eigene Aufgabe stehen und wird nicht überschrieben.
+- **↻ Wöchentlich** – zum Fälligkeitstermin entsteht die nächste, eine Woche
+  später (Zahl am Titelende zählt mit: „Blatt 3" → „Blatt 4"). Früh abgehakt
+  ist man bis dahin für die Woche fertig. Die Vorwoche bleibt als eigene
+  Aufgabe stehen und wird nicht überschrieben.
   Eine Flamme mit Zahl zeigt, wie viele Wochen in Folge pünktlich erledigt
   wurden. Im Fortschritt der Oberaufgabe zählt die Serie nur einmal.
 - **Links** – eigenes Feld je Aufgabe, beliebig viele (im Bearbeitungsmodus

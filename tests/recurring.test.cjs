@@ -30,9 +30,9 @@ const chipText = (t) => li(t).querySelector(":scope>.row .due .due-label")?.text
   await unfocus();
   const before = Object.keys(sync.data).length;
   li("Bald").querySelector(":scope>.row .check").click(); await tick();
-  ok(Object.keys(sync.data).length === before + 1 && Object.values(sync.data).some((v) => v.t === "Bald" && v.r === "w" && !v.x), "früh abgehakt → nächste Woche sofort angelegt");
+  ok(Object.keys(sync.data).length === before && T("Bald").x && T("Bald").r === "w", "früh abgehakt → nächste Woche erst zum Fälligkeitstermin");
   await bodyKey("z", { ctrlKey: true });
-  ok(Object.keys(sync.data).length === before && T("Bald").r === "w" && !T("Bald").x, "Strg+Z nimmt Abhaken + neue Instanz zurück");
+  ok(Object.keys(sync.data).length === before && T("Bald").r === "w" && !T("Bald").x, "Strg+Z nimmt Abhaken zurück");
   edit("Bald"); await tick();
   li("Bald").querySelector('.details .icon-btn.small[title="Datum entfernen"]').click(); await tick();
   ok(!T("Bald").d && !T("Bald").h && !T("Bald").r, "Datum entfernen → Uhrzeit + Wiederholung weg");

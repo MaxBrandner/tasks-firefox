@@ -52,7 +52,8 @@ const menu = async () => { d.querySelector('#listMenu [data-action="doneSubtasks
   ok(!streak("Skript") && !streak("Kurs"), "Flamme nur an wöchentlichen Aufgaben");
   await over("Zettel 4");
   await check("Zettel 4");
-  ok(streak("Zettel 5") === "3" && pill("Kurs").textContent === "1/3", "abgehakt: Zettel 5 mit 3, Fortschritt bleibt 1/3");
+  ok(!H.idOf("Zettel 5") && streak("Zettel 4") === "3", "früh abgehakt: noch kein Zettel 5, Flamme zählt gleich mit: " + streak("Zettel 4"));
+  ok(pill("Kurs").textContent === "2/3", "die Woche zählt als erledigt: " + pill("Kurs").textContent);
   await over("Zahnarzt");
 
   li("Nichts erledigt").querySelector(":scope > .fold-bar").click(); await tick();

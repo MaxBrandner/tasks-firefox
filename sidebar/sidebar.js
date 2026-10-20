@@ -1437,8 +1437,9 @@
   }
 
   // --- Weekly repeat ----------------------------------------------------------
-  // When the current instance is due or checked, the next one is created: one
-  // week later, a number at the end of the title counts up ("Blatt 3" →
+  // When the current instance is due, the next one is created – also when it
+  // was checked early: until then you are done for the week (e.g. the next
+  // exercise sheet only comes out at the deadline). One week later, a number at the end of the title counts up ("Blatt 3" →
   // "Blatt 4"). The old one stays as its own task – even when overdue – and is
   // never overwritten. The new instance's ID is derived from series + date so
   // two devices syncing via Firefox Sync don't create duplicates.
@@ -1467,7 +1468,7 @@
       let id = startId;
       for (let guard = 0; guard < 12; guard++) {
         const cur = tasks.get(id);
-        if (!cur || (!cur.x && dueAt(cur) > now)) break;
+        if (!cur || dueAt(cur) > now) break;
         const series = cur.s || id;
         const nextD = addDays(cur.d, 7);
         const nid = series + "-" + nextD.replace(/-/g, "");
@@ -2508,7 +2509,7 @@
         h("button", {
           class: "chip icon-only" + (t.r === "w" ? " active" : ""),
           type: "button",
-          title: "Wöchentlich wiederholen – die Vorwoche bleibt stehen",
+          title: "Wöchentlich wiederholen – die nächste erscheint zum Fälligkeitstermin, die Vorwoche bleibt stehen",
           "aria-label": "Wöchentlich wiederholen",
           "aria-pressed": String(t.r === "w"),
           onclick: () => setWeekly(id, t.r !== "w"),
@@ -2650,11 +2651,11 @@
   }
 
   // Weekly series: weeks in a row checked by their due date, counted back
-  // from the instance before the current one.
+  // from the current instance (if already checked) or the one before.
   function streakOf(t) {
     if (t.r !== "w" || !t.s || !t.d) return 0;
     const past = [];
-    for (const x of tasks.values()) if (x.s === t.s && x.d && x.d < t.d) past.push(x);
+    for (const x of tasks.values()) if (x.s === t.s && x.d && (x.d < t.d || (x.d === t.d && x.x))) past.push(x);
     past.sort((a, b) => (a.d < b.d ? 1 : -1));
     let n = 0;
     for (const x of past) {
