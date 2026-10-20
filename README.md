@@ -28,8 +28,8 @@ Google, kein eigener Server.
   später (Zahl am Titelende zählt mit: „Blatt 3" → „Blatt 4"). Früh abgehakt
   ist man bis dahin für die Woche fertig. Die Vorwoche bleibt als eigene
   Aufgabe stehen und wird nicht überschrieben.
-  Eine Flamme mit Zahl zeigt, wie viele Wochen in Folge pünktlich erledigt
-  wurden. Im Fortschritt der Oberaufgabe zählt die Serie nur einmal.
+  Eine Flamme mit Zahl zeigt, wie viele Wochen in Folge erledigt wurden
+  (nachgeholte zählen mit). Im Fortschritt der Oberaufgabe zählt die Serie nur einmal.
 - **Links** – eigenes Feld je Aufgabe, beliebig viele (im Bearbeitungsmodus
   „+ Link einfügen"). Eingeklappt zeigt 🔗 die Anzahl – inklusive der Links aller
   Unteraufgaben; ein Klick öffnet einen Link direkt bzw. mehrere zusammen als

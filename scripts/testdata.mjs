@@ -41,7 +41,7 @@ const data = {
   "T:testmy00006": { l: MY, p: "testmy00005", t: "Anna", x: true, xa: at(-6).getTime(), o: 0 },
   "T:testmy00007": { l: MY, p: "testmy00005", t: "Ben", o: 1 },
   "T:testmy00008": { l: MY, p: "testmy00001", t: "Transporter mieten", o: 4 },
-  // Weekly series as subtasks: Blatt 1 late, 2 and 3 on time → flame 2;
+  // Weekly series as subtasks: Blatt 1 (caught up late), 2 and 3 done → flame 3;
   // Blatt 4 is current (next one only appears at its due time)
   "T:testmy00010": { l: MY, t: "Statistik Übungen", o: 1 },
   "T:testmy00011": { l: MY, p: "testmy00010", t: "Lerngruppe finden", x: true, xa: at(-24 * 20).getTime(), o: 0 },

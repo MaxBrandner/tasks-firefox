@@ -19,7 +19,7 @@ const H = require("./harness.cjs")(ROOT, {
   "T:u1": { l: "default", p: "u", t: "Lesen", o: 0 },
   "T:u2": { l: "default", p: "u", t: "Blatt 3", o: 1, r: "w", d: "2026-01-05", x: true, xa: 3 },
   "T:u3": { l: "default", p: "u", t: "Klausur", o: 2 },
-  // Weekly series: Zettel 1 checked late, 2 and 3 on time, Zettel 4 is current.
+  // Weekly series: Zettel 1 caught up late, 2 and 3 on time, Zettel 4 is current.
   "T:k": { l: "default", t: "Kurs", o: 4 },
   "T:k0": { l: "default", p: "k", t: "Anmelden", o: 0, x: true, xa: ago(30) },
   "T:k1": { l: "default", p: "k", t: "Zettel 1", o: 1, s: "k1", d: day(-18), x: true, xa: ago(1) },
@@ -48,12 +48,18 @@ const menu = async () => { d.querySelector('#listMenu [data-action="doneSubtasks
   ok(kids("Übungen")[1] === "Blatt 4" && kids("Übungen")[0] === "Lesen", "nächste Woche landet hinter der ausgeblendeten, nicht oben: " + kids("Übungen").join());
 
   ok(pill("Kurs").textContent === "1/3", "Serie zählt einmal (nur die aktuelle Woche): " + pill("Kurs").textContent);
-  ok(streak("Zettel 4") === "2", "Flamme: 2 Wochen in Folge pünktlich (Zettel 1 war zu spät): " + streak("Zettel 4"));
+  ok(streak("Zettel 4") === "3", "Flamme: 3 Wochen in Folge (nachgeholtes Zettel 1 zählt mit): " + streak("Zettel 4"));
   ok(!streak("Skript") && !streak("Kurs"), "Flamme nur an wöchentlichen Aufgaben");
   await over("Zettel 4");
   await check("Zettel 4");
-  ok(!H.idOf("Zettel 5") && streak("Zettel 4") === "3", "früh abgehakt: noch kein Zettel 5, Flamme zählt gleich mit: " + streak("Zettel 4"));
+  ok(!H.idOf("Zettel 5") && streak("Zettel 4") === "4", "früh abgehakt: noch kein Zettel 5, Flamme zählt gleich mit: " + streak("Zettel 4"));
   ok(pill("Kurs").textContent === "2/3", "die Woche zählt als erledigt: " + pill("Kurs").textContent);
+  pill("Kurs").click(); await tick();
+  ok(li("Zettel 2") && li("Anmelden"), "Klick auf den Fortschritt zeigt alle erledigten – auch wenn eine frisch abgehakte schon sichtbar war");
+  await check("Zettel 2");
+  ok(!T("Zettel 2").x && streak("Zettel 2") === "1" && streak("Zettel 4") === "2", `Woche 2 wieder geöffnet: sie zeigt 1, Zettel 4 nur noch 2 (${streak("Zettel 2")}/${streak("Zettel 4")})`);
+  await check("Zettel 2");
+  ok(T("Zettel 2").x && streak("Zettel 4") === "4" && !streak("Zettel 2"), "wieder abgehakt (jetzt verspätet): Zettel 4 zeigt wieder 4");
   await over("Zahnarzt");
 
   li("Nichts erledigt").querySelector(":scope > .fold-bar").click(); await tick();

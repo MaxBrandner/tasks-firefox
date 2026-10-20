@@ -2593,7 +2593,7 @@
             onclick: (e) => e.target === e.currentTarget && title.startEdit("end"),
           }, title, counter, streak > 0 && h("span", {
             class: "streak",
-            title: `${streak} ${streak === 1 ? "Woche" : "Wochen"} in Folge pünktlich erledigt`,
+            title: `${streak} ${streak === 1 ? "Woche" : "Wochen"} in Folge erledigt`,
           }, icon("flame"), String(streak))) : title,
           buildChips(t, isExp)),
         buildMeta(t, isExp)),
@@ -2641,7 +2641,8 @@
   // Open task with hidden checked subtasks: "2/5" (all levels). A click shows
   // the checked ones until the block is left – e.g. to reopen one.
   function progressCount(id, { done, total }) {
-    const shown = descendants(id).some((d) => lingering.has(d));
+    // Shown = all checked ones visible – a single just-checked one doesn't count.
+    const shown = descendants(id).every((d) => !tasks.get(d).x || lingering.has(d));
     return h("button", {
       class: "fold-count progress" + (shown ? " active" : ""),
       type: "button",
@@ -2677,16 +2678,17 @@
     return out;
   }
 
-  // Weekly series: weeks in a row checked by their due date, counted back
-  // from the current instance (if already checked) or the one before.
+  // Weekly series: weeks in a row checked – also late ones, catching up
+  // counts –, counted back from this instance (itself included once checked).
+  // Shown on open instances (also a reopened earlier week) and the current one.
   function streakOf(t) {
-    if (t.r !== "w" || !t.s || !t.d) return 0;
+    if (!t.s || !t.d || (t.x && t.r !== "w")) return 0;
     const past = [];
     for (const x of tasks.values()) if (x.s === t.s && x.d && (x.d < t.d || (x.d === t.d && x.x))) past.push(x);
     past.sort((a, b) => (a.d < b.d ? 1 : -1));
     let n = 0;
     for (const x of past) {
-      if (!x.x || !x.xa || x.xa > dueAt(x)) break;
+      if (!x.x) break;
       n++;
     }
     return n;
