@@ -423,6 +423,7 @@
   // discarded and reloaded from storage.
   async function write(entries) {
     for (const [k, v] of Object.entries(entries)) expectEcho(k, v);
+    announce(Object.keys(entries));
     try {
       await browser.storage.sync.set(entries);
       if (!bannerEl.hidden) showBanner("");
@@ -436,6 +437,7 @@
 
   async function remove(keys) {
     for (const k of [].concat(keys)) expectEcho(k, undefined);
+    announce([].concat(keys));
     try {
       await browser.storage.sync.remove(keys);
     } catch (err) {
@@ -471,6 +473,28 @@
     return true;
   }
 
+  // Sidebars in other windows announce their writes, so their deletions
+  // aren't reported as coming from another device.
+  const peers = typeof BroadcastChannel === "function" ? new BroadcastChannel("tasks-writes") : null;
+  const peerKeys = new Map(); // key -> when another window announced it
+  if (peers) peers.onmessage = (e) => { for (const k of e.data.keys) peerKeys.set(k, Date.now()); };
+  const fromPeer = (key) => Date.now() - (peerKeys.get(key) || 0) < 10000;
+  const announce = (keys) => { if (peers) peers.postMessage({ keys }); };
+
+  // Many tasks deleted on another device at once: offer to bring them back.
+  // (No list left at all is a wiped Sync store – shared/sync-guard.js
+  // restores that by itself.)
+  const MASS_DELETE = 5;
+  function offerRestore(incoming) {
+    const gone = incoming.filter(([key, , old, value]) => value === undefined && old !== undefined && !fromPeer(key));
+    const n = gone.filter(([key]) => key.startsWith(TASK)).length;
+    if (n < MASS_DELETE || !lists.size) return;
+    const names = gone.filter(([key]) => key.startsWith(LIST)).map(([, , old]) => "„" + (old.t || "Liste") + "“");
+    const where = names.length ? ` (${names.length === 1 ? "Liste" : "Listen"} ${names.join(", ")})` : "";
+    toast(`${n} Aufgaben wurden auf einem anderen Gerät gelöscht${where}.`,
+      Object.fromEntries(gone.map(([key, , old]) => [key, old])));
+  }
+
   // History label for a batch from outside, e.g. "Von außen: 24 Aufgaben und
   // 2 Listen gelöscht" or "Von außen: „Folien“ geändert".
   function outsideLabel(incoming) {
@@ -503,6 +527,7 @@
       if (newValue === undefined) map.delete(key.slice(2));
       else map.set(key.slice(2), newValue);
     }
+    offerRestore(incoming);
     ensureCurrentList();
     if (historyReady) {
       pendingLabel = outsideLabel(incoming);
@@ -510,6 +535,18 @@
     }
     scheduleRender();
   });
+
+  // shared/sync-guard.js wrote the lists back after a wiped Sync store: say so once.
+  const RESTORED_KEY = "tk:syncRestored";
+  function showRestoredNotice(notice) {
+    if (!notice) return;
+    browser.storage.local.remove(RESTORED_KEY);
+    toast("Die Erweiterung wurde auf einem anderen Gerät entfernt – deine Listen bleiben hier erhalten.");
+  }
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes[RESTORED_KEY]) showRestoredNotice(changes[RESTORED_KEY].newValue);
+  });
+  browser.storage.local.get(RESTORED_KEY).then((o) => showRestoredNotice(o && o[RESTORED_KEY]), () => {});
 
   // --- Tree structure -------------------------------------------------------
 

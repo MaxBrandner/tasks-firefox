@@ -280,6 +280,13 @@ Synchronisiert wird nur, wenn in Firefox unter *Einstellungen → Sync* die Opti
 API-Schlüssel werden **nicht** synchronisiert, sie bleiben auf dem jeweiligen
 Rechner.
 
+Entfernst du die Erweiterung auf einem Rechner, löscht Firefox ihre Sync-Daten –
+ohne Schutz wären die Listen dann überall weg. Deshalb hält jeder Rechner eine
+eigene, nicht synchronisierte Kopie und schreibt die Listen sofort zurück; unten
+erscheint ein kurzer Hinweis. Werden auf einem anderen Gerät viele Aufgaben auf
+einmal gelöscht (ab 5), bietet die Meldung unten **Rückgängig** an; jede
+Änderung von außen steht außerdem als eigener Schritt unter ⋯ → Verlauf.
+
 ## Installation
 
 1. [Neueste Version](https://github.com/MaxBrandner/tasks-firefox/releases/latest)

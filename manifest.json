@@ -15,7 +15,7 @@
     "*://*/*"
   ],
   "background": {
-    "scripts": ["shared/privacy.js", "background.js"]
+    "scripts": ["shared/privacy.js", "shared/sync-guard.js", "background.js"]
   },
   "browser_action": {
     "default_title": "Tasks – Seitenleiste ein-/ausblenden",
