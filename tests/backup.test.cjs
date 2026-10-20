@@ -4,7 +4,7 @@ const H = require("./harness.cjs")(ROOT, {
   "L:default": { t: "Meine Aufgaben", o: 0 },
   "L:uni1": { t: "Uni", o: 1 },
   "T:aaa": { l: "default", t: "Beispiel-Aufgabe", o: 0 },
-  "T:bbb": { l: "uni1", t: "nat Info", d: "2026-10-19", o: 0 },
+  "T:bbb": { l: "uni1", t: "LinA", d: "2026-10-19", o: 0 },
   "T:ccc": { l: "uni1", p: "bbb", t: "Blatt", d: "2026-10-19", h: "08:30", n: "Notiz", o: 0 },
 });
 const { d, ok, tick, sync, T, bodyKey } = H;
@@ -47,7 +47,7 @@ const snapshot = () => JSON.stringify(Object.fromEntries(Object.entries(sync.dat
   await pick("Tasks-Sicherung-2026-10-17.json", JSON.stringify({ ...file.data, "tk:apiKey": "x", "T:../böse": { t: "x" }, "T:zzz": "kein Objekt" }));
   ok(/2 Listen, 3 Aufgaben/.test($("importInfo").textContent), "einfaches Format angenommen, fremde/ungültige Einträge ignoriert");
   $("importMerge").click(); await tick();
-  ok(T("nat Info") && !sync.data["tk:apiKey"] && !Object.keys(sync.data).some((k) => k.includes("böse")), "Rettungsdatei eingespielt, nichts Fremdes gespeichert");
+  ok(T("LinA") && !sync.data["tk:apiKey"] && !Object.keys(sync.data).some((k) => k.includes("böse")), "Rettungsdatei eingespielt, nichts Fremdes gespeichert");
   // broken files
   await pick("kaputt.json", "{ nicht json");
   ok(!$("importDlg").open && /keine gültige JSON-Datei/.test($("banner").textContent), "kein JSON → Meldung");

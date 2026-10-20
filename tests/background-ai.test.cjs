@@ -10,7 +10,7 @@ function area() { const data = {}; return { data,
 const sync = area(), local = area();
 const storageListeners = [], msgListeners = [];
 let clickHandler, opened = 0, lastMsg, reply, nativeCalls = 0, permGranted = true, lastReq, apiReply, reqs = [], scripts = [], capReply = () => ({}), activated = [], connectHandler, tabUpdated = new Set();
-const URL0 = "https://ilias.hhu.de/ilias.php?baseClass=ilexercisehandlergui&ref_id=2209395&ass_id=74843";
+const URL0 = "https://lernplattform.example.org/ilias.php?baseClass=ilexercisehandlergui&ref_id=1001&ass_id=2001";
 const ctx = { console, crypto: globalThis.crypto, structuredClone, URL: globalThis.URL, TextDecoder, atob, btoa,
   fetch: async (url, init) => { const r = { url, init, body: JSON.parse(init.body) }; reqs.push(r); lastReq = r; return apiReply(r); },
   browser: { storage: { sync, local, onChanged: { addListener(f) { storageListeners.push(f); } } },
@@ -46,14 +46,14 @@ const capture = async (info, cap, tab = { id: 1, url: URL0, title: "Übung 2" })
   ok(ctx.menu && ctx.menu.id === "tasks-add-selection", "zurück auf Claude Code → Eintrag wieder da");
 
   // --- right-click → card in the chat mailbox, nothing goes to the AI yet
-  const PDF = "https://ilias.hhu.de/blatt2.pdf";
+  const PDF = "https://lernplattform.example.org/blatt2.pdf";
   let c = await capture({ selectionText: "Blatt 2 ist online" }, { selection: "Blatt 2 ist online\nAbgabe 26.10.", links: [{ text: "Blatt 2", href: PDF }], locator: "body > p" });
   ok(opened === 1 && c && c.label === "Blatt 2 ist online" && nativeCalls === 0, "Rechtsklick: Seitenleiste geht auf, Stelle landet als Karte im Chat – noch ohne KI-Anfrage");
   ok(c.picking === true && scripts.some((s) => /pickerInPage/.test(s.code) && /unitOfInPage/.test(s.code) && /"anchor":"body > p"/.test(s.code)), "Rechtsklick startet gleich den Picker in diesem Tab – Umschalt+Klick geht ab der angeklickten Stelle");
-  ok(/^Seite: Übung 2\nAdresse: https:\/\/ilias/.test(c.text) && /Markierter Text:\n<<<\nBlatt 2 ist online\nAbgabe 26\.10\.\n>>>/.test(c.text) && /Links in der Markierung:\n- Blatt 2 → https:\/\/ilias\.hhu\.de\/blatt2\.pdf/.test(c.text), "Karte enthält Seite, Adresse, Markierung mit Zeilenumbrüchen und Link-Zielen");
+  ok(/^Seite: Übung 2\nAdresse: https:\/\/lernplattform/.test(c.text) && /Markierter Text:\n<<<\nBlatt 2 ist online\nAbgabe 26\.10\.\n>>>/.test(c.text) && /Links in der Markierung:\n- Blatt 2 → https:\/\/lernplattform\.example\.org\/blatt2\.pdf/.test(c.text), "Karte enthält Seite, Adresse, Markierung mit Zeilenumbrüchen und Link-Zielen");
   ok(c.page && c.page.locator === "body > p" && c.page.tabId === 1 && scripts.some((o) => /marksInPage/.test(o.code) && /\.flash\(\{"locator":"body > p"\}/.test(o.code)), "Stelle leuchtet auf der Seite auf; Pfad für „Auf der Seite zeigen“ steht in der Karte");
   c = await capture({ linkUrl: PDF, linkText: "Blatt 3", targetElementId: 42 }, { selection: "", section: "Übungen\nBlatt 3 – Abgabe 26. Okt", heading: "Übungen" });
-  ok(/Angeklickt: Link „Blatt 3" → https:\/\/ilias\.hhu\.de\/blatt2\.pdf/.test(c.text) && /Abschnitt um die angeklickte Stelle \(Überschrift: „Übungen"\)/.test(c.text) && !/Markierter Text/.test(c.text) && c.label === "Blatt 3" && /Blatt 3/.test(c.excerpt), "Rechtsklick auf Link: Linktext, Ziel und Abschnitt");
+  ok(/Angeklickt: Link „Blatt 3" → https:\/\/lernplattform\.example\.org\/blatt2\.pdf/.test(c.text) && /Abschnitt um die angeklickte Stelle \(Überschrift: „Übungen"\)/.test(c.text) && !/Markierter Text/.test(c.text) && c.label === "Blatt 3" && /Blatt 3/.test(c.excerpt), "Rechtsklick auf Link: Linktext, Ziel und Abschnitt");
   ok(scripts.some((o) => /"targetId":42/.test(o.code) && /cssPathInPage/.test(o.code)), "angeklicktes Element geht an das Seiten-Skript");
   c = await capture({ srcUrl: "https://x.de/flyer.jpg", mediaType: "image", targetElementId: 7 }, { image: { alt: "Flyer Sommerfest", caption: "Sommerfest 12.7." }, locator: "img" });
   ok(/Angeklickt: Bild https:\/\/x\.de\/flyer\.jpg – Alternativtext: „Flyer Sommerfest" – Bildunterschrift: „Sommerfest 12\.7\."/.test(c.text) && c.label === "Flyer Sommerfest" && !c.image, "Rechtsklick auf Bild: Angaben im Text (Bild-Ausschnitt nur im echten Firefox)");

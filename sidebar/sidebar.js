@@ -2440,7 +2440,7 @@
     let raw = (value || "").trim();
     if (!raw) return false;
     if (raw.startsWith("/")) raw = "file://" + raw; // a path, e.g. from the file manager
-    // "ilias.hhu.de/…" or "localhost:3000" without https://
+    // "lernplattform.example.org/…" or "localhost:3000" without https://
     if (!/^[a-z][a-z0-9+.-]*:(?!\d)/i.test(raw)) raw = "https://" + raw;
     let url;
     try {

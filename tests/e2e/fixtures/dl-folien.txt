@@ -1,4 +1,4 @@
-Magazin Math.-Nat. Fakultät 2026/2027 Wintersemester Informatik Bachelor Informatik PO 21 Wahlbereich Informatik Einführung in Deep Learning Vorlesung
+Kurse › Einführung in Deep Learning › Vorlesung
 Vorlesungsfolien
 Woche 2: Backpropagation und Gradientenabstieg
 Dateien

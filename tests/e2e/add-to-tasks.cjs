@@ -67,9 +67,9 @@ async function run(selection, url, title) {
   await H.tick(); await H.tick();
   d.getElementById("tabChat").click(); await H.tick();
   console.log("1) Blatt 1 (DL) per Rechtsklick");
-  await run(fs.readFileSync(SEL1, "utf8"), "https://ilias.hhu.de/ilias.php?baseClass=ilexercisehandlergui&cmdClass=ilAssignmentPresentationGUI&ref_id=2209395&ass_id=74843", "Blatt 1 - ILIAS");
+  await run(fs.readFileSync(SEL1, "utf8"), "https://lernplattform.example.org/ilias.php?baseClass=ilexercisehandlergui&cmdClass=ilAssignmentPresentationGUI&ref_id=1001&ass_id=2001", "Blatt 1 - Lernplattform");
   console.log("\n2) Folien Woche 2 (DL) per Rechtsklick");
-  await run(fs.readFileSync(SEL2, "utf8"), "https://ilias.hhu.de/ilias.php?baseClass=ilrepositorygui&cmd=view&ref_id=2209411", "Vorlesungsfolien - ILIAS");
+  await run(fs.readFileSync(SEL2, "utf8"), "https://lernplattform.example.org/ilias.php?baseClass=ilrepositorygui&cmd=view&ref_id=1002", "Vorlesungsfolien - Lernplattform");
   console.log("\nListe „Uni“ danach:"); show();
   process.exit(0);
 })().catch((e) => { console.error(e); process.exit(1); });

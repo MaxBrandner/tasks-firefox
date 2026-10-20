@@ -6,8 +6,8 @@ let fails = 0; const ok = (c, m) => { console.log((c ? "✔ " : "✘ ") + m); if
 const START = {
   "L:uni": { t: "Uni", o: 0 }, "L:priv": { t: "Privat", o: 1 },
   "T:dl": { l: "uni", t: "DL", o: 0 },
-  "T:b1": { l: "uni", p: "dl", t: "Blatt 1", d: "2026-10-21", h: "12:00", o: 0, u: [{ url: "https://ilias.hhu.de/b1", t: "Abgabe" }] },
-  "T:fo": { l: "uni", p: "dl", t: "Folien", o: 1, u: [{ url: "https://ilias.hhu.de/fo", t: "Folien" }] },
+  "T:b1": { l: "uni", p: "dl", t: "Blatt 1", d: "2026-10-21", h: "12:00", o: 0, u: [{ url: "https://lernplattform.example.org/b1", t: "Abgabe" }] },
+  "T:fo": { l: "uni", p: "dl", t: "Folien", o: 1, u: [{ url: "https://lernplattform.example.org/fo", t: "Folien" }] },
   "T:ek": { l: "priv", t: "Einkaufen", o: 0 },
 };
 const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: "", title: "", notes: "", due_date: "", due_time: "", done: "", weekly: "", url: "", link_title: "", position: "" }, o);
@@ -67,7 +67,7 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
   last().querySelector('.msg-tools [title^="Markierungen"]').click(); await H.tick();
   ok(H.li("Blatt 1").classList.contains("chat-mark") && d.body.dataset.chat === "tasks", "„Markierungen zeigen“ holt die Markierung zurück (schmal: Reiter „Aufgaben“)");
   const prompt = H.chatPrompts[H.chatPrompts.length - 1];
-  ok(/Blatt 1 \(id: b1, fällig 2026-10-21 12:00, Links: Abgabe <https:\/\/ilias\.hhu\.de\/b1>\)/.test(prompt) && /Gerade aufgeklappt: „Blatt 1“ \(id: b1\)/.test(prompt) && /<<<\nWas ist diese Woche fällig\?\n>>>/.test(prompt), "an die KI: Baum mit IDs/Links, aufgeklappte Aufgabe, Nachricht");
+  ok(/Blatt 1 \(id: b1, fällig 2026-10-21 12:00, Links: Abgabe <https:\/\/lernplattform\.example\.org\/b1>\)/.test(prompt) && /Gerade aufgeklappt: „Blatt 1“ \(id: b1\)/.test(prompt) && /<<<\nWas ist diese Woche fällig\?\n>>>/.test(prompt), "an die KI: Baum mit IDs/Links, aufgeklappte Aufgabe, Nachricht");
   // copy and reply
   let copied = null;
   Object.defineProperty(H.w.navigator, "clipboard", { configurable: true, value: { writeText: async (t) => { copied = t; } } });
@@ -284,7 +284,7 @@ const A = (o) => Object.assign({ op: "", target: "", list: "", parent: "", ref: 
       A({ op: "create_task", parent: "ref:kl", title: "Altklausuren rechnen" }),
       A({ op: "update_task", target: "fo", done: "true" }),
       A({ op: "move_task", target: "ek", list: "uni", position: "last" }),
-      A({ op: "add_link", target: "ref:kl", url: "https://ilias.hhu.de/klausur", link_title: "Klausur-Infos" }),
+      A({ op: "add_link", target: "ref:kl", url: "https://lernplattform.example.org/klausur", link_title: "Klausur-Infos" }),
       A({ op: "add_link", target: "b1", url: "javascript:alert(1)" }),
       A({ op: "update_task", target: "gibtsnicht", title: "x" }),
       A({ op: "move_task", target: "dl", parent: "b1" }),

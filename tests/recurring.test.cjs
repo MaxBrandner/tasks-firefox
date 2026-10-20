@@ -6,7 +6,7 @@ const day = (n) => { const x = new Date(); x.setDate(x.getDate() + n); return x;
 const soon = new Date(Date.now() + 26 * 3600e3);
 const H = require("./harness.cjs")(ROOT, {
   "L:default": { t: "Meine Aufgaben", o: 0 },
-  "T:a1": { l: "default", t: "nat Info", o: 0 },
+  "T:a1": { l: "default", t: "LinA", o: 0 },
   "T:b1": { l: "default", p: "a1", t: "Blatt 1", d: iso(day(-1)), h: "08:30", r: "w", s: "b1", o: 0 },
   "T:c1": { l: "default", t: "Bald", d: iso(soon), h: pad(soon.getHours()) + ":" + pad(soon.getMinutes()), o: -1 },
 });

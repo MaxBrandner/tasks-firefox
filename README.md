@@ -141,7 +141,7 @@ ein Passwort, fragt Tasks vorher nach („Ohne diese Stellen senden“ /
 „Trotzdem senden“ / „Abbrechen“) – geprüft wird auf deinem Rechner, bevor
 etwas verschickt wird.
 
-Die KI sucht die passende Liste und Elternaufgabe (z. B. „nat Info“), wählt den
+Die KI sucht die passende Liste und Elternaufgabe (z. B. „LinA“), wählt den
 Titel im Stil der Geschwister („Blatt 4“), trägt die Abgabefrist mit Uhrzeit ein
 und speichert den passendsten **Link** (die Seite, den angeklickten Link oder
 einen Link aus der Markierung). Gibt es die Aufgabe schon, wird sie ergänzt
