@@ -35,6 +35,7 @@ module.exports = function setup(P, pre = {}, opts = {}) {
     w.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new w.Event("close")); };
   }
   w.eval(fs.readFileSync(P + "/shared/privacy.js", "utf8"));
+  w.eval(fs.readFileSync(P + "/sidebar/vendor/air-datepicker/air-datepicker.js", "utf8"));
   w.eval(fs.readFileSync(P + "/sidebar/sidebar.js", "utf8"));
   let fails = 0;
   const H = Object.assign(H0, { w, d, sync, local });

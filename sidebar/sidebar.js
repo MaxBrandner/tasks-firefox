@@ -111,6 +111,7 @@
   const SVG_NS = "http://www.w3.org/2000/svg";
   const ICONS = {
     chevron: "M6 9l6 6 6-6",
+    calendar: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
     flame: "M12 3c1 3 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-3.5 2.5-5 .3 2 1 3 2.5 3.5C12 8.5 11 6 12 3z",
     chat: "M4 5h16v11H9l-5 4z",
     send: "M4 12l16-8-6 16-2-7z",
@@ -1946,6 +1947,7 @@
         patchTask(id, { n: ta.value.trimEnd() });
       }
       old.remove();
+      dropDatePicker();
     }
     const row = li.querySelector(":scope > .row");
     li.classList.toggle("expanded", isExp);
@@ -1958,6 +1960,8 @@
   document.addEventListener("click", (e) => {
     if (!listMenuEl.hidden && !listMenuEl.contains(e.target)) closeMenu();
     if (!expandedId || !document.contains(e.target)) return;
+    // The date picker's popup lives on <body> but belongs to the task.
+    if (e.target.closest(".air-datepicker")) return;
     const li = findLi(expandedId);
     if (!li) return;
     const row = li.querySelector(":scope > .row");
@@ -2148,6 +2152,30 @@
     }
     if (hh > 23 || mm > 59) return null;
     return pad2(hh) + ":" + pad2(mm);
+  }
+
+  // "2026-10-20" → "20.10.2026".
+  const formatDate = (iso) => iso.split("-").reverse().join(".");
+  const toIso = (dt) => dt.getFullYear() + "-" + pad2(dt.getMonth() + 1) + "-" + pad2(dt.getDate());
+
+  // Typed date → "YYYY-MM-DD"; "" when empty, null when unreadable.
+  // Accepts 20.10.2026, 20.10.26, 20.10., 2010, 201026; without a year the next such day.
+  function parseDate(s) {
+    const v = s.trim();
+    if (!v) return "";
+    const iso = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const m = iso ? [v, iso[3], iso[2], iso[1]]
+      : v.match(/^(\d{1,2})\.(\d{1,2})\.?(\d{2}|\d{4})?$/) || v.match(/^(\d{2})(\d{2})(\d{2}|\d{4})?$/);
+    if (!m) return null;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const [day, month] = [Number(m[1]), Number(m[2])];
+    let y = m[3] ? Number(m[3]) : today.getFullYear();
+    if (y < 100) y += 2000;
+    const dt = new Date(y, month - 1, day);
+    if (!m[3] && dt < today) dt.setFullYear(y + 1);
+    if (dt.getMonth() !== month - 1 || dt.getDate() !== day) return null;
+    return toIso(dt);
   }
 
   function formatLeft(ms) {
@@ -2419,6 +2447,108 @@
     return meta;
   }
 
+  // --- Date picker: Air Datepicker (sidebar/vendor/air-datepicker) ----------
+  // One instance at a time (only one task is expanded). Only the calendar
+  // button opens it, typing in the field stays typing. Its popup sits in a
+  // container on <body> – clicks there don't count as "outside the task".
+  const DATEPICKER_LOCALE = {
+    days: ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"],
+    daysShort: ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"],
+    daysMin: ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"],
+    months: ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"],
+    monthsShort: ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"],
+    today: "Heute",
+    clear: "Entfernen",
+    dateFormat: "dd.MM.yyyy",
+    timeFormat: "HH:mm",
+    firstDay: 1,
+  };
+  let datePicker = null;
+
+  function dropDatePicker() {
+    if (!datePicker) return;
+    datePicker.destroy();
+    datePicker = null;
+  }
+
+  function attachDatePicker(input, btn, iso) {
+    dropDatePicker();
+    const [y, m, d] = iso ? iso.split("-").map(Number) : [];
+    datePicker = new AirDatepicker(input, {
+      locale: DATEPICKER_LOCALE,
+      navTitles: { days: "MMMM <i>yyyy</i>" },
+      selectedDates: iso ? [new Date(y, m - 1, d)] : [],
+      showEvent: "", // never on focus
+      autoClose: true,
+      keyboardNav: true,
+      // The library's "today" only shows the month – ours picks the day.
+      buttons: [{ content: "Heute", onClick: (dp) => dp.selectDate(new Date()) }, "clear"],
+      // Under the field's frame (above it if there's no room), kept inside the sidebar.
+      position: ({ $datepicker }) => {
+        const f = input.parentElement.getBoundingClientRect();
+        const w = $datepicker.offsetWidth, hgt = $datepicker.offsetHeight;
+        const below = f.bottom + 4 + hgt <= window.innerHeight - 4 || f.top - hgt - 4 < 0;
+        $datepicker.style.left = Math.max(4, Math.min(f.left, window.innerWidth - w - 4)) + "px";
+        $datepicker.style.top = (below ? f.bottom + 4 : f.top - hgt - 4) + "px";
+      },
+      onShow: () => btn.classList.add("on"),
+      onHide: () => btn.classList.remove("on"),
+      // No onSelect: the library writes the picked date into the field and fires
+      // "change" there – the field's own handler saves it (day, "Heute", "Entfernen").
+    });
+  }
+
+  mainEl.addEventListener("scroll", () => datePicker && datePicker.hide(), { passive: true });
+  // Esc closes just the calendar (before the library and the "collapse task" Esc).
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !datePicker || !datePicker.visible) return;
+    e.preventDefault();
+    e.stopPropagation();
+    datePicker.hide();
+    datePicker.$el.focus();
+  }, true);
+
+  // Date as text (type="date" would show the browser's format, e.g. "10/20/2026"),
+  // the calendar button opens Air Datepicker.
+  function dateField(id, t) {
+    const input = h("input", {
+      type: "text",
+      value: t.d ? formatDate(t.d) : "",
+      placeholder: "TT.MM.JJJJ",
+      title: "Datum, z. B. 20.10.2026, 20.10. oder 2010",
+      "aria-label": "Fälligkeitsdatum",
+      onkeydown: (e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        e.target.blur();
+      },
+      oninput: (e) => e.target.parentElement.classList.remove("invalid"),
+      onchange: (e) => {
+        // A replaced picker still writes into its old (detached) field a moment later.
+        if (!e.target.isConnected) return;
+        const v = parseDate(e.target.value);
+        if (v === null) return e.target.parentElement.classList.add("invalid");
+        if (v === (t.d || "")) e.target.value = v ? formatDate(v) : "";
+        else setDue(id, v);
+      },
+    });
+    const btn = h("button", {
+      class: "cal-btn",
+      type: "button",
+      title: "Kalender",
+      "aria-label": "Kalender öffnen",
+      // Keep the focus in the field: leaving it closes the calendar again.
+      onmousedown: (e) => e.preventDefault(),
+      onclick: () => {
+        if (datePicker.visible) return datePicker.hide();
+        input.focus();
+        datePicker.show();
+      },
+    }, icon("calendar"));
+    attachDatePicker(input, btn, t.d || "");
+    return h("span", { class: "date-input date-field" }, input, btn);
+  }
+
   function buildDetails(id) {
     const t = tasks.get(id);
     const notes = mdField({
@@ -2496,13 +2626,7 @@
         chip("Heute", 0),
         chip("Morgen", 1),
         chip("+1 Woche", 7),
-        h("input", {
-          class: "date-input",
-          type: "date",
-          value: t.d || "",
-          "aria-label": "Fälligkeitsdatum",
-          onchange: (e) => setDue(id, e.target.value),
-        }),
+        dateField(id, t),
         // Text instead of type="time": Firefox would show the browser's format (e.g. "02:30 PM").
         h("input", {
           class: "date-input time-input" + (hour12 ? " h12" : ""),

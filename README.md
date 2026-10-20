@@ -20,7 +20,8 @@ Google, kein eigener Server.
   verlässt; die Oberaufgabe zeigt stattdessen den Fortschritt „2/5“. Ein Klick
   darauf zeigt die erledigten kurz wieder (z. B. um eine wieder zu öffnen).
   ⋯ → „Erledigte Unteraufgaben: anzeigen“ lässt sie wie früher an ihrem Platz.
-- **Fälligkeit** – Schnellknöpfe Heute / Morgen / +1 Woche oder Datum, dazu
+- **Fälligkeit** – Schnellknöpfe Heute / Morgen / +1 Woche oder Datum (tippen
+  wie „20.10.“ oder „2010“, oder im Kalender wählen, Woche ab Montag), dazu
   optional eine **Uhrzeit** (tippen wie „14:30“, „1430“ oder „2pm“). Anzeige
   „Heute", „Morgen", Wochentag; unter 48 h ein **Countdown** („noch 1 T 18 Std"),
   danach „überfällig" in Rot.
@@ -343,5 +344,11 @@ Ordner sind per `.gitignore` vom Repo ausgeschlossen.
 > ⚠️ **Nie die echte `manifest.json` temporär laden**, wenn Tasks installiert
 > ist: Sie ersetzt die installierte Version, und beim Entfernen löscht Firefox
 > deren Aufgaben.
+
+**Mitgelieferte Bibliothek:** Der Kalender am Datumsfeld ist
+[Air Datepicker](https://air-datepicker.com) (MIT), unverändert kopiert nach
+`sidebar/vendor/air-datepicker/` (mit `LICENSE`). Aktualisieren: Version in
+`package.json` anheben, `npm install`, die Dateien `air-datepicker.js` und
+`air-datepicker.css` aus `node_modules/air-datepicker/` erneut dorthin kopieren.
 
 Neue Version veröffentlichen: siehe [RELEASING.md](RELEASING.md).

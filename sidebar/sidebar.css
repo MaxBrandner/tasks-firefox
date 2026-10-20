@@ -975,6 +975,99 @@ kbd {
   font-size: 12px;
 }
 
+/* Date: text and calendar button in one frame. */
+.date-field {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 1px 0 0;
+}
+
+.date-field:focus-within {
+  border-color: var(--accent);
+}
+
+.date-field.invalid {
+  border-color: var(--danger);
+}
+
+.date-field input {
+  width: 6.6em;
+  padding: 2px 0 2px 6px;
+  border: 0;
+  background: none;
+  outline: none;
+  font-size: 12px;
+}
+
+.cal-btn {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+}
+
+.cal-btn:hover,
+.cal-btn.on {
+  background: var(--hover);
+  color: var(--accent);
+}
+
+.cal-btn .ico {
+  width: 14px;
+  height: 14px;
+}
+
+/* Air Datepicker (sidebar/vendor) in our colors and sizes. */
+.air-datepicker {
+  --adp-font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --adp-font-size: 12px;
+  --adp-width: 224px;
+  --adp-padding: 6px;
+  --adp-z-index: 30;
+  --adp-background-color: var(--surface);
+  --adp-background-color-hover: var(--hover);
+  --adp-background-color-active: var(--line);
+  --adp-color: var(--text);
+  --adp-color-secondary: var(--muted);
+  --adp-accent-color: var(--accent);
+  --adp-color-current-date: var(--accent);
+  --adp-color-other-month: var(--faint);
+  --adp-color-other-month-hover: var(--muted);
+  --adp-border-color: var(--line);
+  --adp-border-color-inner: var(--line);
+  --adp-border-radius: 10px;
+  --adp-nav-height: 30px;
+  --adp-nav-action-size: 26px;
+  --adp-day-name-color: var(--faint);
+  --adp-day-cell-height: 28px;
+  --adp-cell-border-radius: 6px;
+  --adp-cell-background-color-selected: var(--accent);
+  --adp-cell-background-color-selected-hover: var(--accent);
+  --adp-btn-height: 26px;
+  --adp-btn-color: var(--accent);
+  --adp-btn-color-hover: var(--accent);
+  --adp-btn-background-color-hover: var(--accent-soft);
+  box-shadow: var(--shadow);
+}
+
+/* We place it ourselves (under the field), so no pointer. */
+.air-datepicker--pointer {
+  display: none;
+}
+
+.air-datepicker-cell.-selected- {
+  color: var(--accent-text);
+}
+
+.air-datepicker-cell.-current- {
+  font-weight: 650;
+}
+
 .time-input {
   width: 4.6em;
   text-align: center;
