@@ -43,6 +43,20 @@ const boot = async (sync, local) => { const H = setup(P, sync, { local }); await
   await X.close();
   await H.bodyKey("z", { ctrlKey: true });
   ok(H.sync.data["T:b"].t === "B", "… und lässt sich zurücknehmen");
+  // 3b) changes from outside while the sidebar is open: own steps, undoable
+  await H.sync.set({ "T:b": { ...H.sync.data["T:b"], t: "B (Handy)" } }); await H.tick();
+  await H.sync.remove(["T:a", "T:c"]); await H.tick();
+  await X.open();
+  ok(/\| Von außen: „B \(Handy\)“ geändert \| Von außen: 2 Aufgaben gelöscht$/.test(X.labels()), "Änderungen von außen bei offener Seitenleiste je ein Schritt: " + X.labels());
+  await X.close();
+  await H.bodyKey("z", { ctrlKey: true });
+  ok(H.sync.data["T:a"] && H.sync.data["T:c"] && H.sync.data["T:b"].t === "B (Handy)", "Strg+Z holt die von außen gelöschten Aufgaben zurück");
+  await H.bodyKey("y", { ctrlKey: true });
+  await X.check("B (Handy)"); await wait(800);
+  await X.open();
+  ok(/\| Von außen: 2 Aufgaben gelöscht \| „B \(Handy\)“ abgehakt$/.test(X.labels()), "eigene Schritte danach ohne Schein-Schritt von außen: " + X.labels());
+  await X.close();
+  await H.bodyKey("z", { ctrlKey: true }); await H.bodyKey("z", { ctrlKey: true }); // A and C back for the steps below
   // 4) another window saves a history → taken over
   await wait(800);
   const other = { ...structuredClone(H.local.data["tk:history"]), by: "anderes-fenster" };

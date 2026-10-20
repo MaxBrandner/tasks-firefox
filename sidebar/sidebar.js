@@ -422,6 +422,7 @@
   // Writes entries. On error (usually: quota exceeded) the local state is
   // discarded and reloaded from storage.
   async function write(entries) {
+    for (const [k, v] of Object.entries(entries)) expectEcho(k, v);
     try {
       await browser.storage.sync.set(entries);
       if (!bannerEl.hidden) showBanner("");
@@ -434,6 +435,7 @@
   }
 
   async function remove(keys) {
+    for (const k of [].concat(keys)) expectEcho(k, undefined);
     try {
       await browser.storage.sync.remove(keys);
     } catch (err) {
@@ -451,25 +453,62 @@
     write({ [TASK + id]: next });
   }
 
-  // Changes from other devices (Firefox Sync) or other windows.
+  // Values this sidebar wrote whose onChanged echo hasn't arrived yet, so a
+  // late echo (after a newer local change) isn't taken for a change from outside.
+  const echoes = new Map(); // key -> [JSON of the value, "-" for removed]
+  const echoOf = (value) => (value === undefined ? "-" : JSON.stringify(value));
+  function expectEcho(key, value) {
+    const list = echoes.get(key) || [];
+    list.push(echoOf(value));
+    echoes.set(key, list);
+  }
+  function isEcho(key, value) {
+    const list = echoes.get(key);
+    const i = list ? list.indexOf(echoOf(value)) : -1;
+    if (i < 0) return false;
+    list.splice(0, i + 1); // older ones were superseded
+    if (!list.length) echoes.delete(key);
+    return true;
+  }
+
+  // History label for a batch from outside, e.g. "Von außen: 24 Aufgaben und
+  // 2 Listen gelöscht" or "Von außen: „Folien“ geändert".
+  function outsideLabel(incoming) {
+    const kindOf = ([, , old, value]) => (value === undefined ? "gelöscht" : old === undefined ? "neu" : "geändert");
+    if (incoming.length === 1 && incoming[0][0].startsWith(TASK)) {
+      const [, , old, value] = incoming[0];
+      return "Von außen: „" + (plainTitle((value || old).t) || "Aufgabe").slice(0, 40) + "“ " + kindOf(incoming[0]);
+    }
+    const count = { gelöscht: [0, 0], neu: [0, 0], geändert: [0, 0] };
+    for (const c of incoming) count[kindOf(c)][c[0].startsWith(TASK) ? 0 : 1]++;
+    const parts = Object.entries(count).filter(([, [t, l]]) => t || l).map(([kind, [t, l]]) =>
+      [t && (t === 1 ? "1 Aufgabe" : t + " Aufgaben"), l && (l === 1 ? "1 Liste" : l + " Listen")].filter(Boolean).join(" und ") + " " + kind);
+    return "Von außen: " + parts.join(", ");
+  }
+
+  // Changes from other devices (Firefox Sync) or other windows. Each batch
+  // becomes its own step in the history, so it can be undone there.
   browser.storage.onChanged.addListener((changes, area) => {
     if (area !== "sync") return;
-    let dirty = false;
+    const incoming = []; // [key, map, old value, new value]
     for (const [key, { newValue }] of Object.entries(changes)) {
       const map = key.startsWith(TASK) ? tasks : key.startsWith(LIST) ? lists : null;
-      if (!map) continue;
-      const id = key.slice(2);
-      if (newValue === undefined) {
-        if (map.delete(id)) dirty = true;
-      } else if (JSON.stringify(map.get(id)) !== JSON.stringify(newValue)) {
-        map.set(id, newValue);
-        dirty = true;
-      }
+      if (!map || isEcho(key, newValue)) continue;
+      const old = map.get(key.slice(2));
+      if (echoOf(old) !== echoOf(newValue)) incoming.push([key, map, old, newValue]);
     }
-    if (dirty) {
-      ensureCurrentList();
-      scheduleRender();
+    if (!incoming.length) return;
+    if (historyReady) commitPending(); // our own last action keeps its own step
+    for (const [key, map, , newValue] of incoming) {
+      if (newValue === undefined) map.delete(key.slice(2));
+      else map.set(key.slice(2), newValue);
     }
+    ensureCurrentList();
+    if (historyReady) {
+      pendingLabel = outsideLabel(incoming);
+      commitPending();
+    }
+    scheduleRender();
   });
 
   // --- Tree structure -------------------------------------------------------
@@ -657,6 +696,7 @@
   let histRoot = null;
   let histCurrent = null;
   let pendingLabel = null; // label of the action whose result isn't recorded yet
+  let historyReady = false; // until the saved tree is loaded, outside changes go into its first step
 
   const canon = (v) => (Array.isArray(v) ? v.map(canon)
     : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])])) : v);
@@ -747,6 +787,7 @@
     } else {
       ensureHistoryRoot();
     }
+    historyReady = true;
   }
 
   // "Verlauf leeren": the current state becomes the new start.
