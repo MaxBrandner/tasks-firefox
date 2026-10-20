@@ -16,7 +16,7 @@
   //                     r: "w" weekly, s: series id, u: [{ url, t }] links,
   //                     o: order among siblings }
   // Empty fields are omitted – the sync quota is tight (~100 KB).
-  // storage.local (per device): theme, selected list, done section open, AI settings.
+  // storage.local (per device): theme, selected list, done section open, checked subtasks shown, AI settings.
   const LIST = "L:";
   const TASK = "T:";
   // Fixed ID: if two devices start for the first time, both create the same list.
@@ -26,6 +26,7 @@
   const CURRENT_KEY = "tk:currentList";
   const DONE_OPEN_KEY = "tk:doneOpen";
   const COLLAPSED_KEY = "tk:collapsed"; // folded tasks – per device, keeps the sync quota free
+  const DONE_SUBTASKS_KEY = "tk:doneSubtasks"; // true: checked subtasks stay visible (as before 0.1.10)
   // AI integration (context menu "Zu Tasks hinzufügen", see background.js).
   // Real version vs. test copy (npm run dev).
   const DEV_ID = "tasks-dev@brandner.name";
@@ -47,6 +48,11 @@
   const tasks = new Map(); // id -> { l, p, t, n, d, x, xa, o }
   let currentList = null;
   let doneOpen = false;
+  let showDoneSubtasks = false;
+  // Just checked subtasks stay visible until the pointer or focus leaves
+  // their top-level block (lingerRoot) – so several can be checked in a row.
+  const lingering = new Set();
+  let lingerRoot = null;
   const collapsed = new Set(); // ids of folded tasks (subtasks hidden)
   const selected = new Set(); // selected tasks (not being edited), see "Selection"
   let selAnchor = null; // start of a Shift range
@@ -104,6 +110,7 @@
   const SVG_NS = "http://www.w3.org/2000/svg";
   const ICONS = {
     chevron: "M6 9l6 6 6-6",
+    flame: "M12 3c1 3 5 5.5 5 10a5 5 0 0 1-10 0c0-2.5 1.5-3.5 2.5-5 .3 2 1 3 2.5 3.5C12 8.5 11 6 12 3z",
     chat: "M4 5h16v11H9l-5 4z",
     send: "M4 12l16-8-6 16-2-7z",
     check: "M5 12.5l4.5 4.5L19 7.5",
@@ -477,14 +484,58 @@
   }
 
   // Siblings in display order. Top level: open ones only (done ones live in
-  // the done section). Below that: all – checked subtasks keep their place
-  // (as in Notion).
+  // the done section). Below that: checked subtasks of an open task are
+  // hidden (see hiddenDone); with the ⋯ switch they keep their place.
   function visibleChildren(listId, parentId) {
     const out = [];
     for (const [id, t] of tasks) {
-      if (t.l === listId && parentOf(id) === parentId && (parentId || !t.x)) out.push({ id, ...t });
+      if (t.l === listId && parentOf(id) === parentId && (parentId ? !hiddenDone(id) : !t.x)) out.push({ id, ...t });
     }
     return out.sort(byOrder);
+  }
+
+  // Checked subtask of an open task: hidden, the parent shows "2/5" instead.
+  // Stays visible while just checked, edited or marked by the chat.
+  function hiddenDone(id) {
+    const t = tasks.get(id);
+    if (!t || !t.x || showDoneSubtasks || lingering.has(id) || expandedId === id || chatMarks.has(id) || chatChanged.has(id)) return false;
+    const p = tasks.get(parentOf(id));
+    return !!p && !p.x;
+  }
+
+  const rootOf = (id) => ancestors(id).pop() || id;
+
+  function linger(ids, root) {
+    if (lingerRoot !== root) lingering.clear();
+    lingerRoot = root;
+    for (const id of ids) lingering.add(id);
+  }
+
+  function endLinger() {
+    if (!lingering.size) return;
+    lingering.clear();
+    lingerRoot = null;
+    scheduleRender();
+  }
+
+  // Top-level block under an element (null outside the open tasks).
+  const blockOf = (el) => {
+    const li = el && el.closest && el.closest("#openList > li.task");
+    return li ? li.dataset.id : null;
+  };
+  for (const type of ["mouseover", "focusin"]) {
+    document.addEventListener(type, (e) => {
+      if (lingering.size && blockOf(e.target) !== lingerRoot) endLinger();
+    });
+  }
+  document.documentElement.addEventListener("mouseleave", endLinger);
+
+  // Checked subtasks stay until the block is left.
+  function lingerChecked(ids) {
+    for (const id of ids) {
+      const t = tasks.get(id);
+      if (t && t.x && parentOf(id)) linger([id], rootOf(id));
+    }
   }
 
   function hasChildren(id) {
@@ -992,6 +1043,10 @@
       exportBackup();
     } else if (action === "import") {
       $("importFile").click();
+    } else if (action === "doneSubtasks") {
+      applyDoneSubtasks(!showDoneSubtasks);
+      browser.storage.local.set({ [DONE_SUBTASKS_KEY]: showDoneSubtasks });
+      render();
     } else if (action === "timeFormat") {
       const next = hour12 ? "24h" : "12h";
       applyTimeFormat(next);
@@ -1281,6 +1336,7 @@
     if (!t) return;
     checkpoint(q(id) + (t.x ? " wieder geöffnet" : " abgehakt"));
     setDoneState(id, !t.x);
+    lingerChecked([id]);
     rollRecurring();
     render();
   }
@@ -1418,9 +1474,10 @@
         patchTask(id, { r: "", s: series });
         if (!tasks.has(nid)) {
           tasks.set(nid, compact({ l: cur.l, t: bumpNumber(cur.t || ""), n: cur.n, d: nextD, h: cur.h, r: "w", s: series }));
+          // Right behind the old one – also when it is hidden (checked subtask).
           const par = parentOf(id);
-          const idx = visibleChildren(cur.l, par).findIndex((x) => x.id === id);
-          placeTask(nid, par, idx < 0 ? 0 : idx + 1);
+          const idx = visibleChildren(cur.l, par).filter((x) => x.id !== nid && byOrder(x, cur) <= 0).length;
+          placeTask(nid, par, idx);
         }
         changed = true;
         id = nid;
@@ -1743,6 +1800,7 @@
     const fallback = besideSelection();
     checkpoint(many(roots, done ? "abgehakt" : "wieder geöffnet", done ? "abgehakt" : "wieder geöffnet"));
     for (const id of roots) setDoneState(id, done);
+    lingerChecked(roots);
     rollRecurring();
     roots.forEach(unmarkTask);
     settleSelection(fallback);
@@ -2469,6 +2527,10 @@
     const kids = tree.get(t.id) || [];
     const isExp = expandedId === t.id;
     const folded = kids.length > 0 && collapsed.has(t.id);
+    const counts = progressOf.get(t.id);
+    const prog = !folded && !showDoneSubtasks && counts && counts.done ? counts : null;
+    const counter = folded ? foldCount(t.id) : prog ? progressCount(t.id, prog) : null;
+    const streak = streakOf(t);
     const canDrag = sortable && !t.x;
 
     const title = mdField({
@@ -2497,11 +2559,14 @@
       }, icon("check")),
       h("div", { class: "main" },
         h("div", { class: "title-row" },
-          folded ? h("div", {
+          counter || streak ? h("div", {
             class: "title-line",
             // The title is only as wide as its text here: a click next to it edits too.
             onclick: (e) => e.target === e.currentTarget && title.startEdit("end"),
-          }, title, foldCount(t.id)) : title,
+          }, title, counter, streak > 0 && h("span", {
+            class: "streak",
+            title: `${streak} ${streak === 1 ? "Woche" : "Wochen"} in Folge pünktlich erledigt`,
+          }, icon("flame"), String(streak))) : title,
           buildChips(t, isExp)),
         buildMeta(t, isExp)),
       // Only visible in edit mode (CSS).
@@ -2533,16 +2598,70 @@
     );
   }
 
-  // Folded block: how many subtasks (all levels) are still open.
+  // Folded block: progress as when unfolded ("2/5", all levels) – also with
+  // nothing checked yet, it shows that something is folded away.
   function foldCount(id) {
-    const all = descendants(id);
-    const open = all.filter((c) => !tasks.get(c).x).length;
+    const { done, total } = progressOf.get(id) || { done: 0, total: 0 };
     return h("button", {
       class: "fold-count",
       type: "button",
-      title: `${open} von ${all.length} Unteraufgaben offen – aufklappen`,
+      title: `${done} von ${total} Unteraufgaben erledigt – aufklappen`,
       onclick: () => toggleFold(id),
-    }, open ? String(open) : "✓");
+    }, `${done}/${total}`);
+  }
+
+  // Open task with hidden checked subtasks: "2/5" (all levels). A click shows
+  // the checked ones until the block is left – e.g. to reopen one.
+  function progressCount(id, { done, total }) {
+    const shown = descendants(id).some((d) => lingering.has(d));
+    return h("button", {
+      class: "fold-count progress" + (shown ? " active" : ""),
+      type: "button",
+      title: `${done} von ${total} Unteraufgaben erledigt – ` + (shown ? "erledigte wieder ausblenden" : "erledigte kurz zeigen"),
+      onclick: () => {
+        const ds = descendants(id).filter((d) => tasks.get(d).x);
+        if (shown) endLinger();
+        else {
+          linger(ds, rootOf(id));
+          render();
+        }
+      },
+    }, `${done}/${total}`);
+  }
+
+  // Progress of every open task in the current list: id -> { done, total }.
+  // A weekly series counts once – only its newest instance.
+  let progressOf = new Map();
+  function computeProgress() {
+    const latest = new Map(); // series -> newest due date
+    for (const t of tasks.values()) if (t.s && t.d && !(latest.get(t.s) >= t.d)) latest.set(t.s, t.d);
+    const out = new Map();
+    for (const [id, t] of tasks) {
+      if (t.l !== currentList || (t.s && t.d && t.d < latest.get(t.s))) continue;
+      for (const a of ancestors(id)) {
+        if (tasks.get(a).x) continue;
+        const p = out.get(a) || { done: 0, total: 0 };
+        p.total++;
+        if (t.x) p.done++;
+        out.set(a, p);
+      }
+    }
+    return out;
+  }
+
+  // Weekly series: weeks in a row checked by their due date, counted back
+  // from the instance before the current one.
+  function streakOf(t) {
+    if (t.r !== "w" || !t.s || !t.d) return 0;
+    const past = [];
+    for (const x of tasks.values()) if (x.s === t.s && x.d && x.d < t.d) past.push(x);
+    past.sort((a, b) => (a.d < b.d ? 1 : -1));
+    let n = 0;
+    for (const x of past) {
+      if (!x.x || !x.xa || x.xa > dueAt(x)) break;
+      n++;
+    }
+    return n;
   }
 
   function isBusy() {
@@ -2571,11 +2690,12 @@
     for (const [id, t] of tasks) if (t.l === currentList) all.push({ id, ...t });
     const tree = new Map(); // parent id -> children
     for (const t of all) {
+      if (hiddenDone(t.id)) continue;
       const p = parentOf(t.id);
       if (!tree.has(p)) tree.set(p, []);
       tree.get(p).push(t);
     }
-    // By order – checked subtasks keep their place.
+    // By order – shown checked subtasks keep their place.
     for (const kids of tree.values()) kids.sort(byOrder);
 
     // Guard against cycles (e.g. conflicting changes from two devices):
@@ -2589,7 +2709,7 @@
     };
     roots.forEach((r) => mark(r.id));
     for (const t of all) {
-      if (!seen.has(t.id)) {
+      if (!seen.has(t.id) && !hiddenDone(t.id)) {
         roots.push(t);
         mark(t.id);
         for (const kids of tree.values()) {
@@ -2609,6 +2729,7 @@
       renderListSelect();
 
       const { all, tree, roots } = buildTree();
+      progressOf = computeProgress();
 
       if (expandedId && !tasks.has(expandedId)) expandedId = null;
       // A line that is about to get the caret (new subtask, Tab into a folded
@@ -2812,6 +2933,16 @@
     themeToggleEl.setAttribute("aria-label", THEME_META[m].label);
   }
 
+  // --- Checked subtasks (⋯ menu): hidden (default) or in place ----------------
+  function applyDoneSubtasks(show) {
+    showDoneSubtasks = !!show;
+    const item = $("doneSubtasksItem");
+    item.textContent = "Erledigte Unteraufgaben: " + (showDoneSubtasks ? "anzeigen" : "ausblenden");
+    item.title = showDoneSubtasks
+      ? "Abgehakte Unteraufgaben bleiben an ihrem Platz – klicken zum Ausblenden"
+      : "Abgehakte Unteraufgaben verschwinden, die Oberaufgabe zeigt „2/5“ – klicken, damit sie stehen bleiben";
+  }
+
   // --- Time format (⋯ menu): 24 h or 12 h with AM/PM ---------------------------
   function applyTimeFormat(fmt) {
     hour12 = fmt === "12h";
@@ -2954,6 +3085,7 @@
   const CHAT_SETTINGS = {
     theme: { label: "Design", names: { system: "System", light: "hell", dark: "dunkel" } },
     done_section: { label: "Bereich „Erledigt“", names: { open: "aufgeklappt", closed: "zugeklappt" } },
+    done_subtasks: { label: "Erledigte Unteraufgaben", names: { hide: "ausblenden", show: "anzeigen" } },
     ai_mode: { label: "KI-Verbindung", names: { "claude-code": "Claude Code", api: "eigenes Modell", none: "keine KI" } },
   };
   const isAiOff = (a) => a.op === "set_setting" && a.target === "ai_mode" && a.value === "none";
@@ -2976,6 +3108,10 @@
     } else if (key === "done_section") {
       doneOpen = value === "open";
       browser.storage.local.set({ [DONE_OPEN_KEY]: doneOpen });
+      render();
+    } else if (key === "done_subtasks") {
+      applyDoneSubtasks(value === "show");
+      browser.storage.local.set({ [DONE_SUBTASKS_KEY]: showDoneSubtasks });
       render();
     } else if (key === "ai_mode") {
       aiSettings.mode = value;
@@ -3034,6 +3170,11 @@
       render();
       li = findLi(id);
     }
+    if (!li && hiddenDone(id)) {
+      linger([id], rootOf(id));
+      render();
+      li = findLi(id);
+    }
     if (!li && t.x && !doneOpen) {
       doneOpen = true;
       render();
@@ -3054,7 +3195,7 @@
     ];
     const ex = expandedId && tasks.get(expandedId);
     lines.push(ex ? `Gerade aufgeklappt: „${plainTitle(ex.t)}“ (id: ${expandedId})` : "Gerade aufgeklappt: nichts");
-    lines.push(`Einstellungen: theme=${document.documentElement.dataset.theme || "system"}, done_section=${doneOpen ? "open" : "closed"}, ai_mode=${aiSettings.mode}` +
+    lines.push(`Einstellungen: theme=${document.documentElement.dataset.theme || "system"}, done_section=${doneOpen ? "open" : "closed"}, done_subtasks=${showDoneSubtasks ? "show" : "hide"}, ai_mode=${aiSettings.mode}` +
       (aiSettings.apiOk ? "" : " (eigenes Modell nicht eingerichtet)"));
     lines.push("", "Listen und Aufgaben:");
     for (const [lid, list] of sortedLists()) {
@@ -4281,10 +4422,11 @@
     $("chatSend").append(icon("send"));
     for (const b of document.querySelectorAll(".modal-close")) b.append(icon("close"));
     setupEnvBanner();
-    const local = await browser.storage.local.get([THEME_KEY, CURRENT_KEY, DONE_OPEN_KEY, COLLAPSED_KEY, TIME_FORMAT_KEY]);
+    const local = await browser.storage.local.get([THEME_KEY, CURRENT_KEY, DONE_OPEN_KEY, COLLAPSED_KEY, TIME_FORMAT_KEY, DONE_SUBTASKS_KEY]);
     for (const id of local[COLLAPSED_KEY] || []) collapsed.add(id);
     applyTheme(local[THEME_KEY]);
     applyTimeFormat(local[TIME_FORMAT_KEY]);
+    applyDoneSubtasks(local[DONE_SUBTASKS_KEY]);
     refreshAiSettings();
     doneOpen = !!local[DONE_OPEN_KEY];
     currentList = local[CURRENT_KEY] || null;

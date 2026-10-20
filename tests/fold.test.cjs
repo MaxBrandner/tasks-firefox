@@ -4,7 +4,7 @@ const H = require("./harness.cjs")(ROOT);
 const { w, d, ok, T, li, edit, key, type, add, unfocus, idOf, rootTitles, kids, tick, local } = H;
 
 const bar = (t) => li(t).querySelector(":scope > .fold-bar");
-const count = (t) => { const c = li(t).querySelector(":scope > .row .fold-count"); return c && c.textContent; };
+const count = (t) => { const c = li(t).querySelector(":scope > .row .fold-count:not(.progress)"); return c && c.textContent; };
 const menu = async (action) => { d.querySelector(`#listMenu [data-action="${action}"]`).click(); await tick(); };
 const fire = (el, name, o = {}) => {
   const e = new w.Event(name, { bubbles: true, cancelable: true });
@@ -22,14 +22,14 @@ const fire = (el, name, o = {}) => {
 
   bar("A").click(); await tick();
   ok(!li("A").querySelector(".subtasks") && li("A").classList.contains("folded"), "Klick auf die Leiste klappt ein");
-  ok(count("A") === "1", "eingeklappt: Zahl der offenen Unteraufgaben");
+  ok(count("A") === "1/2", "eingeklappt: Fortschritt wie ausgeklappt");
   ok((local.data["tk:collapsed"] || []).includes(idOf("A")), "Zustand liegt in storage.local (pro Gerät)");
   li("A").querySelector(":scope > .row .fold-count").click(); await tick();
   ok(kids("A").join() === "A1,A2" && !count("A"), "Klick auf die Zahl klappt auf");
 
   ta = edit("A1"); await key(ta, "ArrowUp", { ctrlKey: true });
   ok(li("A").classList.contains("folded") && d.activeElement.closest("li.task") === li("A"), "Strg+↑ in Unteraufgabe klappt den Block ein, Cursor im Block");
-  ok(count("A") === "1", "Zahl erscheint auch beim Einklappen per Tastatur (während der Titel bearbeitet wird)");
+  ok(count("A") === "1/2", "Zahl erscheint auch beim Einklappen per Tastatur (während der Titel bearbeitet wird)");
   ta = await key(d.activeElement, "ArrowDown", { ctrlKey: true });
   ok(!li("A").classList.contains("folded") && d.activeElement.closest("li.task") === li("A"), "Strg+↓ klappt auf, Cursor bleibt");
   await key(d.activeElement, "ArrowUp", { ctrlKey: true });
@@ -39,7 +39,8 @@ const fire = (el, name, o = {}) => {
   ok(d.activeElement.closest("li.task") === li("N"), "Cursor in der neuen Zeile");
   ok(await key(d.activeElement, "ArrowUp") && d.activeElement.closest("li.task") === li("A") && await key(d.activeElement, "ArrowDown") && d.activeElement.closest("li.task") === li("N"), "↑/↓ überspringen eingeklappte Unteraufgaben");
   await key(d.activeElement, "Tab");
-  ok(T("N").p === idOf("A") && kids("A").join() === "A1,A2,N", "Tab in eingeklappten Block klappt ihn auf");
+  // A2 is checked and hidden by now (the caret left block A).
+  ok(T("N").p === idOf("A") && kids("A").join() === "A1,N", "Tab in eingeklappten Block klappt ihn auf");
   await unfocus();
 
   await menu("foldAll");

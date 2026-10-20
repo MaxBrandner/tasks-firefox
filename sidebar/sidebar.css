@@ -1136,6 +1136,30 @@ kbd {
   color: var(--text);
 }
 
+/* Weekly series: weeks in a row checked on time. */
+.streak {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 3px 0 0 6px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.streak .ico {
+  width: 13px;
+  height: 13px;
+  color: var(--accent);
+}
+
+/* "2/5": checked subtasks hidden; active = shown for the moment. */
+.fold-count.progress.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 /* --- Drag & Drop --------------------------------------------------------- */
 
 .task.dragging > .row {

@@ -16,7 +16,10 @@ Google, kein eigener Server.
   Fälligkeit und Papierkorb. Klick daneben oder Esc schließt.
 - **Unteraufgaben** – beliebig tief verschachtelt (Tab / Shift+Tab). Hauptaufgabe
   erledigt → alle darunter auch; Unteraufgabe wieder offen → alle darüber auch.
-  Abgehakte Unteraufgaben bleiben an ihrem Platz.
+  Abgehakte Unteraufgaben verschwinden, sobald man den Block mit der Maus
+  verlässt; die Oberaufgabe zeigt stattdessen den Fortschritt „2/5“. Ein Klick
+  darauf zeigt die erledigten kurz wieder (z. B. um eine wieder zu öffnen).
+  ⋯ → „Erledigte Unteraufgaben: anzeigen“ lässt sie wie früher an ihrem Platz.
 - **Fälligkeit** – Schnellknöpfe Heute / Morgen / +1 Woche oder Datum, dazu
   optional eine **Uhrzeit** (tippen wie „14:30“, „1430“ oder „2pm“). Anzeige
   „Heute", „Morgen", Wochentag; unter 48 h ein **Countdown** („noch 1 T 18 Std"),
@@ -24,6 +27,8 @@ Google, kein eigener Server.
 - **↻ Wöchentlich** – ist eine Abgabe fällig oder abgehakt, entsteht die nächste
   eine Woche später (Zahl am Titelende zählt mit: „Blatt 3" → „Blatt 4"). Die
   Vorwoche bleibt als eigene Aufgabe stehen und wird nicht überschrieben.
+  Eine Flamme mit Zahl zeigt, wie viele Wochen in Folge pünktlich erledigt
+  wurden. Im Fortschritt der Oberaufgabe zählt die Serie nur einmal.
 - **Links** – eigenes Feld je Aufgabe, beliebig viele (im Bearbeitungsmodus
   „+ Link einfügen"). Eingeklappt zeigt 🔗 die Anzahl – inklusive der Links aller
   Unteraufgaben; ein Klick öffnet einen Link direkt bzw. mehrere zusammen als
@@ -43,7 +48,7 @@ Google, kein eigener Server.
   oder im Titel **Alt+↑ / Alt+↓**.
 - **Einklappen** – wie in Jupyter: Leiste links an einem Block mit
   Unteraufgaben anklicken (oder **Strg+↑ / Strg+↓** im Titel); eingeklappt zeigt
-  eine Zahl die offenen Unteraufgaben. ⋯ → „Alle einklappen“ / „Alle ausklappen“.
+  den Fortschritt („2/5“, wie ausgeklappt). ⋯ → „Alle einklappen“ / „Alle ausklappen“.
   Gilt pro Gerät.
 - **Erledigt** – einklappbarer Bereich, unten verankert; „Erledigte löschen".
 - **Rückgängig / Wiederholen** – **Strg+Z** / **Strg+Y** für alle Änderungen;
