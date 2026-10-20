@@ -1,7 +1,8 @@
 // Generates test data to import into the test copy "Tasks DEV":
 //   npm run testdata  →  testdata/tasks-testdata.json
-// In Tasks DEV: ⋯ → "Sicherung importieren …" → "Zusammenführen", then close
-// and reopen the sidebar once (weekly repeat + legacy note links run on start).
+// npm run dev also runs this and ships the result with the test copy, which
+// merges it by itself (see scripts/dev.mjs). By hand: ⋯ → "Sicherung
+// importieren …" → "Zusammenführen".
 //
 // Due dates are relative to now, so the countdown (~3 h, ~30 h) and "overdue"
 // are visible. IDs start with "test" – no overlap with real data. All links
@@ -21,11 +22,46 @@ const at = (hours) => new Date(now.getTime() + hours * 3600e3);
 const hm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const soon3 = at(3);
 const soon30 = at(30);
+const soon5 = at(5);
+const MY = "default"; // "Meine Aufgaben" – the list the sidebar opens with
 const UNI = "testuni0001";
 const PRIV = "testpriv001";
 
 const data = {
+  "L:default": { t: "Meine Aufgaben", o: 0 },
   "L:testuni0001": { t: "Test: Uni", o: 10 },
+
+  // "Meine Aufgaben": the newest features at a glance, no list switching.
+  // Checked subtasks (hidden, parent shows progress), nested level
+  "T:testmy00001": { l: MY, t: "Umzug vorbereiten", d: day(5), o: 0 },
+  "T:testmy00002": { l: MY, p: "testmy00001", t: "Kartons besorgen", x: true, xa: at(-50).getTime(), o: 0 },
+  "T:testmy00003": { l: MY, p: "testmy00001", t: "Nachsendeauftrag stellen", x: true, xa: at(-30).getTime(), o: 1 },
+  "T:testmy00004": { l: MY, p: "testmy00001", t: "Strom ummelden", o: 2 },
+  "T:testmy00005": { l: MY, p: "testmy00001", t: "Helfer fragen", o: 3 },
+  "T:testmy00006": { l: MY, p: "testmy00005", t: "Anna", x: true, xa: at(-6).getTime(), o: 0 },
+  "T:testmy00007": { l: MY, p: "testmy00005", t: "Ben", o: 1 },
+  "T:testmy00008": { l: MY, p: "testmy00001", t: "Transporter mieten", o: 4 },
+  // Weekly series as subtasks: Blatt 1 late, 2 and 3 on time → flame 2;
+  // Blatt 4 is current (next one only appears at its due time)
+  "T:testmy00010": { l: MY, t: "Statistik Übungen", o: 1 },
+  "T:testmy00011": { l: MY, p: "testmy00010", t: "Lerngruppe finden", x: true, xa: at(-24 * 20).getTime(), o: 0 },
+  "T:testmy00012": { l: MY, p: "testmy00010", t: "Blatt 1", d: day(-18), h: "10:00", s: "testmy00012", x: true, xa: at(-24 * 17).getTime(), o: 1 },
+  "T:testmy00013": { l: MY, p: "testmy00010", t: "Blatt 2", d: day(-11), h: "10:00", s: "testmy00012", x: true, xa: at(-24 * 12).getTime(), o: 2 },
+  "T:testmy00014": { l: MY, p: "testmy00010", t: "Blatt 3", d: day(-4), h: "10:00", s: "testmy00012", x: true, xa: at(-24 * 5).getTime(), o: 3 },
+  "T:testmy00015": {
+    l: MY, p: "testmy00010", t: "Blatt 4", d: day(3), h: "10:00", r: "w", s: "testmy00012", o: 4,
+    u: [{ url: "https://example.org/statistik/blatt-4", t: "Blatt 4 (PDF)" }],
+  },
+  "T:testmy00016": { l: MY, p: "testmy00010", t: "Klausur anmelden", d: day(12), o: 5 },
+  // Countdown (~5 h) with link, weekly top-level, note with Markdown
+  "T:testmy00020": {
+    l: MY, t: "Paket abholen", d: iso(soon5), h: hm(soon5), o: 2,
+    u: [{ url: "https://example.org/sendungsverfolgung", t: "Sendung" }],
+  },
+  "T:testmy00021": { l: MY, t: "Wäsche waschen", d: day(1), h: "18:00", r: "w", s: "testmy00021", o: 3 },
+  "T:testmy00022": { l: MY, t: "Bewerbung schreiben", o: 4, n: "- Lebenslauf **aktualisieren**\n- Anschreiben\n\n[Stellenanzeige](https://example.org/job)" },
+  "T:testmy00023": { l: MY, t: "Zahnarzt anrufen", x: true, xa: at(-3).getTime(), o: 5 },
+
   "L:testpriv001": { t: "Test: Privat", o: 11 },
 
   // Math: links on several levels, weekly (due yesterday), checked subtask
@@ -93,4 +129,4 @@ fs.writeFileSync(out, JSON.stringify({ format: "tasks-backup", version: 1, expor
 const count = (p) => Object.keys(data).filter((k) => k.startsWith(p)).length;
 console.log(`Testdaten (${count("L:")} Listen, ${count("T:")} Aufgaben) → ${out}
 Countdown: Arzttermin ${hm(soon3)} (~3 h), DL › Blatt 2 ${iso(soon30)} ${hm(soon30)} (~30 h)
-Import nur in „Tasks DEV": ⋯ → „Sicherung importieren …" → Zusammenführen.`);
+Kommt mit npm run dev automatisch in „Tasks DEV"; von Hand: ⋯ → „Sicherung importieren …" → Zusammenführen.`);

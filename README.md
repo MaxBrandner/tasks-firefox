@@ -309,8 +309,9 @@ das eingetragene Modell).
 
 ```bash
 npm install
-npm run dev          # Test-Kopie „Tasks DEV" nach dev/ bauen
-npm run testdata     # Testdaten nach testdata/ (Import in Tasks DEV)
+npm run dev          # Test-Kopie „Tasks DEV" nach dev/ bauen (bringt Testdaten mit)
+npm run dev -- --fresh  # dasselbe, Testdaten mit frischen Fälligkeiten ersetzen
+npm run testdata     # nur die Testdaten nach testdata/
 npm test             # alle automatischen Tests (tests/*.test.cjs)
 npm test chat        # nur Tests, deren Name „chat" enthält
 npm run lint
@@ -328,9 +329,15 @@ Kontextmenü-Eintrag heißt „Zu Tasks DEV hinzufügen".
 `npm run test:e2e -- backups/<sicherung>.json` („Zu Tasks hinzufügen" zweimal,
 inkl. automatischer Gruppe) und `npm run test:e2e:chat -- backups/<sicherung>.json`.
 
-**Testdaten:** `npm run testdata` schreibt `testdata/tasks-testdata.json`
-(Fälligkeiten relativ zu jetzt) – in Tasks DEV über `⋯` → „Sicherung
-importieren …" einspielen. Eigene Sicherungen gehören nach `backups/`; beide
+**Testdaten:** `npm run dev` erzeugt sie mit (Fälligkeiten relativ zu jetzt)
+und legt sie der Test-Kopie bei – die neuesten Funktionen direkt in „Meine
+Aufgaben“, dazu die Listen „Test: Uni“ und „Test: Privat“. Tasks DEV spielt
+beim Öffnen von selbst ein, was es noch nicht hatte (z. B. nach einem
+Firefox-Neustart, der das temporäre Add-on samt Daten entfernt); Vorhandenes
+wird nie überschrieben, Gelöschtes kommt nicht wieder.
+`npm run dev -- --fresh` ersetzt alles mit frischen Fälligkeiten. Von Hand: `npm run testdata` schreibt
+`testdata/tasks-testdata.json`, einspielen über `⋯` → „Sicherung
+importieren …". Eigene Sicherungen gehören nach `backups/`; beide
 Ordner sind per `.gitignore` vom Repo ausgeschlossen.
 
 > ⚠️ **Nie die echte `manifest.json` temporär laden**, wenn Tasks installiert

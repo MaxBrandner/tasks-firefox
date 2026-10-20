@@ -17,7 +17,7 @@ module.exports = function setup(P, pre = {}, opts = {}) {
     permissions: { async request() { H0.perm.requests++; H0.perm.granted = H0.perm.answer; return H0.perm.answer; }, async contains() { return H0.perm.granted; } },
     tabs: { async create(o) { H0.tabsOpened.push(o); return { id: H0.tabsOpened.length }; }, async group(o) { H0.grouped = o.tabIds; return 77; }, async update() {} },
     tabGroups: { async update(id, o) { H0.groupTitle = o.title; } },
-    runtime: { id: opts.runtimeId || "tasks@brandner.name",
+    runtime: { id: opts.runtimeId || "tasks@brandner.name", getURL: (p) => "moz-extension://test/" + p,
       onMessage: { addListener(f) { (H0.msgListeners = H0.msgListeners || []).push(f); } },
       connect(o) { return { name: o.name, postMessage(m) { (H0.marks = H0.marks || []).push(m); } }; },
       async sendMessage(id, msg) { if (id && id.type === "show-on-page") { H0.shown = (H0.shown || []).concat(id); return { ok: H0.showOk !== false }; } if (id && (id.type === "picker-start" || id.type === "picker-stop")) { H0.picker = (H0.picker || []).concat(id.type); return id.type === "picker-start" ? { ok: true, title: "Termine 2026", url: "https://www.sonntagsblatt.de/termine" } : { ok: true }; } if (id && id.type === "page-text") return H0.pageText ? H0.pageText() : { ok: false, error: "kein Mock" }; if (id && id.type === "help-search") { H0.helpAsks = (H0.helpAsks || []).concat(id); return H0.helpReply ? H0.helpReply(id) : { ok: false, error: "kein Mock" }; } if (id && id.type === "chat") { H0.chatPrompts = (H0.chatPrompts || []).concat(id.prompt); H0.chatAttachments = id.attachments || []; return H0.chatReply ? H0.chatReply(id) : { ok: false, error: "kein Mock" }; } H0.pings = (H0.pings || 0) + 1; if (H0.devReply) return H0.devReply(id, msg); throw new Error("Could not establish connection. Receiving end does not exist."); },
@@ -29,6 +29,7 @@ module.exports = function setup(P, pre = {}, opts = {}) {
   w.URL.revokeObjectURL = () => {};
   w.HTMLAnchorElement.prototype.click = function () { H0.lastDownload = this.download; };
   w.fetch = async (url, init) => { H0.lastFetch = { url, init }; return H0.fetchReply(); };
+  if (opts.fetchReply) H0.fetchReply = opts.fetchReply;
   if (!w.HTMLDialogElement.prototype.showModal) {
     w.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
     w.HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new w.Event("close")); };

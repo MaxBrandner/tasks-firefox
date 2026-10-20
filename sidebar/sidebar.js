@@ -31,6 +31,7 @@
   // Real version vs. test copy (npm run dev).
   const DEV_ID = "tasks-dev@brandner.name";
   const IS_DEV = browser.runtime.id === DEV_ID;
+  const DEV_SEED_KEY = "tk:devSeed"; // { fresh, keys }: test data the test copy already took
   const AI_MODE = "tk:aiMode"; // "claude-code" (default), "api" or "none"
   // Custom model: { preset, label, protocol, baseUrl, model, key } – storage.local only.
   const API_CONFIG = "tk:api";
@@ -2054,6 +2055,32 @@
 
   $("importMerge").addEventListener("click", () => applyImport(false));
   $("importReplace").addEventListener("click", () => applyImport(true));
+
+  // Test copy: merges the test data shipped by `npm run dev`. Entries it never
+  // took before are added once (after a Firefox restart the temporary add-on
+  // has lost its storage, new test data appears by itself), existing ones are
+  // never overwritten and deleted ones don't come back – unless
+  // `npm run dev -- --fresh` asks for all of it with fresh dates.
+  async function seedDevData() {
+    if (!IS_DEV) return;
+    let seed;
+    try {
+      seed = await (await fetch(browser.runtime.getURL("dev-testdata.json"))).json();
+    } catch (_) {
+      return; // built without test data
+    }
+    if (!seed || !seed.data) return;
+    const keys = Object.keys(seed.data).filter((k) => BACKUP_KEY.test(k));
+    const have = await browser.storage.sync.get(keys);
+    const stored = (await browser.storage.local.get(DEV_SEED_KEY))[DEV_SEED_KEY];
+    const taken = stored && typeof stored === "object" ? stored : { fresh: "", keys: [] };
+    const fresh = !!seed.fresh && seed.fresh !== taken.fresh;
+    const data = {};
+    for (const k of keys) if (fresh || (!(k in have) && !taken.keys.includes(k))) data[k] = seed.data[k];
+    if (!Object.keys(data).length) return;
+    await write(data);
+    await browser.storage.local.set({ [DEV_SEED_KEY]: { fresh: seed.fresh || taken.fresh, keys: [...new Set([...taken.keys, ...keys])] } });
+  }
 
   // --- Undo toast -------------------------------------------------------------
 
@@ -4431,6 +4458,7 @@
     refreshAiSettings();
     doneOpen = !!local[DONE_OPEN_KEY];
     currentList = local[CURRENT_KEY] || null;
+    await seedDevData();
     await reloadAll();
     ensureCurrentList();
     migrateNoteLinks();
